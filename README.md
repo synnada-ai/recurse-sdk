@@ -2,7 +2,21 @@
 
 Author, package, and deploy Recurse applications.
 
-Install the CLI as an isolated tool:
+## Installation
+
+Python 3.14 or newer is required. Install Recurse from PyPI:
+
+```sh
+pip install recurse-sdk
+```
+
+This installs both the `recurse` command and the Python API. Check the installation:
+
+```sh
+recurse --help
+```
+
+If you prefer uv, install the CLI as an isolated tool:
 
 ```sh
 uv tool install recurse-sdk
@@ -13,6 +27,9 @@ Add the Python API to an application:
 ```sh
 uv add recurse-sdk
 ```
+
+Running or deploying an application also requires [uv](https://docs.astral.sh/uv/getting-started/installation/)
+on your PATH to build its package.
 
 The distribution ships two things:
 
