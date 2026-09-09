@@ -1,0 +1,63 @@
+api_version: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: tiny-tuner
+  title: Tiny Model Tuner
+  summary: Tunes a tiny classifier across feature and training configurations.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  prompt: prompt.md
+inputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [target_f1, max_trials]
+  properties:
+    target_f1:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Validation F1 score that ends the search once reached.
+    max_trials:
+      type: integer
+      minimum: 1
+      description: Maximum number of distinct trials to run.
+    optimizer_momentum:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.8
+      description: Momentum applied by the training optimizer.
+    task:
+      type: string
+      default: |
+        Search the multidimensional configuration space for a model with validation F1 >=
+        {{ input.target_f1 }}. Run no more than {{ input.max_trials }} distinct trials. Compare
+        every candidate with the accumulated validated models, revise your theory after each
+        validation, and save the best model when you finish.
+  additionalProperties: false
+outputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [best_f1, target_reached]
+  properties:
+    best_f1:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Highest validation F1 measured during the run.
+    target_reached:
+      type: boolean
+      description: Whether the best validation F1 met the requested target.
+  additionalProperties: false
+tools:
+  source: tools.py
+  built-in: true
+  register:
+    extract_features: ~
+    train_model:
+      volatile: true
+    validate_model: ~
+    save_best_model:
+      storable: false

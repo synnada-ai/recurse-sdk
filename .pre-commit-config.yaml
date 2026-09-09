@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: sdk-check
+        name: SDK and example checks
+        entry: ./check.sh
+        language: system
+        pass_filenames: false
+        always_run: true

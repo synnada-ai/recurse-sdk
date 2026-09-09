@@ -1,0 +1,21 @@
+[project]
+name = "rna-fold-lab-tests"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+  "rna-fold-lab", "recurse-sdk", "pytest>=8,<9", "pytest-cov>=6,<8",
+  "mypy>=1.19,<2", "types-jsonschema>=4,<5", "types-pyyaml>=6,<7",
+]
+
+[tool.uv.sources]
+rna-fold-lab = { path = "..", editable = true }
+recurse-sdk = { path = "../../..", editable = true }
+
+[tool.coverage.run]
+branch = true
+source = [".."]
+omit = ["test_*.py"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true

@@ -1,0 +1,107 @@
+api_version: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: rna-fold-lab
+  title: RNA Fold Lab
+  summary: Designs an RNA sequence against an independently predicted target fold.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  prompt: prompt.md
+inputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [target_structure, sequence_template, max_trials]
+  properties:
+    target_structure:
+      type: string
+      minLength: 16
+      maxLength: 40
+      pattern: "^[().]+$"
+      description: Pseudoknot-free target structure in dot-bracket notation.
+    sequence_template:
+      type: string
+      minLength: 16
+      maxLength: 40
+      pattern: "^[ACGUN]+$"
+      description: Fixed bases by position, using N for positions the specialist may choose.
+    gc_min_fraction:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.35
+      description: Minimum allowed fraction of G and C nucleotides.
+    gc_max_fraction:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.55
+      description: Maximum allowed fraction of G and C nucleotides.
+    max_homopolymer:
+      type: integer
+      minimum: 1
+      maximum: 8
+      default: 3
+      description: Maximum allowed consecutive copies of one nucleotide.
+    max_trials:
+      type: integer
+      minimum: 1
+      maximum: 20
+      description: Maximum number of distinct sequences the validator may measure.
+    task:
+      type: string
+      default: |
+        Design an RNA sequence whose predicted minimum-free-energy structure exactly matches
+        {{ input.target_structure }} while matching fixed-base template
+        {{ input.sequence_template }}. Keep the GC fraction from {{ input.gc_min_fraction }} to
+        {{ input.gc_max_fraction }} and use no homopolymer longer than
+        {{ input.max_homopolymer }}. Measure no more than {{ input.max_trials }} distinct valid
+        sequences. Save the best measured result even if no exact match is found.
+  additionalProperties: false
+outputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required:
+    - sequence
+    - predicted_structure
+    - minimum_free_energy
+    - distance
+    - gc_fraction
+    - measured_trials
+  properties:
+    sequence:
+      type: string
+      pattern: "^[ACGU]+$"
+      description: Best RNA sequence measured during the run.
+    predicted_structure:
+      type: string
+      pattern: "^[().]+$"
+      description: Minimum-free-energy structure predicted for the best sequence.
+    minimum_free_energy:
+      type: number
+      description: Predicted minimum free energy for the best sequence.
+    distance:
+      type: integer
+      minimum: 0
+      description: Base-pair distance between the predicted and target structures.
+    gc_fraction:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Fraction of G and C bases in the best sequence.
+    measured_trials:
+      type: integer
+      minimum: 1
+      maximum: 20
+      description: Number of distinct sequences measured during the run.
+  additionalProperties: false
+tools:
+  source: rna_fold_tools.py
+  built-in: true
+  register:
+    create_sequence: ~
+    evaluate_sequence:
+      volatile: true
+    save_best_sequence:
+      storable: false

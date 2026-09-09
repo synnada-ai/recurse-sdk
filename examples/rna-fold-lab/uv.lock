@@ -1,0 +1,27 @@
+version = 1
+revision = 3
+requires-python = ">=3.14"
+
+[[package]]
+name = "rna-fold-lab"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "viennarna" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "viennarna", specifier = "==2.7.2" }]
+
+[[package]]
+name = "viennarna"
+version = "2.7.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/7a/2165d7d54234efc63a929a33d8a746cc23c3834747d195bd4d1b56cd1124/viennarna-2.7.2.tar.gz", hash = "sha256:44682b8a5f077faf32bf5d0353a232c74091ea47255a76a56495f9fb02e1e872", size = 6325292, upload-time = "2025-12-30T02:02:37.294Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/7a/e3f474cd8ca60e3f90a78bd81e08cd5d0e3e75df94395ff8463727aacac4/viennarna-2.7.2-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:7a64704fd6a5356c966f1a05928c77935ebb5aca56c0bc9159a24300a9ae5009", size = 2657116, upload-time = "2025-12-30T02:02:28.127Z" },
+    { url = "https://files.pythonhosted.org/packages/43/36/e04bcb7ad8d986073a6b75610d75940c71111af3b3f026365a72cae57ff1/viennarna-2.7.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:e4a7c5535ad98479db455329d6957c67b147a5c18e8f1998ece074cc49a1dc31", size = 2489689, upload-time = "2025-12-30T02:02:29.68Z" },
+    { url = "https://files.pythonhosted.org/packages/78/b7/b45c72f99a5f5acece93c87dff4ff36ca9c1f55a596443180ab2556d202f/viennarna-2.7.2-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4eafcc3be39666b4314fc9fe0eacdf7aa52527b3702b6c6df9b676dfbcf36d14", size = 13391196, upload-time = "2025-12-30T02:02:31.382Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/2c/4426855bee29218525d5789d923574709cb73bfac6e2d70678e13e22cd0b/viennarna-2.7.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:e0e04ffa2c10d4c435e1b91e30537676670b50292c9ed0cf2ba67629677c9b2c", size = 14162528, upload-time = "2025-12-30T02:02:33.211Z" },
+    { url = "https://files.pythonhosted.org/packages/76/b7/57c0991edc7e7cd3fc4b514496cd87a6338229028c12bb062cd5b58d70f7/viennarna-2.7.2-cp314-cp314-win_amd64.whl", hash = "sha256:7bb950ba5c6bccdb07f058708c7cc4508e10c2e452ee2169f56fea421b40d268", size = 2063901, upload-time = "2025-12-30T02:02:35.784Z" },
+]

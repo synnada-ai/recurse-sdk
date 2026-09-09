@@ -1,0 +1,76 @@
+[project]
+name = "recurse-sdk"
+version = "0.1.0"
+description = "Author, package, and deploy Recurse applications."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = [
+  "jsonschema>=4,<5",
+  "keyring>=25,<26",
+  "pyyaml>=6,<7",
+]
+
+[project.scripts]
+recurse = "_recurse_cli:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.19,<2",
+  "pytest>=8,<9",
+  "pytest-cov>=6,<8",
+  "ruff>=0.14,<1",
+  "types-jsonschema>=4,<5",
+  "types-pyyaml>=6,<7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/recurse.py", "src/_recurse_cli.py", "src/agent.schema.json"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", "tools", "examples", "README.md", "LICENSE", "check.sh", ".pre-commit-config.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src", "tools", "examples/tiny-tuner"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["A", "B", "C4", "D", "E", "F", "I", "N", "PL", "RUF", "S", "SIM", "UP", "W"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "S101", # pytest assertions are the executable test contract
+  "PLR2004", # protocol and boundary tests intentionally compare exact wire values
+]
+"examples/*/tests/**" = [
+  "S101", # example behavior is verified with pytest assertions
+  "PLR2004", # example tests compare exact measured results and boundary values
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+files = ["src", "tests", "tools", "examples"]
+exclude = ["^examples/rna-fold-lab/"]
