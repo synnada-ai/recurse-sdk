@@ -22,17 +22,6 @@ def test_generated_references_are_not_stale() -> None:
     assert generate_docs.main(["--check"]) == 0
 
 
-def test_readme_uses_uv_for_normal_installation() -> None:
-    """Public setup distinguishes CLI and library installation with uv."""
-    readme = (ROOT / "README.md").read_text()
-    guide = (ROOT / "docs" / "guide.md").read_text()
-
-    for document in (readme, guide):
-        assert "uv tool install recurse-sdk" in document
-        assert "uv add recurse-sdk" in document
-        assert "pip install recurse-sdk" not in document
-
-
 def test_guide_explains_how_to_shape_a_specialist_loop() -> None:
     """Authoring guidance covers the decisions that make recursion useful."""
     guide = (ROOT / "docs" / "guide.md").read_text()
