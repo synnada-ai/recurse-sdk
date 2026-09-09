@@ -30,6 +30,8 @@ deployment guide:
 
 - `examples/tiny-tuner` — tune a classifier against held-out validation F1.
 - `examples/rna-fold-lab` — design RNA sequences against an independent forward-fold oracle.
+- [`examples/backpack-3d`](examples/backpack-3d) — write, render, visually critique, and revise a 3D
+  backpack using Astra and complete Python modeling programs.
 
 ```sh
 recurse login
@@ -54,8 +56,8 @@ server.
 ## Contributing
 
 Run `./check.sh` for formatting, lint, types, tests, generated-reference checks, and package builds.
-Both the SDK and RNA example must reach 100% statement and branch coverage. The RNA example's
-tests and dependencies live in `examples/rna-fold-lab/tests`; they are checked in their own environment.
+The SDK and examples must reach 100% statement and branch coverage. The RNA and backpack examples'
+tests and dependencies live under their own `tests` directories and use separate locked environments.
 
 Install the same gate before committing:
 

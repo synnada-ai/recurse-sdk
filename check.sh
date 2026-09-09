@@ -12,3 +12,7 @@ uv run --directory examples/rna-fold-lab/tests --locked \
   pytest --cov --cov-branch --cov-report=term-missing -q
 MYPYPATH=../../../src uv run --directory examples/rna-fold-lab/tests --locked \
   mypy --config-file ../../../pyproject.toml ../rna_fold_tools.py test_rna_fold_lab.py
+uv run --directory examples/backpack-3d/tests --locked \
+  pytest --cov --cov-branch --cov-report=term-missing -q
+MYPYPATH=../../../src uv run --directory examples/backpack-3d/tests --locked \
+  mypy --config-file pyproject.toml ../tools.py test_backpack.py
