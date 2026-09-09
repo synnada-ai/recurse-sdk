@@ -1,0 +1,45 @@
+api_version: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: backpack-3d
+  title: Backpack 3D Coding Specialist
+  summary: Writes complete modeling programs and improves them by inspecting actual mesh renders.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  prompt: prompt.md
+  model: gpt-6-astra
+inputs:
+  type: object
+  required: [reference_image_base64, description]
+  properties:
+    reference_image_base64: {type: string, minLength: 1, maxLength: 90000}
+    description: {type: string, minLength: 1}
+    max_trials: {type: integer, minimum: 1, maximum: 32, default: 4}
+    task:
+      type: string
+      default: |
+        Reconstruct {{ input.description }} from the actual reference image.
+        Use {{ input.max_trials }} candidate evaluations. Explore substantially different
+        constructions early, then refine the strongest. Call finish_run at completion.
+  additionalProperties: false
+outputs:
+  type: object
+  required: [candidate_id, attempts, valid_candidates]
+  properties:
+    candidate_id: {type: string}
+    attempts: {type: integer}
+    valid_candidates: {type: integer}
+  additionalProperties: false
+tools:
+  source: tools.py
+  built-in: false
+  register:
+    reference_image: {storable: false}
+    build_candidate: {storable: false}
+    read_candidate: {storable: false}
+    revise_candidate: {storable: false}
+    view_candidate: {storable: false}
+    record_review: {storable: false}
+    finish_run: {storable: false}

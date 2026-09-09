@@ -1,0 +1,31 @@
+[project]
+name = "backpack-3d-tests"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+  "backpack-3d", "recurse-sdk", "pytest>=8,<9", "pytest-cov>=6,<8",
+  "mypy>=1.19,<2", "types-jsonschema>=4,<5", "types-pyyaml>=6,<7",
+]
+
+[tool.uv.sources]
+backpack-3d = { path = "..", editable = true }
+recurse-sdk = { path = "../../..", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = [".."]
+
+[tool.coverage.run]
+branch = true
+source = [".."]
+omit = ["test_*.py"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+ignore_missing_imports = true
+untyped_calls_exclude = ["trimesh"]
