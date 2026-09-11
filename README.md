@@ -83,6 +83,26 @@ uv tool install pre-commit
 pre-commit install
 ```
 
+### Publishing
+
+`pyproject.toml` sets `readme = "README.md"`, so package builds embed this README as the
+PyPI description. Editing it on GitHub does not update an existing release:
+[PyPI retains the metadata from that release's first upload](https://docs.pypi.org/api/json/).
+To publish a corrected description with the next SDK release:
+
+1. Choose an unpublished version, update `project.version` in `pyproject.toml`, and run `uv lock`.
+2. Run `./check.sh` to validate the release and build its wheel and source distribution in `dist/`.
+3. Inspect the wheel's `.dist-info/METADATA` and the source distribution's `PKG-INFO`.
+   Their description must match the current README, with `pip install recurse-sdk` first and
+   `uv tool install recurse-sdk` as an optional alternative.
+4. With PyPI publishing access, upload only the two files for that version using
+   `uv publish dist/recurse_sdk-<version>-py3-none-any.whl dist/recurse_sdk-<version>.tar.gz`,
+   replacing `<version>` with the selected version.
+5. Check the new release's description on PyPI and the default project page.
+
+Version 0.1.0 retains its original description. Publish a new version to refresh the default
+project page; [PyPI does not allow replacing previously uploaded files](https://pypi.org/help/#file-name-reuse).
+
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
