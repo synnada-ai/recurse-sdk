@@ -199,6 +199,22 @@ def test_invalid_manifests_name_the_offending_field(
         load_manifest(app)
 
 
+@pytest.mark.parametrize("model", ["gpt-5.6", "astra", "unknown-model"])
+def test_unsupported_model_is_rejected_locally(edit_manifest: Edit, model: str) -> None:
+    """Reject unsupported selections before building or uploading an application."""
+    app = edit_manifest(lambda m: m["agent"].update(model=model))
+    with pytest.raises(recurse.ManifestError, match=r"agent\.model must be one of"):
+        load_manifest(app)
+
+
+@pytest.mark.parametrize("pure_args", [None, [], ["item"]])
+def test_storage_settings_survive_loading(edit_manifest: Edit, pure_args: object) -> None:
+    """Keep omission distinct from the all-pure null shorthand."""
+    settings = {"no_storage": ["count"], "pure_args": pure_args}
+    app = edit_manifest(lambda m: m["tools"].update(defaults=settings))
+    assert load_manifest(app)["tools"]["defaults"] == settings
+
+
 def test_optional_tool_settings_are_accepted(edit_manifest: Edit) -> None:
     """built-in, defaults, and per-tool settings are all accepted together."""
     app = edit_manifest(
@@ -212,6 +228,19 @@ def test_optional_tool_settings_are_accepted(edit_manifest: Edit) -> None:
     )
     manifest = load_manifest(app)
     assert manifest["tools"]["built-in"] is True
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [("pure_args", True), ("pure_args", [3]), ("no_storage", None), ("no_storage", [""])],
+)
+def test_invalid_storage_settings_are_authoring_errors(
+    edit_manifest: Edit, key: str, value: object
+) -> None:
+    """Malformed parameter lists produce a manifest error, not an internal exception."""
+    app = edit_manifest(lambda m: m["tools"].update(defaults={key: value}))
+    with pytest.raises(recurse.ManifestError, match=key):
+        load_manifest(app)
 
 
 def test_manifest_schema_is_a_valid_standalone_package_resource(app: Path) -> None:

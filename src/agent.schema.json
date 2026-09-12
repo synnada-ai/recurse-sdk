@@ -77,9 +77,10 @@
       "required": ["prompt"],
       "properties": {
         "model": {
-          "description": "Model used by the specialist, for example `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). Availability is checked by the service; unsupported models are rejected, never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.",
+          "description": "Supported specialist model: `gpt-5.6-luna` or `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). The service also checks availability; models are never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.",
           "type": "string",
           "minLength": 1,
+          "enum": ["gpt-5.6-luna", "gpt-6-astra"],
           "examples": ["gpt-6-astra"]
         },
         "prompt": {
@@ -184,6 +185,18 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "no_storage": {
+          "description": "Parameter names that must receive inline values instead of stored-object references. Names must exist in the tool signature. Defaults to an empty list.",
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "default": []
+        },
+        "pure_args": {
+          "description": "Parameter names the tool guarantees not to mutate. Names must exist in the tool signature. Omit or use an empty list for conservative behavior; null declares all parameters pure.",
+          "type": ["array", "null"],
+          "items": {"type": "string", "minLength": 1},
+          "default": []
+        },
         "volatile": {
           "description": "Whether repeated calls with the same arguments may return different results. Defaults to false.",
           "type": "boolean",
