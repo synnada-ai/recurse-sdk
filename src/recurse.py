@@ -262,7 +262,9 @@ def _format_manifest_value_error(
 ) -> str:
     """Format one scalar or collection constraint failure."""
     if validator == "type":
-        expected_type = cast("str", error.validator_value)
+        expected_type = cast("str | list[str]", error.validator_value)
+        if isinstance(expected_type, list):
+            return f"{path} must be an {' or '.join(expected_type)}"
         expected = {"object": "mapping", "boolean": "boolean", "string": "string"}.get(
             expected_type, expected_type
         )

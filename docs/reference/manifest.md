@@ -116,9 +116,11 @@ The agent that drives the application's tools: its system prompt and optional mo
 
 ### `agent.model`
 
-*string, optional*
+*choice, optional*
 
-Model used by the specialist, for example `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). Availability is checked by the service; unsupported models are rejected, never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.
+Supported specialist model: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, or `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). The service also checks availability; models are never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.
+
+Allowed values: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`
 
 Example:
 
@@ -224,6 +226,22 @@ built-in: true
 *mapping, optional*
 
 Default behavior settings applied to every registered tool. Per-tool settings override them.
+
+#### `tools.defaults.no_storage`
+
+*array, optional*
+
+Parameter names that must receive inline values instead of stored-object references. Names must exist in the tool signature. Defaults to an empty list.
+
+Default: `[]`
+
+#### `tools.defaults.pure_args`
+
+*array or null, optional*
+
+Parameter names the tool guarantees not to mutate. Names must exist in the tool signature. Omit or use an empty list for conservative behavior; null declares all parameters pure.
+
+Default: `[]`
 
 #### `tools.defaults.volatile`
 

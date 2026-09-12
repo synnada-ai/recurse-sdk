@@ -74,7 +74,9 @@ def _schema_kind(field: dict[str, Any]) -> str:
         return "choice"
     if field.get("format") == "relative-path":
         return "path"
-    kind = cast("str", field["type"])
+    kind = cast("str | list[str]", field["type"])
+    if isinstance(kind, list):
+        return " or ".join(kind)
     return {"boolean": "bool", "object": "mapping"}.get(kind, kind)
 
 
