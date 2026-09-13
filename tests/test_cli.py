@@ -2772,7 +2772,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.1.0",
+                    "version": "0.1.1",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -3059,7 +3059,7 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     )
     assert service.device_grants == ["device-1", "device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.1.0"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.1.1"
 
 
 @pytest.mark.parametrize(
