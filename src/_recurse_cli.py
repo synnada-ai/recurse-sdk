@@ -489,22 +489,24 @@ def _login() -> None:
     try:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        login_url = (
-            api_base_url()
-            + "/login?"
-            + urllib.parse.urlencode(
-                {
-                    "redirect_to": f"http://127.0.0.1:{server.server_port}/callback",
-                    "code_challenge": challenge,
-                    "state": state,
-                }
+        try:
+            login_url = (
+                api_base_url()
+                + "/login?"
+                + urllib.parse.urlencode(
+                    {
+                        "redirect_to": f"http://127.0.0.1:{server.server_port}/callback",
+                        "code_challenge": challenge,
+                        "state": state,
+                    }
+                )
             )
-        )
-        webbrowser.open(login_url)
-        print("Complete the login in your browser. Waiting up to 5 minutes...")
-        completed = server.done.wait(timeout=_LOGIN_WAIT_SECONDS)
-        server.shutdown()
-        thread.join()
+            webbrowser.open(login_url)
+            print("Complete the login in your browser. Waiting up to 5 minutes...")
+            completed = server.done.wait(timeout=_LOGIN_WAIT_SECONDS)
+        finally:
+            server.shutdown()
+            thread.join()
         code = server.code
     finally:
         server.server_close()
@@ -1427,7 +1429,7 @@ def _read_runtime_secret(*, from_stdin: bool) -> str:
     try:
         value = getpass.getpass("Secret value: ")
         confirmation = getpass.getpass("Confirm secret value: ")
-    except (EOFError, KeyboardInterrupt) as error:
+    except EOFError as error:
         raise _CliError("secret entry was cancelled") from error
     try:
         raw_value = value.encode("utf-8")
@@ -1600,7 +1602,7 @@ def _secret_delete(name: str, *, confirmed: bool) -> None:
         count = match["deployment_binding_count"]
         try:
             answer = input(f"Delete {name} and remove it from {count} MCP deployments? [y/N] ")
-        except (EOFError, KeyboardInterrupt) as error:
+        except EOFError as error:
             raise _CliError("secret deletion was cancelled") from error
         if answer.strip().lower() not in {"y", "yes"}:
             print(f"not deleted: {name}")
@@ -1770,12 +1772,13 @@ def _run(
     }
     if resolved_bindings:
         admission_body["secret_bindings"] = resolved_bindings
-    admitted, token = _run_request("POST", "/v1/runs", token=token, json_body=admission_body)
-    run_id = required_field(admitted, "run_id")
-    if admitted.get("status") != "queued":
-        raise ServiceError("the Recurse service returned an invalid run response")
-    print(f"run: {run_id}", flush=True)
+    run_id = None
     try:
+        admitted, token = _run_request("POST", "/v1/runs", token=token, json_body=admission_body)
+        run_id = required_field(admitted, "run_id")
+        if admitted.get("status") != "queued":
+            raise ServiceError("the Recurse service returned an invalid run response")
+        print(f"run: {run_id}", flush=True)
         for _attempt in range(_RUN_POLL_ATTEMPTS):
             try:
                 quoted_run_id = urllib.parse.quote(run_id, safe="")
@@ -1795,9 +1798,27 @@ def _run(
                 return _RUN_EXIT_STATUS[run_status]
             time.sleep(_POLL_SECONDS)
     except KeyboardInterrupt:
-        print("detached: the run is still executing")
-        print(f"inspect: recurse status {run_id}")
-        print(f"cancel: recurse cancel {run_id}")
+        print(
+            "Interrupted. Requesting cancellation; press Ctrl-C again to stop waiting.", flush=True
+        )
+        try:
+            if run_id is None:
+                # Recover a possibly accepted admission using its original idempotency key.
+                admitted, token = _run_request(
+                    "POST", "/v1/runs", token=token, json_body=admission_body
+                )
+                run_id = required_field(admitted, "run_id")
+            if _cancel(run_id) in _RUN_EXIT_STATUS:
+                return 130
+        except RecurseError, ServiceError, KeyboardInterrupt:
+            print("Cancellation could not be confirmed.")
+        print("Execution and charges may continue until cancellation is confirmed.")
+        if run_id is not None:
+            print(f"inspect: recurse status {run_id}")
+            print(f"cancel: recurse cancel {run_id}")
+        else:
+            print(f"admission: {admission_body['idempotency_key']}")
+            print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
         return 130
     raise _CliError("the run did not finish; inspect it with: recurse status " + run_id)
 
@@ -1807,8 +1828,8 @@ def _status(run_id: str) -> None:
     _print_run_view(_get_run(run_id, _access_token()))
 
 
-def _cancel(run_id: str) -> None:
-    """Request cancellation of one account-owned run."""
+def _cancel(run_id: str) -> str:
+    """Request cancellation and return the confirmed state of one account-owned run."""
     token = _access_token()
     quoted_run_id = urllib.parse.quote(run_id, safe="")
     response = _retry_request("POST", f"/v1/runs/{quoted_run_id}/cancel", token=token)
@@ -1819,6 +1840,7 @@ def _cancel(run_id: str) -> None:
         raise ServiceError("the Recurse service returned an invalid run response")
     print(f"run: {run_id}")
     print(f"status: {run_status}")
+    return run_status
 
 
 def _artifact_path(output_directory: Path, path: object) -> Path:
@@ -2157,4 +2179,7 @@ def main(argv: list[str] | None = None) -> int:
     except (RecurseError, ServiceError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return 130
     return 0

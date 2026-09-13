@@ -258,8 +258,10 @@ limit. Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
 
-Closing the terminal does not own the hosted execution lifetime. Ctrl-C detaches, exits `130`, and
-prints commands that reconnect to or explicitly cancel the durable run:
+Ctrl-C during `recurse run` requests cancellation of the admitted run and exits `130`. The CLI
+prints the state confirmed by the service: cancellation can race completion, and a request alone
+does not prove the run has stopped. If confirmation fails or remains pending, execution and charges
+may continue; use the printed commands to inspect or cancel the run:
 
 ```sh
 recurse status <run-id>
@@ -267,12 +269,28 @@ recurse cancel <run-id>
 recurse artifacts <run-id> --output results
 ```
 
+If Ctrl-C interrupts the admission response, the CLI replays the same admission request with its
+original idempotency key to recover the run ID before cancelling. It does not prepare another
+version or use a new key. If the original request never arrived, this replay can admit the run
+before cancelling it. If recovery also fails, the CLI prints the admission reference and warns that
+the run's identity and state are unknown; keep that reference rather than blindly starting another
+run. Recovery uses the existing finite HTTP retries and request timeouts. A second Ctrl-C stops
+waiting for confirmation without claiming remote execution stopped.
+
+Ctrl-C before admission stops local work cleanly; it does not promise that an already submitted
+preparation was cancelled. Interrupting login closes its callback listener. Ctrl-Z retains native
+terminal behavior: it suspends the local CLI, and `fg` or `bg` resumes it; remote work is not cancelled.
+Ctrl-D still ends stdin input or aborts an unanswered prompt. Closing a terminal is not an explicit
+run cancellation request.
+
 Artifacts are available for 24 hours after completion. Downloads refuse unsafe paths and existing
 files, verify size and SHA-256, and only then atomically move the file into place.
 
 For automation, `recurse run` exits with `0` on success, `1` on agent failure, `2` on timeout,
-`3` on cancellation, and `4` on infrastructure failure. Detaching with Ctrl-C exits with `130`.
-Other reported CLI errors exit with `1`.
+`3` when it observes a remotely cancelled run, and `4` on infrastructure failure. A CLI interrupted
+by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax exits
+with `2` as well, so inspect the printed status and error rather than treating that code alone as
+proof of a remote timeout. Other reported CLI errors exit with `1`.
 
 ## Deployment
 

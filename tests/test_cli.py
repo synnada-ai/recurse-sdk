@@ -532,6 +532,76 @@ def test_login_times_out_without_a_callback(
     assert "login timed out" in output.err
 
 
+def test_login_interrupt_stops_callback_server_without_saving_credentials(
+    keychain: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Interrupting browser login releases its listener and background thread."""
+    servers: list[_LoginServer] = []
+    stopped = threading.Event()
+
+    class LoginServer(_LoginServer):
+        """Observe real callback-server shutdown, including exceptional exit."""
+
+        def __init__(self, state: str) -> None:
+            """Keep the real listener available for cleanup assertions."""
+            super().__init__(state)
+            servers.append(self)
+
+        def serve_forever(self, poll_interval: float = 0.5) -> None:
+            """Record when the actual serving loop has exited."""
+            try:
+                super().serve_forever(poll_interval)
+            finally:
+                stopped.set()
+
+    def interrupt_browser(_url: str) -> bool:
+        """Interrupt after the callback serving thread has started."""
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "_LoginServer", LoginServer)
+    monkeypatch.setattr(webbrowser, "open", interrupt_browser)
+    try:
+        try:
+            exit_status = main(["login"])
+        except KeyboardInterrupt:
+            pytest.fail("login leaked KeyboardInterrupt instead of returning 130")
+        assert exit_status == 130
+        assert stopped.wait(1)
+        assert servers[0].fileno() == -1
+        assert keychain == {}
+        assert "Interrupted" in capsys.readouterr().err
+    finally:
+        for server in servers:
+            server.shutdown()
+            server.server_close()
+
+
+def test_run_interrupt_before_admission_stops_without_starting_a_run(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Stopping preparation ends local waiting, without admitting or cancelling a run."""
+    app = write_app(tmp_path / "app")
+
+    def interrupt(_seconds: float) -> None:
+        """Interrupt the real preparation-polling path."""
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("_recurse_cli.time.sleep", interrupt)
+    try:
+        exit_status = main(["run", str(app)])
+    except KeyboardInterrupt:
+        pytest.fail("preparation leaked KeyboardInterrupt instead of returning 130")
+    assert exit_status == 130
+    assert not any(path.startswith("/v1/runs") for _, path, _, _ in service.requests)
+    assert "Interrupted" in capsys.readouterr().err
+
+
 def test_deploy_builds_uploads_and_prints_only_public_results(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
@@ -927,16 +997,20 @@ def test_run_reauthenticates_once_after_401_during_polling(
     assert tokens == ["access-old", "access-new"]
 
 
-def test_run_detaches_on_interrupt_without_cancelling(
+@pytest.mark.parametrize("cancel_status", ["cancelled", "succeeded", "failed", "running", "queued"])
+def test_run_interrupt_cancels_and_reports_confirmed_state(  # noqa: PLR0913, PLR0917 - fixtures plus state
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    cancel_status: str,
 ) -> None:
-    """Ctrl-C leaves durable execution running and prints recovery commands."""
+    """Ctrl-C requests cancellation, without claiming pending work has stopped."""
     app = write_app(tmp_path / "app")
     service.version_statuses = ["ready"]
+    cancel_path = f"/v1/runs/{service.run_id}/cancel"
+    service.malformed[cancel_path] = {"run_id": service.run_id, "status": cancel_status}
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
     def interrupt(_seconds: float) -> None:
@@ -949,9 +1023,113 @@ def test_run_detaches_on_interrupt_without_cancelling(
 
     output = capsys.readouterr().out
     assert f"run: {service.run_id}" in output
-    assert f"recurse status {service.run_id}" in output
-    assert f"recurse cancel {service.run_id}" in output
-    assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
+    assert f"status: {cancel_status}" in output
+    assert sum(path == cancel_path for _, path, _, _ in service.requests) == 1
+    assert "detached" not in output
+    if cancel_status in {"running", "queued"}:
+        assert "may continue" in output
+        assert f"recurse status {service.run_id}" in output
+
+
+@pytest.mark.parametrize("failure", ["transport", "authentication", "malformed", "interrupt"])
+def test_run_interrupt_preserves_recovery_when_cancellation_is_unconfirmed(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    """An unsuccessful cancellation never masquerades as stopped remote work."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    original = cli.request
+
+    def interrupted_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Interrupt polling, then exercise the selected cancellation boundary."""
+        if method == "GET" and path == f"/v1/runs/{service.run_id}":
+            raise KeyboardInterrupt
+        if path.endswith("/cancel"):
+            if failure == "interrupt":
+                raise KeyboardInterrupt
+            if failure == "transport":
+                raise cli.ServiceError("connection lost")
+            if failure == "authentication":
+                raise cli.ServiceError("login expired", 401)
+            return {"run_id": "wrong-run", "status": "cancelled"}
+        return original(method, path, **kwargs)
+
+    monkeypatch.setattr(cli, "request", interrupted_request)
+
+    assert main(["run", "app"]) == 130
+
+    output = capsys.readouterr()
+    assert "may continue" in output.out
+    assert f"recurse cancel {service.run_id}" in output.out
+    assert f"recurse status {service.run_id}" in output.out
+    assert "status: cancelled" not in output.out
+    assert "Traceback" not in output.err
+
+
+def test_run_interrupt_during_admission_reuses_the_exact_request(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A lost admission response is recovered with the same idempotency key before cancellation."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    original = cli.request
+    interrupted = False
+
+    def lose_admission(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Interrupt only after the local service has accepted the first admission."""
+        nonlocal interrupted
+        response = original(method, path, **kwargs)
+        if method == "POST" and path == "/v1/runs" and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt
+        return response
+
+    monkeypatch.setattr(cli, "request", lose_admission)
+
+    assert main(["run", "app", "--cpu", "2"]) == 130
+
+    admissions = [body for method, path, body, _ in service.requests if path == "/v1/runs"]
+    assert len(admissions) == 2
+    assert admissions[0] == admissions[1]
+    assert sum(path.endswith("/cancel") for _, path, _, _ in service.requests) == 1
+    assert f"run: {service.run_id}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("failure", [cli.ServiceError("offline"), KeyboardInterrupt()])
+def test_run_interrupt_with_unknown_admission_preserves_uncertainty(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: BaseException,
+) -> None:
+    """If admission recovery also fails, retain its reference without claiming no run exists."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    attempts: list[dict[str, Any]] = []
+
+    def interrupt_admission(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Keep both attempted request bodies while losing their responses."""
+        assert (method, path) == ("POST", "/v1/runs")
+        attempts.append(kwargs["json_body"])
+        if len(attempts) == 1:
+            raise KeyboardInterrupt
+        raise failure
+
+    monkeypatch.setattr(cli, "_run_request", interrupt_admission)
+
+    assert main(["run", "app"]) == 130
+
+    output = capsys.readouterr().out
+    assert "may continue" in output
+    assert attempts[0]["idempotency_key"] in output
+    assert len(attempts) == 2
+    assert attempts[0] == attempts[1]
+    assert "No run was started" not in output
 
 
 def test_status_cancel_and_artifacts_use_the_public_run_routes(
@@ -1256,13 +1434,21 @@ def test_secret_delete_can_be_declined_or_confirmed_noninteractively(
     assert service.runtime_secrets == []
 
 
-@pytest.mark.parametrize("interruption", [EOFError(), KeyboardInterrupt()])
-def test_secret_delete_reports_cancelled_confirmation(
+@pytest.mark.parametrize(
+    ("interruption", "expected_status", "message"),
+    [
+        (EOFError(), 1, "error: secret deletion was cancelled"),
+        (KeyboardInterrupt(), 130, "Interrupted"),
+    ],
+)
+def test_secret_delete_reports_cancelled_confirmation(  # noqa: PLR0913, PLR0917 - fixtures plus expected outcome
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     interruption: BaseException,
+    expected_status: int,
+    message: str,
 ) -> None:
     """A closed or interrupted confirmation prompt produces a concise error."""
     del logged_in
@@ -1274,9 +1460,9 @@ def test_secret_delete_reports_cancelled_confirmation(
 
     monkeypatch.setattr("builtins.input", interrupt)
 
-    assert main(["secret", "delete", "github-token"]) == 1
+    assert main(["secret", "delete", "github-token"]) == expected_status
 
-    assert capsys.readouterr().err == "error: secret deletion was cancelled\n"
+    assert message in capsys.readouterr().err
     assert service.runtime_secrets
 
 
@@ -1291,12 +1477,16 @@ def test_secret_commands_offer_no_literal_value_option(
     assert "unrecognized arguments: --value private-token" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("interruption", [EOFError(), KeyboardInterrupt()])
+@pytest.mark.parametrize(
+    ("interruption", "expected_error"),
+    [(EOFError(), cli._CliError), (KeyboardInterrupt(), KeyboardInterrupt)],
+)
 def test_secret_hidden_entry_reports_cancellation(
     monkeypatch: pytest.MonkeyPatch,
     interruption: BaseException,
+    expected_error: type[BaseException],
 ) -> None:
-    """An interrupted hidden prompt becomes a concise CLI error."""
+    """EOF aborts entry; a keyboard interrupt reaches the common exit-130 handler."""
 
     def interrupt(_prompt: str) -> str:
         """Raise the scripted terminal interruption."""
@@ -1304,7 +1494,7 @@ def test_secret_hidden_entry_reports_cancellation(
 
     monkeypatch.setattr("getpass.getpass", interrupt)
 
-    with pytest.raises(cli._CliError, match="entry was cancelled"):
+    with pytest.raises(expected_error):
         cli._read_runtime_secret(from_stdin=False)
 
 
