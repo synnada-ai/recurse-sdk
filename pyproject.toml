@@ -1,6 +1,6 @@
 [project]
 name = "recurse-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Author, package, and deploy Recurse applications."
 readme = "README.md"
 license = "Apache-2.0"
@@ -11,6 +11,11 @@ dependencies = [
   "keyring>=25,<26",
   "pyyaml>=6,<7",
 ]
+
+[project.urls]
+Repository = "https://github.com/synnada-ai/recurse-sdk"
+Documentation = "https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md"
+Issues = "https://github.com/synnada-ai/recurse-sdk/issues"
 
 [project.scripts]
 recurse = "_recurse_cli:main"

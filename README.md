@@ -42,12 +42,12 @@ The distribution ships two things:
 ## Quickstart
 
 An application is a directory with an `agent.yaml` manifest, a system prompt, a tool
-module, and a uv lockfile. See the runnable examples and `docs/guide.md` for the full authoring and
-deployment guide:
+module, and a uv lockfile. See the runnable examples and
+[authoring and deployment guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md):
 
-- `examples/tiny-tuner` — tune a classifier against held-out validation F1.
-- `examples/rna-fold-lab` — design RNA sequences against an independent forward-fold oracle.
-- [`examples/backpack-3d`](examples/backpack-3d) — write, render, visually critique, and revise a 3D
+- [examples/tiny-tuner](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/tiny-tuner) — tune a classifier against held-out validation F1.
+- [examples/rna-fold-lab](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/rna-fold-lab) — design RNA sequences against an independent forward-fold oracle.
+- [examples/backpack-3d](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/backpack-3d) — write, render, visually critique, and revise a 3D
   backpack using Astra and complete Python modeling programs.
 
 ```sh
@@ -61,14 +61,14 @@ codex mcp add recurse -- recurse mcp serve <deployment-id>
 claude mcp add recurse -- recurse mcp serve <deployment-id>
 ```
 
-For Codex, apply the startup and tool timeout settings shown in `docs/guide.md` after adding the
-server.
+For Codex, apply the startup and tool timeout settings shown in the
+[guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) after adding the server.
 
 ## Documentation
 
-- `docs/guide.md` — installation, authoring, runtime, login, deployment, local MCP access, and billing.
-- `docs/reference/api.md` — generated API reference.
-- `docs/reference/manifest.md` — generated `agent.yaml` reference.
+- [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.
+- [docs/reference/api.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/reference/api.md) — generated API reference.
+- [docs/reference/manifest.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/reference/manifest.md) — generated `agent.yaml` reference.
 
 ## Contributing
 
@@ -91,6 +91,9 @@ PyPI description. Editing it on GitHub does not update an existing release:
 To publish a corrected description with the next SDK release:
 
 1. Choose an unpublished version, update `project.version` in `pyproject.toml`, and run `uv lock`.
+   Update the SDK version reported in `src/_recurse_cli.py` and its matching CLI tests.
+   Also run `uv lock --directory examples/rna-fold-lab/tests` and
+   `uv lock --directory examples/backpack-3d/tests` to refresh their local SDK dependency.
 2. Run `./check.sh` to validate the release and build its wheel and source distribution in `dist/`.
 3. Inspect the wheel's `.dist-info/METADATA` and the source distribution's `PKG-INFO`.
    Their description must match the current README, with `pip install recurse-sdk` first and
@@ -98,11 +101,13 @@ To publish a corrected description with the next SDK release:
 4. With PyPI publishing access, upload only the two files for that version using
    `uv publish dist/recurse_sdk-<version>-py3-none-any.whl dist/recurse_sdk-<version>.tar.gz`,
    replacing `<version>` with the selected version.
-5. Check the new release's description on PyPI and the default project page.
+5. Check the new release's description on PyPI and the default project page. In a fresh
+   Python 3.14 environment outside this checkout, run `pip install recurse-sdk`, `pip check`,
+   and `recurse --help`. Confirm `pip show recurse-sdk` reports the published version.
 
 Version 0.1.0 retains its original description. Publish a new version to refresh the default
 project page; [PyPI does not allow replacing previously uploaded files](https://pypi.org/help/#file-name-reuse).
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [Apache License 2.0](https://github.com/synnada-ai/recurse-sdk/blob/main/LICENSE).
