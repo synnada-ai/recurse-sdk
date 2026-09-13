@@ -1188,6 +1188,197 @@ def test_run_terminal_failure_has_a_stable_exit_status(  # noqa: PLR0913, PLR091
     assert main(["run", str(app)]) == expected_exit
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        ("failed", "insufficient_balance", 1, "recurse billing top-up 5"),
+        ("failed", "secret_unavailable", 1, "recurse secret list"),
+        ("failed", "invalid_inputs", 1, "input schema"),
+        ("failed", "invalid_agent", 1, "agent.yaml"),
+        ("failed", "invalid_output", 1, "output schema"),
+        ("failed", "execution_failed", 1, "No further public cause"),
+        ("failed", "artifact_failed", 1, "collected or stored"),
+        ("timed_out", "timed_out", 2, "time limit"),
+        ("cancelled", "cancelled", 3, "service reports"),
+        ("infrastructure_failed", "infrastructure_failed", 4, "service reports"),
+    ],
+)
+def test_run_failure_explains_the_confirmed_public_reason(  # noqa: PLR0913, PLR0917 - fixtures plus public contract cases
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    case: tuple[str, str, int, str],
+) -> None:
+    """A confirmed failure retains identity, exit category, reason and useful guidance."""
+    state, reason, exit_status, hint = case
+    service.version_statuses = ["ready"]
+    service.run_views = [{**service.run_views[0], "status": state, "error": reason}]
+    monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
+
+    assert main(["run", str(write_app(tmp_path / "app"))]) == exit_status
+
+    output = capsys.readouterr()
+    assert f"run: {service.run_id}" in output.out
+    assert f"status: {state}" in output.out
+    assert f"error: {reason}:" in output.out
+    assert hint in output.out
+    assert "may continue" not in output.out
+    assert output.err == ""
+
+
+@pytest.mark.parametrize("reason", ["private provider payload", {"private": "payload"}, None])
+def test_unknown_run_failure_is_safe_and_keeps_identity(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    reason: object,
+) -> None:
+    """An unrecognized failed-run reason is not echoed or given an invented cause."""
+    service.run_views = [{**service.run_views[0], "status": "failed", "error": reason}]
+
+    assert main(["status", service.run_id]) == 0
+
+    output = capsys.readouterr().out
+    assert f"run: {service.run_id}" in output
+    assert "error: unknown_error:" in output
+    assert "No further public cause" in output
+    assert "private" not in output
+    assert "payload" not in output
+
+
+@pytest.mark.parametrize("failure", ["authentication", "transport", "malformed", "server"])
+def test_failed_run_observation_preserves_identity_without_resubmission(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    """Losing observation must not look like a terminal run failure or start another run."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    path = f"/v1/runs/{service.run_id}"
+    if failure == "authentication":
+        service.fail_detail[path] = (401, "private authentication detail")
+    elif failure == "malformed":
+        service.malformed[path] = {"run_id": "wrong-id", "status": "failed"}
+    elif failure == "server":
+        service.fail_detail[path] = (500, "private server traceback")
+    else:
+        original = urllib.request.urlopen
+
+        def disconnect(request: urllib.request.Request, **kwargs: Any) -> Any:
+            """Lose only the status response at the actual HTTP client boundary."""
+            if request.full_url.endswith(path):
+                raise urllib.error.URLError("private network diagnostic")
+            return original(request, **kwargs)
+
+        monkeypatch.setattr(urllib.request, "urlopen", disconnect)
+
+    assert main(["run", "app"]) == 1
+
+    output = capsys.readouterr()
+    assert f"recurse status {service.run_id}" in output.out
+    assert f"recurse cancel {service.run_id}" in output.out
+    assert "may continue" in output.out
+    assert "before starting another run" in output.out
+    assert "status: failed" not in output.out
+    assert "private" not in output.err
+    assert (
+        "authentication_failed" in output.err
+        if failure == "authentication"
+        else "request_failed" in output.err
+    )
+    if failure == "authentication":
+        assert "recurse login" in output.err
+    assert sum(path == "/v1/runs" for _, path, _, _ in service.requests) == 1
+    assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
+
+
+def test_lost_admission_response_retains_reference_without_retrying(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed acknowledgement can follow acceptance; preserve its key, not a retry prompt."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    original = cli.request
+
+    def lose_response(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Let the service accept admission, then lose that response."""
+        response = original(method, path, **kwargs)
+        if path == "/v1/runs":
+            raise cli.ServiceError("the Recurse service could not be reached")
+        return response
+
+    monkeypatch.setattr(cli, "request", lose_response)
+
+    assert main(["run", "app"]) == 1
+
+    output = capsys.readouterr().out
+    admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
+    assert len(admissions) == 1
+    assert isinstance(admissions[0], dict)
+    assert f"admission: {admissions[0]['idempotency_key']}" in output
+    assert "may continue" in output
+    assert "do not blindly retry" in output
+
+
+def test_login_removed_during_run_observation_preserves_recovery(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Losing the local credential during reauthentication cannot hide the admitted run."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    service.fail_detail[f"/v1/runs/{service.run_id}"] = (401, "expired access token")
+    logged_in.clear()
+
+    assert main(["run", "app"]) == 1
+
+    output = capsys.readouterr()
+    assert "recurse login" in output.err
+    assert "may continue" in output.out
+    assert f"recurse status {service.run_id}" in output.out
+    assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
+
+
+@pytest.mark.parametrize("command", ["status", "cancel"])
+def test_follow_up_authentication_failure_keeps_run_recovery(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    """Failed authentication cannot establish whether a previously admitted run stopped."""
+    service.fail_detail["/v1/auth/token"] = (401, "private authentication detail")
+
+    assert main([command, service.run_id]) == 1
+
+    output = capsys.readouterr()
+    assert "authentication_failed" in output.err
+    assert "recurse login" in output.err
+    assert "private" not in output.err
+    assert f"recurse status {service.run_id}" in output.out
+    assert "may continue" in output.out
+
+
+def test_cli_syntax_error_is_not_a_confirmed_remote_timeout(
+    service: FakeService, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 2 also covers parser rejection, which never admits a remote run."""
+    with pytest.raises(SystemExit) as exit_info:
+        main(["run"])
+    assert exit_info.value.code == 2
+    output = capsys.readouterr()
+    assert "usage:" in output.err
+    assert "status: timed_out" not in output.out
+    assert service.requests == []
+
+
 @pytest.mark.parametrize("content", ["[broken", "[]"])
 def test_run_inputs_require_one_readable_json_object(
     tmp_path: Path,
@@ -1682,8 +1873,8 @@ def test_failed_run_prints_the_wallet_recovery_commands(
 
     assert capsys.readouterr().out.splitlines() == [
         "status: failed",
-        "error: insufficient_balance",
         (
+            "error: insufficient_balance: Wallet balance is too low. "
             "Add balance with `recurse billing top-up 5` or redeem a code with "
             "`recurse billing redeem CODE`, then retry."
         ),
@@ -2759,7 +2950,7 @@ def test_logout_preserves_the_device_credential_when_revocation_fails(
     assert main(["logout"]) == 1
 
     assert logged_in == {_credential_key(service.url): "device-1"}
-    assert "temporarily unavailable" in capsys.readouterr().err
+    assert "Service Unavailable (HTTP 503)" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
