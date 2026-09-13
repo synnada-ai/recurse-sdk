@@ -1798,7 +1798,7 @@ def _print_run_recovery(run_id: str | None, admission_reference: str | None = No
         print(f"cancel: recurse cancel {run_id}")
 
 
-def _run(
+def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
@@ -1866,7 +1866,13 @@ def _run(
                 return 130
         except RecurseError, ServiceError, KeyboardInterrupt:
             print("Cancellation could not be confirmed.")
-        _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
+        print("Execution and charges may continue until cancellation is confirmed.")
+        if run_id is not None:
+            print(f"inspect: recurse status {run_id}")
+            print(f"cancel: recurse cancel {run_id}")
+        else:
+            print(f"admission: {admission_body['idempotency_key']}")
+            print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
         return 130
     _print_run_recovery(run_id)
     raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
@@ -1875,7 +1881,8 @@ def _run(
 def _status(run_id: str) -> None:
     """Print the current durable state of one account-owned run."""
     view = _get_run(run_id, _access_token())
-    print(f"run: {view['run_id']}")
+    if view["status"] in _RUN_EXIT_STATUS and view["status"] != "succeeded":
+        print(f"run: {view['run_id']}")
     _print_run_view(view)
 
 

@@ -1063,6 +1063,7 @@ def test_run_interrupt_preserves_recovery_when_cancellation_is_unconfirmed(
 
     output = capsys.readouterr()
     assert "may continue" in output.out
+    assert output.out.splitlines().count(f"run: {service.run_id}") == 1
     assert f"recurse cancel {service.run_id}" in output.out
     assert f"recurse status {service.run_id}" in output.out
     assert "status: cancelled" not in output.out
@@ -1152,6 +1153,23 @@ def test_status_cancel_and_artifacts_use_the_public_run_routes(
     assert "status: cancelled" in output
     assert "downloaded: results/receipt.json" in output
     assert service.artifact_download_authorization == "Bearer artifact-token"
+
+
+@pytest.mark.parametrize("run_status", ["queued", "running", "succeeded"])
+def test_status_without_failure_preserves_normal_output(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    run_status: str,
+) -> None:
+    """Error-reporting changes leave ordinary status output alone."""
+    service.run_views = [{**service.run_views[0], "status": run_status}]
+
+    assert main(["status", service.run_id]) == 0
+
+    output = capsys.readouterr()
+    assert output.out.splitlines() == [f"status: {run_status}", "artifacts: 0"]
+    assert output.err == ""
 
 
 @pytest.mark.parametrize(
