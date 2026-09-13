@@ -292,6 +292,41 @@ by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid co
 with `2` as well, so inspect the printed status and error rather than treating that code alone as
 proof of a remote timeout. Other reported CLI errors exit with `1`.
 
+Confirmed run failures include the run ID, status, a stable public error identifier and a short
+explanation. For example:
+
+```text
+run: 77777777-7777-4777-8777-777777777777
+status: failed
+error: invalid_inputs: Run inputs do not match the agent's input schema. Check --inputs against agent.yaml.
+artifacts: 0
+```
+
+| Public reason | Meaning and next step |
+| --- | --- |
+| `insufficient_balance` | Add wallet balance with `recurse billing top-up 5` or redeem a credit code, then retry. |
+| `secret_unavailable` | A bound secret could not be supplied. Check `recurse secret list` and restore it with `recurse secret set NAME` if needed. |
+| `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
+| `invalid_agent` | Check the application declaration and packaged tool definitions. |
+| `invalid_output` | Check the final return value against the declared output schema. |
+| `execution_failed` | The agent failed; no more specific public cause is available. Keep the run ID when asking for help. |
+| `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
+| `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
+| `cancelled` | The service confirms cancellation. |
+| `infrastructure_failed` | The service reports an infrastructure failure. Retain the run ID when asking for help. |
+| `unknown_error` | A failed run has no recognized public reason. No private detail or guessed diagnosis is printed. |
+
+Failure to observe a run is different from a failed run. `authentication_failed` directs you to
+`recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
+execution stopped. `observation_timeout` means local polling ended without confirmation, not that
+the service reported `timed_out`. These CLI failures exit `1`.
+
+After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
+may continue, and prints `recurse status <run-id>` and `recurse cancel <run-id>`. Inspect the existing
+run before starting another. If admission itself lost its response, keep the printed admission
+reference: the CLI does not know whether a run was created and does not automatically resubmit it.
+The Ctrl-C recovery described above is the explicit cancellation path.
+
 ## Deployment
 
 ```sh

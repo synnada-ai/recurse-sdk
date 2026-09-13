@@ -150,10 +150,10 @@ def request(
     except urllib.error.HTTPError as error:
         raw = error.read()
         raise ServiceError(_error_detail(raw, error.reason), error.code) from error
-    except urllib.error.URLError as error:
-        raise ServiceError(f"the Recurse service could not be reached: {error.reason}") from error
     except (http.client.HTTPException, OSError) as error:
-        raise ServiceError(f"the Recurse service could not be reached: {error}") from error
+        raise ServiceError(
+            "the Recurse service could not be reached. Check your connection and RECURSE_API_URL."
+        ) from error
     if not json_response:
         return {}
     try:
@@ -1685,6 +1685,47 @@ _RUN_EXIT_STATUS = {
     "infrastructure_failed": 4,
 }
 _RUN_STATUSES = {"queued", "running", *_RUN_EXIT_STATUS}
+_RUN_FAILURE_MESSAGES = {
+    "insufficient_balance": (
+        "Wallet balance is too low. Add balance with `recurse billing top-up 5` or redeem a "
+        "code with `recurse billing redeem CODE`, then retry."
+    ),
+    "secret_unavailable": (
+        "A bound runtime secret could not be supplied. Use `recurse secret list` to check the "
+        "binding; restore the secret with `recurse secret set NAME` if needed."
+    ),
+    "invalid_inputs": (
+        "Run inputs do not match the agent's input schema. Check --inputs against agent.yaml."
+    ),
+    "invalid_agent": (
+        "The application could not be loaded as a valid agent. Check agent.yaml and the "
+        "packaged tool definitions."
+    ),
+    "invalid_output": (
+        "The final result does not match the declared output schema. Check the agent's output "
+        "declaration and return value."
+    ),
+    "execution_failed": (
+        "The agent did not complete successfully. No further public cause is available. "
+        "Keep the run ID when asking for help."
+    ),
+    "artifact_failed": (
+        "The run's artifacts could not be collected or stored. Check the artifact paths and "
+        "keep the run ID when asking for help."
+    ),
+    "timed_out": (
+        "The service reports that the run reached its time limit. Review the workload before "
+        "starting another run."
+    ),
+    "cancelled": "The service reports that the run was cancelled.",
+    "infrastructure_failed": (
+        "The service reports an infrastructure failure. Keep the run ID when asking for help."
+    ),
+    "unknown_error": (
+        "The run failed. No further public cause is available. "
+        "Keep the run ID when asking for help."
+    ),
+}
 
 
 def _same_run_id(returned: str, requested: str) -> bool:
@@ -1734,20 +1775,30 @@ def _print_run_view(view: dict[str, Any]) -> None:
             print(f"answer: {answer}")
         else:
             print(f"result: {json.dumps(result, sort_keys=True, separators=(',', ':'))}")
-    error = view.get("error")
-    if isinstance(error, str):
-        print(f"error: {error}")
-        if error == "insufficient_balance":
-            print(
-                "Add balance with `recurse billing top-up 5` or redeem a code with "
-                "`recurse billing redeem CODE`, then retry."
-            )
+    if view["status"] in _RUN_EXIT_STATUS and view["status"] != "succeeded":
+        error = view.get("error") if view["status"] == "failed" else view["status"]
+        if not isinstance(error, str) or error not in _RUN_FAILURE_MESSAGES:
+            error = "unknown_error"
+        print(f"error: {error}: {_RUN_FAILURE_MESSAGES[error]}")
     print(f"artifacts: {len(view['artifacts'])}")
     if view["payload_expired"]:
         print("payloads: expired")
 
 
-def _run(
+def _print_run_recovery(run_id: str | None, admission_reference: str | None = None) -> None:
+    """Retain safe next steps; an unknown run ID requires its admission reference."""
+    print("Remote state is unconfirmed. Execution and charges may continue.")
+    if run_id is None:
+        print(f"admission: {admission_reference}")
+        print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
+    else:
+        print(f"run: {run_id}")
+        print("Inspect this run before starting another run.")
+        print(f"inspect: recurse status {run_id}")
+        print(f"cancel: recurse cancel {run_id}")
+
+
+def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
@@ -1797,6 +1848,9 @@ def _run(
                 _print_run_view(view)
                 return _RUN_EXIT_STATUS[run_status]
             time.sleep(_POLL_SECONDS)
+    except RecurseError, ServiceError:
+        _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
+        raise
     except KeyboardInterrupt:
         print(
             "Interrupted. Requesting cancellation; press Ctrl-C again to stop waiting.", flush=True
@@ -1820,12 +1874,16 @@ def _run(
             print(f"admission: {admission_body['idempotency_key']}")
             print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
         return 130
-    raise _CliError("the run did not finish; inspect it with: recurse status " + run_id)
+    _print_run_recovery(run_id)
+    raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
 
 
 def _status(run_id: str) -> None:
     """Print the current durable state of one account-owned run."""
-    _print_run_view(_get_run(run_id, _access_token()))
+    view = _get_run(run_id, _access_token())
+    if view["status"] in _RUN_EXIT_STATUS and view["status"] != "succeeded":
+        print(f"run: {view['run_id']}")
+    _print_run_view(view)
 
 
 def _cancel(run_id: str) -> str:
@@ -2139,6 +2197,27 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_cli_error(error: RecurseError | ServiceError, arguments: argparse.Namespace) -> None:
+    """Explain request failures without confusing them with confirmed run failures."""
+    message = str(error)
+    if isinstance(error, ServiceError):
+        if error.status_code == HTTPStatus.UNAUTHORIZED:
+            message = "authentication_failed: Sign-in was rejected. Run `recurse login`."
+        elif (
+            error.status_code is not None and error.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+        ):
+            reason = http.client.responses.get(error.status_code, "Server error")
+            message = (
+                f"request_failed: {reason} (HTTP {error.status_code}). "
+                "The Recurse service could not complete the request."
+            )
+        else:
+            message = f"request_failed: {message}"
+    if arguments.command in {"status", "cancel"}:
+        _print_run_recovery(arguments.run_id)
+    print(f"error: {message}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the `recurse` command.
 
@@ -2177,7 +2256,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _manage_billing(arguments)
     except (RecurseError, ServiceError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        _print_cli_error(error, arguments)
         return 1
     except KeyboardInterrupt:
         print("Interrupted.", file=sys.stderr)
