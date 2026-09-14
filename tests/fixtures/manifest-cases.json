@@ -1,0 +1,14 @@
+[
+  {"name": "canonical", "replace": [], "error": null},
+  {"name": "old-version-key", "replace": [["apiVersion:", "api_version:"]], "error": "api_version|apiVersion"},
+  {"name": "old-tool-key", "replace": [["built_in:", "built-in:"]], "error": "built-in"},
+  {"name": "both-version-keys", "replace": [["kind: Agent", "api_version: recurse.run/v1alpha1\nkind: Agent"]], "error": "api_version"},
+  {"name": "both-tool-keys", "replace": [["built_in: true", "built_in: true\n  built-in: false"]], "error": "built-in"},
+  {"name": "implicit-boolean", "replace": [["built_in: true", "built_in: yes"]], "error": null},
+  {"name": "quoted-boolean", "replace": [["built_in: true", "built_in: 'yes'"]], "error": "built_in"},
+  {"name": "implicit-name-boolean", "replace": [["name: example", "name: on"]], "error": "metadata.name"},
+  {"name": "quoted-name", "replace": [["name: example", "name: 'on'"]], "error": null},
+  {"name": "duplicate-key", "replace": [["built_in: true", "built_in: true\n  built_in: false"]], "error": "duplicate key"},
+  {"name": "malformed-yaml", "replace": [["metadata:", "metadata: ["]], "error": "valid YAML"},
+  {"name": "invalid-output-schema", "replace": [["best_f1: {type: number}", "best_f1: {type: invalid}"]], "error": "outputs"}
+]

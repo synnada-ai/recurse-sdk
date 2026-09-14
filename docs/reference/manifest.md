@@ -4,7 +4,7 @@ Generated from the manifest specification the SDK validates with. Do not edit by
 
 The `agent.yaml` manifest declares a complete Recurse application: its identity, runtime, agent behavior, run input and output schemas, and tools. The shape is closed; unknown fields are rejected.
 
-## `api_version`
+## `apiVersion`
 
 *literal, required*
 
@@ -15,7 +15,7 @@ Allowed value: `recurse.run/v1alpha1`
 Example:
 
 ```yaml
-api_version: recurse.run/v1alpha1
+apiVersion: recurse.run/v1alpha1
 ```
 
 ## `kind`
@@ -207,7 +207,7 @@ Example:
 source: tools.py
 ```
 
-### `tools.built-in`
+### `tools.built_in`
 
 *bool, optional*
 
@@ -218,7 +218,7 @@ Default: `True`
 Example:
 
 ```yaml
-built-in: true
+built_in: true
 ```
 
 ### `tools.defaults`

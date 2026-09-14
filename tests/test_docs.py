@@ -86,7 +86,7 @@ def test_generation_reports_stale_and_writes_fresh_references(
     manifest = (tmp_path / "reference" / "manifest.md").read_text()
     for name in ["build_bundle", "context", "RunContext", "RecurseError"]:
         assert f"recurse.{name}" in api
-    for field in ["api_version", "metadata.name", "tools.register", "inputs"]:
+    for field in ["apiVersion", "metadata.name", "tools.register", "inputs"]:
         assert f"`{field}`" in manifest
     assert "Default: `True`" in manifest
     assert "*literal, required*" in manifest

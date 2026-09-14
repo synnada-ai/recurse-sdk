@@ -15,6 +15,33 @@ from recurse import ManifestError, load_manifest
 
 Edit = Callable[[Callable[[dict[str, Any]], None]], Path]
 
+MANIFEST_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads((MANIFEST_FIXTURES / "manifest-cases.json").read_text()),
+    ids=lambda case: case["name"],
+)
+def test_shared_manifest_contract(case: dict[str, Any], tmp_path: Path) -> None:
+    """Keep raw YAML interpretation and manifest names stable across consumers."""
+    source = (MANIFEST_FIXTURES / "manifest.yaml").read_text()
+    for old, new in case["replace"]:
+        assert old in source
+        source = source.replace(old, new)
+    (tmp_path / "agent.yaml").write_text(source)
+    if case["error"] is not None:
+        with pytest.raises(ManifestError, match=case["error"]):
+            load_manifest(tmp_path)
+    else:
+        manifest = load_manifest(tmp_path)
+        assert manifest["apiVersion"] == "recurse.run/v1alpha1"
+        assert manifest["tools"]["built_in"] is True
+        assert manifest["inputs"]["additionalProperties"] is False
+        assert manifest["metadata"]["name"] == (
+            "on" if case["name"] == "quoted-name" else "example"
+        )
+
 
 def test_valid_manifest_round_trips_the_authored_document(app: Path) -> None:
     """Loading returns exactly what the author wrote."""
@@ -95,8 +122,8 @@ def test_surrogate_text_is_rejected_as_an_encoding_problem(app: Path) -> None:
         (lambda m: m["metadata"].__setitem__("name", 3), r"^metadata\.name must be a string$"),
         (lambda m: m.__setitem__("metadata", []), r"^metadata must be a mapping$"),
         (
-            lambda m: m.__setitem__("api_version", "recurse.run/v2"),
-            r"^api_version must be recurse\.run/v1alpha1$",
+            lambda m: m.__setitem__("apiVersion", "recurse.run/v2"),
+            r"^apiVersion must be recurse\.run/v1alpha1$",
         ),
         (lambda m: m.__setitem__("kind", "Robot"), r"^kind must be Agent$"),
         (
@@ -169,8 +196,8 @@ def test_surrogate_text_is_rejected_as_an_encoding_problem(app: Path) -> None:
             r"^tools\.register\.write_receipt has an unknown field: speed$",
         ),
         (
-            lambda m: m["tools"].__setitem__("built-in", "yes"),
-            r"^tools\.built-in must be a boolean$",
+            lambda m: m["tools"].__setitem__("built_in", "yes"),
+            r"^tools\.built_in must be a boolean$",
         ),
         (
             lambda m: m["tools"].__setitem__("defaults", {"storable": None}),
@@ -216,18 +243,18 @@ def test_storage_settings_survive_loading(edit_manifest: Edit, pure_args: object
 
 
 def test_optional_tool_settings_are_accepted(edit_manifest: Edit) -> None:
-    """built-in, defaults, and per-tool settings are all accepted together."""
+    """built_in, defaults, and per-tool settings are all accepted together."""
     app = edit_manifest(
         lambda m: m["tools"].update(
             {
-                "built-in": True,
+                "built_in": True,
                 "defaults": {"volatile": False},
                 "register": {"write_receipt": {"storable": False, "volatile": True}},
             }
         )
     )
     manifest = load_manifest(app)
-    assert manifest["tools"]["built-in"] is True
+    assert manifest["tools"]["built_in"] is True
 
 
 @pytest.mark.parametrize(

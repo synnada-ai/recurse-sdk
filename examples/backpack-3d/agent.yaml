@@ -1,4 +1,4 @@
-api_version: recurse.run/v1alpha1
+apiVersion: recurse.run/v1alpha1
 kind: Agent
 metadata:
   name: backpack-3d
@@ -34,7 +34,7 @@ outputs:
   additionalProperties: false
 tools:
   source: tools.py
-  built-in: false
+  built_in: false
   register:
     reference_image: {storable: false}
     build_candidate: {storable: false}

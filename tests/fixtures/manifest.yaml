@@ -1,0 +1,29 @@
+apiVersion: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: example
+  title: Example
+  summary: A manifest parsing fixture.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  prompt: prompt.md
+inputs:
+  type: object
+  properties:
+    target_f1: {type: number}
+  additionalProperties: false
+outputs:
+  type: object
+  properties:
+    best_f1: {type: number}
+  additionalProperties: false
+tools:
+  source: tools.py
+  built_in: true
+  defaults:
+    no_storage: []
+    pure_args: []
+  register:
+    measure: null
