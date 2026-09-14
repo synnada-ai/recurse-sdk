@@ -26,8 +26,6 @@ it does not fall back to another model. No reference photograph or finished answ
 4. `record_review` stores the visible defects and whether this candidate replaces the incumbent.
    `revise_candidate` applies exact edits to a saved program; `read_candidate` allows a full rewrite.
 5. `finish_run` saves the selected model, source, receipt, and complete attempt history.
-   Call it once: after archiving the history it deletes the per-candidate folders. Calling it
-   again overwrites the archive and receipt; reuse the saved receipt and artifacts instead.
 
 Execution failures count against `max_trials` and remain in the history. Successful execution
 proves the program produced renderable mesh geometry. Selection is Astra's subjective visual

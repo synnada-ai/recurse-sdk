@@ -192,19 +192,19 @@
           "default": []
         },
         "pure_args": {
-          "description": "Parameter names the tool guarantees not to mutate in place. Names must exist in the tool signature. Recurse uses this to plan tool execution; incorrect declarations can cause races. Omit or use an empty list for conservative behavior; null declares all parameters pure.",
+          "description": "Parameter names the tool guarantees not to mutate. Names must exist in the tool signature. Omit or use an empty list for conservative behavior; null declares all parameters pure.",
           "type": ["array", "null"],
           "items": {"type": "string", "minLength": 1},
           "default": []
         },
         "volatile": {
-          "description": "Whether identical arguments may produce different results. When true, repeated calls or recurring patterns do not alert the harness to a stuck loop. Defaults to false.",
+          "description": "Whether repeated calls with the same arguments may return different results. Defaults to false.",
           "type": "boolean",
           "default": false,
           "examples": [true]
         },
         "storable": {
-          "description": "Whether return values may be saved in program memory and passed between tools by reference. A non-None return type enables it by default. Disable only for results used solely as context text or with no composable Python object. This is separate from workspace artifacts.",
+          "description": "Whether results may be stored and passed between tools by reference. When omitted, Recurse infers it from the tool's return type.",
           "type": "boolean",
           "examples": [false]
         }

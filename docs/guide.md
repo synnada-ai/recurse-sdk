@@ -36,12 +36,51 @@ An application directory contains:
 - `pyproject.toml` with an explicit standards-based build backend, and the uv lockfile declared by
   `runtime.lockfile`.
 
+### Tool interfaces
+
 Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
 `Returns:`; tools returning `None` must not have a `Returns:` section. Supply type parameters
 for generic types whenever possible, such as `list[Candidate]` rather than bare `list`, so the
-harness can reflect them in the tool schema. Carry results between tools through typed values.
+harness can reflect them in the tool schema. Use bare generics only when their element types
+are unconstrained or unknown.
+
+The harness turns the docstring summary, body, and `Returns:` section into the tool description.
+Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
+as instructions the specialist can use: what the tool does, when to choose it, valid ranges or
+units, side effects, and what another tool can do with the result. Keep signatures and parameter
+instructions here; the agent prompt explains their role in the task.
+
+Use safe defaults and make errors explain both the problem and what the specialist can correct.
+Keep tools safe to retry where possible. Prefix private helpers with `_`.
+
+### Passing values between tools
+
+Return Python objects that other tools can accept directly. For example, the
+[skill's polygon example](https://recurse.run/SKILL.md#authoring-tools) has `build_polygon` return a
+`Polygon` and `measure_area` accept that object. The specialist can connect the tools without
+reconstructing the polygon from prose. Explain useful combinations in the return description.
+
+The harness resolves dependencies between calls: a call waits for the values it needs, while
+independent calls can execute concurrently. Results can also be stored as Python objects in
+program memory and reused across iterations. Do not impose one tool call per turn or hide
+shared state in mutable globals; carry evolving state through typed parameters and returns so
+the harness can see the dependencies. Files under `recurse.context().workspace` serve a different
+purpose: durable artifacts available after the run.
+
+### Tool registration and settings
+
+Set `tools.source` to the application-relative tool file and register every public tool function
+by its exact name. A `~` entry uses defaults. For the polygon example:
+
+```yaml
+tools:
+  source: tools.py
+  register:
+    build_polygon: ~
+    measure_area: ~
+```
 
 Use `tools.defaults` for shared settings and override individual registrations when needed:
 
@@ -55,6 +94,11 @@ Use `tools.defaults` for shared settings and override individual registrations w
 - `pure_args` lists parameters the tool guarantees not to mutate in place. It defaults to an
   empty list; `null` declares all parameters pure. The harness uses it to plan execution, so an
   incorrect declaration can cause races. Keep the conservative default when unsure.
+
+`tools.built-in` defaults to `true` and controls built-in tools such as notes, TODO management,
+and planning. Set per-tool options only when their behavior calls for them.
+
+### Input and output contracts
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
 `task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
@@ -117,32 +161,86 @@ Evaluate prompt or tool changes on repeated examples rather than one favorable r
 `recurse run` for one run-to-completion execution and `recurse deploy --as mcp` when the specialist
 should become a reusable tool.
 
+## Writing the agent prompt
+
+Create the application prompt file and point `agent.prompt` to it in `agent.yaml`. Start from the
+agreed proposal, the actual tools, and the verifiers. The prompt should tell the specialist:
+
+- The outcome to improve, how it is measured, and how to choose between feasible results.
+- Which requirements are hard constraints, which choices it can explore, and which domain facts
+  constrain those choices.
+- What each verifier measures, how the measurement relates to the goal, and what it does not
+  establish. Include the domain context needed to interpret failures and tradeoffs.
+- When to stop refinement, including acceptance conditions and the time or spending allowance.
+- Which measured facts and artifacts to return, and how final JSON must agree with the completion
+  receipt and the declared output schema.
+
+For a lighter mounting bracket, describe the material, loads, strength, stiffness, and manufacturing
+constraints. Explain how the checks establish feasibility and how mass ranks feasible designs.
+Let the specialist explore geometry and construction choices; do not prescribe a sequence of CAD
+edits or provide candidate answers. This leaves the decisions to the specialist while making the
+objective and verification explicit.
+
+Use `{{ input.NAME }}` in the declared task when caller inputs provide control values. Keep the
+prompt focused on the task and decision-making; put concrete signatures and parameter instructions
+in tool docstrings. Encourage hypotheses, alternatives, and refinement from observed measurements
+rather than a fixed sequence of calls.
+
+Revise the prompt when run evidence shows recurring misinterpretation, ignored constraints, or
+unproductive exploration. Compare the revision with the baseline using the same cases, verifiers,
+and allowances. A longer prompt or a successful single run is not evidence of improvement by itself.
+
 ## Outer-agent workflow
 
+Before cloud work, propose the input/output contract, artifact formats, objective, independent
+verification, hard constraints, and time/spending allowances. Explain why the approach fits and
+what the custom agent will own. Ask about material ambiguities and state narrow routine assumptions.
+Use arbitrary weights or thresholds sparingly; when needed, propose them with their tradeoffs.
+
 1. Prefer an existing specialist when its contract already matches the task.
-2. Before cloud work, propose the input/output contract, objective, independent verification,
-   hard constraints, and time/spending allowances. Explain the approach and what the custom agent
-   will own. Ask about material ambiguities, state narrow routine assumptions, and propose any
-   unavoidable weights or thresholds with their tradeoffs.
-3. Establish a direct baseline. Consider independent approaches concurrently when allowances permit;
+2. Establish a direct baseline. Consider independent approaches concurrently when allowances permit;
    sequence attempts that depend on earlier results. Explain the concurrency and isolation needed
-   for the work and available resources.
-4. Use `recurse run` on representative cases and record success, quality, trials, time, and cost.
-   Compare revisions on the same cases, criteria, and allowances; repeat variable results.
-5. Make small prompt, tool, or verifier changes supported by observed failures. Version changed
-   verifiers and criteria, retain earlier requirements, and reevaluate baseline and contenders
-   consistently. Keep older scores as history rather than ranking incompatible evaluations.
-   Agree materially new acceptance requirements with the user.
-6. Preserve the best feasible candidate when later attempts regress. A higher score cannot
-   compensate for a failed hard requirement. Repeated infeasibility is a reason to inspect the
-   tools and verifiers. One successful repair does not establish generalization.
-7. Track aggregate usage across runs and do not start work that cannot fit the remaining allowance.
-   Use an agreed acceptance target, or justify diminishing returns from measured gains, remaining
-   approaches, and the cost of another attempt. A timeout is not evidence of diminishing returns.
-8. Save the best agent design and its measured facts before normal completion. State whether work
-   stopped for acceptance, diminishing returns, a resource limit, or a blocker. After abrupt
-   failure, report only located evidence and distinguish diagnostic artifacts from final results.
-9. Deploy as MCP only after evidence shows that the specialist is reusable.
+   for the work and available resources, rather than choosing an arbitrary worker count.
+3. Use `recurse run` on representative cases and record success, quality, trials, time, and cost.
+4. Make small prompt, tool, or verifier changes supported by a hypothesis and observed evidence.
+   Compare revisions as described below and repeat variable results.
+5. Preserve the best feasible candidate when later attempts regress. One successful repair does
+   not establish that the specialist generalizes.
+6. Finalize using the acceptance target, justified diminishing returns, remaining allowance, or
+   a concrete blocker. Save the best agent design and its measured facts.
+7. Deploy as MCP only after evidence shows that the specialist is reusable.
+
+### Comparing revisions fairly
+
+A comparison needs the same cases, criteria, and allowances. Record success, quality, trials,
+time, and cost so that a larger budget is not mistaken for a better design. Repeat variable
+results. Prefer small changes supported by a concrete hypothesis over a larger redesign without
+evidence that it is needed.
+
+When a new kind of input exposes a missing check, strengthen the interpretation of the same user
+intent while retaining earlier requirements. For example, a geometry check that captures a bag's
+shape may overlook a shoe's laces. Version the revised check and evaluate both the baseline and
+contenders with it. Retain old scores as history; do not rank them against scores from the new
+check. Agree materially new requirements before changing what counts as acceptable.
+
+Separate feasibility from quality. Every hard requirement must pass before a candidate can win
+on the objective. Preserve the best feasible candidate when a later attempt has a higher score
+but fails a requirement. If no candidates are feasible after repeated attempts, examine the tools
+and verifiers instead of weakening the requirements to manufacture success.
+
+### Finalizing the agent design
+
+Finalizing the design means preserving the best prompt, tools, and verifiers supported by the
+runs, not just choosing a candidate from one run. Use the user's acceptance target when provided.
+Otherwise justify diminishing returns with the history of gains, remaining approaches, and the
+cost of another attempt. An arbitrary count of low-gain attempts does not establish convergence,
+and a runtime timeout does not establish diminishing returns or global optimality.
+
+Track aggregate time and spending across runs. Do not begin an attempt that cannot fit the
+remaining allowance. Before normal completion, save the best design and report its measurable
+facts and the reason for stopping: acceptance, diminishing returns, a resource limit, or a blocker.
+After abrupt failure, report only available evidence. Locate artifacts before claiming them,
+and identify diagnostic files as diagnostics rather than final results.
 
 ## Building application artifacts
 
@@ -453,9 +551,7 @@ deterministic synthetic dataset:
    workspace.
 
 The agent runs measure-and-revise loops until a candidate reaches `target_f1` or
-`max_trials` is exhausted, then saves the winner. In this example, stopping is instructed by the
-prompt and `save_best_model` writes an artifact but returns `None`; it does not implement the
-completion tool and receipt pattern described above. Build it yourself:
+`max_trials` is exhausted, then saves the winner. Build it yourself:
 
 ```python
 import recurse

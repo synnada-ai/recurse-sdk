@@ -39,9 +39,6 @@ recurse deploy examples/tiny-tuner --as mcp
 
 The successful result reports the best measured validation metrics. The run also produces
 `best-model.json` with the winning configuration, weights, bias, precision, recall, and F1.
-The prompt controls when to stop. `save_best_model` writes the artifact and returns `None`; it does
-not check the stopping condition or return the completion receipt recommended in the
-[authoring guide](../../docs/guide.md#designing-a-specialist-loop).
 
 ## Limitations
 

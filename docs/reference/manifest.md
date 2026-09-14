@@ -239,7 +239,7 @@ Default: `[]`
 
 *array or null, optional*
 
-Parameter names the tool guarantees not to mutate in place. Names must exist in the tool signature. Recurse uses this to plan tool execution; incorrect declarations can cause races. Omit or use an empty list for conservative behavior; null declares all parameters pure.
+Parameter names the tool guarantees not to mutate. Names must exist in the tool signature. Omit or use an empty list for conservative behavior; null declares all parameters pure.
 
 Default: `[]`
 
@@ -247,7 +247,7 @@ Default: `[]`
 
 *bool, optional*
 
-Whether identical arguments may produce different results. When true, repeated calls or recurring patterns do not alert the harness to a stuck loop. Defaults to false.
+Whether repeated calls with the same arguments may return different results. Defaults to false.
 
 Default: `False`
 
@@ -261,7 +261,7 @@ volatile: true
 
 *bool, optional*
 
-Whether return values may be saved in program memory and passed between tools by reference. A non-None return type enables it by default. Disable only for results used solely as context text or with no composable Python object. This is separate from workspace artifacts.
+Whether results may be stored and passed between tools by reference. When omitted, Recurse infers it from the tool's return type.
 
 Example:
 

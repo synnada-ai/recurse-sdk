@@ -240,10 +240,7 @@ def build_candidate(code: str, parent_id: str, hypothesis: str) -> str:
     """Execute a complete modeling program and immediately show its actual mesh renders.
 
     Args:
-        code: Complete Python program defining scene as a trimesh.Scene, with Z up,
-            metres, and -Y as the front. An optional camera dictionary must contain
-            finite azimuth and elevation angles in degrees; defaults are -115 and 12.
-            Camera settings affect previews. Export applies the glTF Y-up conversion.
+        code: Complete Python program defining a trimesh.Scene and optional camera.
         parent_id: Earlier candidate being revised, or empty for an independent construction.
         hypothesis: Specific visual improvement or construction approach to test.
 
@@ -333,9 +330,7 @@ def record_review(candidate_id: str, critique: str, keep: bool) -> str:
         keep: Whether the inspected candidate should replace the current incumbent.
 
     Returns:
-        JSON containing the reviewed candidate_id, critique, and keep decision. When keep
-        is false, candidate_id still names the reviewed candidate, not the incumbent.
-        No pixel score determines selection.
+        JSON review and selected candidate ID, if any. No pixel score determines selection.
     """
     folder = _folder(candidate_id)
     if not (folder / "comparison.jpg").is_file():
@@ -367,10 +362,6 @@ def record_review(candidate_id: str, critique: str, keep: bool) -> str:
 
 def finish_run() -> str:
     """Archive every attempt and return the selected model receipt.
-
-    Call once after selecting the final candidate. This deletes the per-candidate folders
-    after writing history.zip. Executing it again overwrites the archive and receipt from
-    the remaining folders; reuse the saved receipt instead of calling again.
 
     Returns:
         JSON candidate ID, total attempts including failures, and number of valid candidates.
