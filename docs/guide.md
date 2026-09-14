@@ -39,9 +39,22 @@ An application directory contains:
 Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
-`Returns:`; tools returning `None` must not have a `Returns:` section. Tool parameters
-and results may be scalars (`bool`, `int`, `float`, `str`, `None`), your own classes, or
-tuples of your own classes; class instances are passed between tools by reference.
+`Returns:`; tools returning `None` must not have a `Returns:` section. Supply type parameters
+for generic types whenever possible, such as `list[Candidate]` rather than bare `list`, so the
+harness can reflect them in the tool schema. Carry results between tools through typed values.
+
+Use `tools.defaults` for shared settings and override individual registrations when needed:
+
+- `storable` allows a return value to be saved in program memory; a non-`None` return type enables
+  it by default. Disable it only for results used solely as context text or with no composable
+  Python object. This storage is separate from workspace artifacts.
+- `no_storage` lists parameters that must receive inline values instead of stored objects.
+  It defaults to an empty list.
+- `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
+  results; repeated calls or recurring patterns then do not alert the harness to a stuck loop.
+- `pure_args` lists parameters the tool guarantees not to mutate in place. It defaults to an
+  empty list; `null` declares all parameters pure. The harness uses it to plan execution, so an
+  incorrect declaration can cause races. Keep the conservative default when unsure.
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
 `task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
@@ -90,9 +103,11 @@ Keep the tool set small and give each part one role:
 - **Validator tools** measure a proposal with the independent oracle. Return the observed score,
   pass/fail state, and enough diagnostic evidence to inform the next attempt. Errors should name
   what the specialist can change before retrying.
-- **Result tools** preserve the best measured proposal, including when the target was not reached.
-  Return a concise, authoritative receipt containing the facts the calling agent needs; artifacts
-  are durable evidence, not a substitute for a readable result.
+- **Completion tool** decides whether the task is complete and, if so, preserves the best feasible
+  candidate and returns an authoritative receipt. Register it alongside action and validator tools.
+  The final JSON must match `outputs` and agree with the receipt. Artifacts hold durable evidence;
+  they are not the only explanation of the result. A quality target may remain unmet when an
+  agreed resource limit ends the search, but hard requirements still apply.
 
 Carry evolving state through typed tool values and one stable agent storage key. Do not use mutable
 module globals as run state. Keep the validator independent from candidate-producing tools, and do
@@ -105,16 +120,29 @@ should become a reusable tool.
 ## Outer-agent workflow
 
 1. Prefer an existing specialist when its contract already matches the task.
-2. Name the candidate, independent validator, stopping rule, and smallest useful tool boundary. If
-   any is unclear, work directly until the loop is understood.
-3. Establish a direct baseline or unchanged fallback before shaping the specialist.
-4. Use `recurse run` on a small representative cohort and record result quality, failures, time,
-   and cost.
-5. Make one supported change to the prompt, tools, diagnostics, or search limits in response to
-   recurring evidence.
-6. Retain the revision only when the same cohort supports its improvement. One favorable run is not
-   sufficient evidence.
-7. Deploy as MCP only after the loop is stable and likely to be reused.
+2. Before cloud work, propose the input/output contract, objective, independent verification,
+   hard constraints, and time/spending allowances. Explain the approach and what the custom agent
+   will own. Ask about material ambiguities, state narrow routine assumptions, and propose any
+   unavoidable weights or thresholds with their tradeoffs.
+3. Establish a direct baseline. Consider independent approaches concurrently when allowances permit;
+   sequence attempts that depend on earlier results. Explain the concurrency and isolation needed
+   for the work and available resources.
+4. Use `recurse run` on representative cases and record success, quality, trials, time, and cost.
+   Compare revisions on the same cases, criteria, and allowances; repeat variable results.
+5. Make small prompt, tool, or verifier changes supported by observed failures. Version changed
+   verifiers and criteria, retain earlier requirements, and reevaluate baseline and contenders
+   consistently. Keep older scores as history rather than ranking incompatible evaluations.
+   Agree materially new acceptance requirements with the user.
+6. Preserve the best feasible candidate when later attempts regress. A higher score cannot
+   compensate for a failed hard requirement. Repeated infeasibility is a reason to inspect the
+   tools and verifiers. One successful repair does not establish generalization.
+7. Track aggregate usage across runs and do not start work that cannot fit the remaining allowance.
+   Use an agreed acceptance target, or justify diminishing returns from measured gains, remaining
+   approaches, and the cost of another attempt. A timeout is not evidence of diminishing returns.
+8. Save the best agent design and its measured facts before normal completion. State whether work
+   stopped for acceptance, diminishing returns, a resource limit, or a blocker. After abrupt
+   failure, report only located evidence and distinguish diagnostic artifacts from final results.
+9. Deploy as MCP only after evidence shows that the specialist is reusable.
 
 ## Building application artifacts
 
@@ -240,10 +268,10 @@ recurse deploy path/to/app --as mcp --secret GITHUB_TOKEN=github-token
 
 Repeat `--secret` for multiple bindings. A run keeps the secret versions that were active when it
 started, so rotation affects future runs without changing one already in progress. Deleting a bound
-secret disables affected MCP deployments and blocks future runs. Secret values are available only
-to the application tools that declare them; they are never exposed during application preparation
-or model calls. If a required value is deleted before use, the run ends with
-`secret_unavailable` before the tool executes.
+secret disables affected MCP deployments and blocks future runs. Each `--secret ENV=NAME` binding
+supplies the named secret as an environment variable inside tools. Keep the value itself out of
+the manifest, command arguments, and application archive. If a required value is deleted before
+use, the run ends with `secret_unavailable` before the tool executes.
 
 ## Direct runs
 
@@ -304,7 +332,7 @@ artifacts: 0
 
 | Public reason | Meaning and next step |
 | --- | --- |
-| `insufficient_balance` | Add wallet balance with `recurse billing top-up 5` or redeem a credit code, then retry. |
+| `insufficient_balance` | Check `recurse billing balance`. Redeem an available credit code or open checkout with `recurse billing top-up 5`; an agent must obtain user approval before adding funds. Then retry. |
 | `secret_unavailable` | A bound secret could not be supplied. Check `recurse secret list` and restore it with `recurse secret set NAME` if needed. |
 | `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
 | `invalid_agent` | Check the application declaration and packaged tool definitions. |
@@ -342,6 +370,9 @@ CPU and `1024` MiB. These are billable run ceilings, not consumption measurement
 reports `build_failed`; an account with too little balance reports the top-up and redemption
 commands needed before retrying.
 
+Local prompt, tool, dependency, or model edits do not update an existing deployment. Deploy again,
+then replace the deployment ID in the MCP host configuration and reconnect to use the new version.
+
 ## Local MCP access
 
 Run `recurse login` once, then configure each local MCP host with the deployment identifier:
@@ -362,6 +393,8 @@ args = ["mcp", "serve", "<deployment-id>"]
 startup_timeout_sec = 180
 tool_timeout_sec = 1140
 ```
+
+Give other MCP hosts comparable startup and tool-call headroom around the execution limit.
 
 Both commands start the same small stdio bridge. Each process reads the shared device
 credential from the operating system keychain and obtains its own short-lived access token.
@@ -401,6 +434,8 @@ recurse billing redeem CODE
 accepts `$5.00` through `$500.00` with at most two decimal places and opens one-time hosted
 Checkout; `$5`, `$10`, and `$20` are ordinary examples, not separate plans. On a headless machine,
 add `--no-open` to print the hosted URL. `redeem` applies a Recurse-issued credit code once.
+Adding funds is a separate purchase decision, not an automatic response to insufficient balance;
+an agent must obtain user approval before purchasing credit.
 
 ## Tiny Tuner walkthrough
 
@@ -418,7 +453,9 @@ deterministic synthetic dataset:
    workspace.
 
 The agent runs measure-and-revise loops until a candidate reaches `target_f1` or
-`max_trials` is exhausted, then saves the winner. Build it yourself:
+`max_trials` is exhausted, then saves the winner. In this example, stopping is instructed by the
+prompt and `save_best_model` writes an artifact but returns `None`; it does not implement the
+completion tool and receipt pattern described above. Build it yourself:
 
 ```python
 import recurse
