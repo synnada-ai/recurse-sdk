@@ -6,7 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "api_version",
+    "apiVersion",
     "kind",
     "metadata",
     "runtime",
@@ -16,7 +16,7 @@
     "tools"
   ],
   "properties": {
-    "api_version": {
+    "apiVersion": {
       "description": "The manifest contract revision. Always `recurse.run/v1alpha1`.",
       "const": "recurse.run/v1alpha1",
       "examples": ["recurse.run/v1alpha1"]
@@ -145,7 +145,7 @@
           "minLength": 1,
           "examples": ["tools.py"]
         },
-        "built-in": {
+        "built_in": {
           "description": "Whether Recurse's built-in agent tools are also registered. Defaults to true.",
           "type": "boolean",
           "default": true,

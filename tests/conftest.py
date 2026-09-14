@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 VALID_MANIFEST: dict[str, Any] = {
-    "api_version": "recurse.run/v1alpha1",
+    "apiVersion": "recurse.run/v1alpha1",
     "kind": "Agent",
     "metadata": {
         "name": "receipt-writer",

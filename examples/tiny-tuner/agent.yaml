@@ -1,4 +1,4 @@
-api_version: recurse.run/v1alpha1
+apiVersion: recurse.run/v1alpha1
 kind: Agent
 metadata:
   name: tiny-tuner
@@ -53,7 +53,7 @@ outputs:
   additionalProperties: false
 tools:
   source: tools.py
-  built-in: true
+  built_in: true
   register:
     extract_features: ~
     train_model:

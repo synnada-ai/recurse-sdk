@@ -1,4 +1,4 @@
-api_version: recurse.run/v1alpha1
+apiVersion: recurse.run/v1alpha1
 kind: Agent
 metadata:
   name: rna-fold-lab
@@ -98,7 +98,7 @@ outputs:
   additionalProperties: false
 tools:
   source: rna_fold_tools.py
-  built-in: true
+  built_in: true
   register:
     create_sequence: ~
     evaluate_sequence:
