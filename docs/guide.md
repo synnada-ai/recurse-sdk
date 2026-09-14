@@ -180,7 +180,8 @@ objective and verification explicit.
 Use `{{ input.NAME }}` in the declared task when caller inputs provide control values. Keep the
 prompt focused on the task and decision-making; put concrete signatures and parameter instructions
 in tool docstrings. Encourage hypotheses, alternatives, and refinement from observed measurements
-rather than a fixed sequence of calls.
+rather than a fixed sequence of calls. Teach it to evaluate hypotheses using the method in
+[Comparing revisions fairly](#comparing-revisions-fairly).
 
 Revise the prompt when run evidence shows recurring misinterpretation, ignored constraints, or
 unproductive exploration. Compare the revision with the baseline using the same cases, verifiers,
@@ -212,6 +213,12 @@ A comparison needs the same cases, criteria, and allowances. Record success, qua
 time, and cost so that a larger budget is not mistaken for a better design. Repeat variable
 results. Prefer small changes supported by a concrete hypothesis over a larger redesign without
 evidence that it is needed.
+
+Explain why each hypothesis should help beyond a single repaired case. Do not reject a hypothesis
+solely because metrics regress. Resolve the conflict between the original reasoning and the
+observed results. This investigation may reveal an implementation flaw in a useful idea, or
+provide reasons to reject the hypothesis and formulate a better one. Continue to preserve the
+best feasible candidate while investigating.
 
 When a new kind of input exposes a missing check, strengthen the interpretation of the same user
 intent while retaining earlier requirements. For example, a geometry check that captures a bag's
