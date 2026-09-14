@@ -88,6 +88,7 @@ Use `tools.defaults` for shared settings and override individual registrations w
   it by default. Disable it only for results used solely as context text or with no composable
   Python object. This storage is separate from workspace artifacts.
 - `no_storage` lists parameters that must receive inline values instead of stored objects.
+  Use it for identifiers or control flags where Python object passing is unnecessary.
   It defaults to an empty list.
 - `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
   results; repeated calls or recurring patterns then do not alert the harness to a stuck loop.
@@ -125,24 +126,19 @@ To change a deployed specialist's model, edit the declaration and deploy a new v
 Unsupported selections fail rather than falling back. Model usage is charged at the selected
 model's rates, so the same token count can cost more with Astra.
 
-Recurse is useful when an outer agent needs a reusable specialist for a domain with a checkable
-outcome. The outer agent chooses the specialist's prompt, tools, inputs, and limits. The inner
-specialist then works in a shorter loop: construct, measure, and revise until it succeeds or reaches
-its declared search budget.
+Use Recurse when feedback can guide refinement or exploration across many approaches. The aim is
+to improve an objective while meeting constraints; the best achievable result need not be known.
+The outer agent shapes the prompt, tools, verifiers, inputs, and allowances. The specialist explores
+candidates, measures results, and revises from evidence without supervision of every attempt.
 
-The practical decision is whether a bounded candidate-validator loop can operate through a small,
-stable tool set without outer-agent supervision between attempts. A single substantial search can
-justify a direct Recurse run. Expected reuse is the threshold for deploying the specialist as an
-MCP, not for a direct run. A checkable result alone is insufficient: ordinary coding, editing, or
-deterministic work is usually clearer when handled directly.
+A single substantial search can justify a direct Recurse run. Use direct runs while shaping an
+agent; deploy it as an MCP after evidence shows it is reusable. Consider independent approaches
+concurrently when the allowance supports them, and sequence attempts that depend on earlier results.
 
-Start with the validator. A useful target has an independent oracle such as a test suite, scorer,
-simulator, query executor, or human review gate. Work directly on one-shot tasks, independent
-batches, deterministic workflows, or tasks without a checkable outcome.
+Choose independent verification such as a test suite, scorer, simulator, solver, or query.
+Give each part of the tool set a clear role:
 
-Keep the tool set small and give each part one role:
-
-- **Building tools** apply choices made by the specialist and reject malformed proposals. They may
+- **Action tools** apply choices made by the specialist and reject malformed proposals. They may
   preserve basic invariants, but must not search for or reveal the answer.
 - **Validator tools** measure a proposal with the independent oracle. Return the observed score,
   pass/fail state, and enough diagnostic evidence to inform the next attempt. Errors should name
@@ -153,9 +149,9 @@ Keep the tool set small and give each part one role:
   they are not the only explanation of the result. A quality target may remain unmet when an
   agreed resource limit ends the search, but hard requirements still apply.
 
-Carry evolving state through typed tool values and one stable agent storage key. Do not use mutable
-module globals as run state. Keep the validator independent from candidate-producing tools, and do
-not encode target-specific answers or deterministic solution workflows into the tool set.
+Carry evolving state through typed parameters and return values that other tools can compose.
+Do not use mutable module globals as run state. Keep the validator independent from candidate-producing
+tools, and do not encode target-specific answers or deterministic solution workflows into the tool set.
 
 Evaluate prompt or tool changes on repeated examples rather than one favorable run. Use
 `recurse run` for one run-to-completion execution and `recurse deploy --as mcp` when the specialist
@@ -332,7 +328,11 @@ service failure can be retried safely.
 
 ## Runtime-secret management
 
-Store an account-owned credential with two hidden prompts:
+User secrets are credentials you supply for your application, such as a GitHub token or simulator
+API key. Recurse separately manages its own credentials for calling the model; your application
+does not receive those credentials.
+
+Store your token under a name, using two hidden prompts:
 
 ```sh
 recurse secret set github-token
@@ -364,12 +364,31 @@ recurse run path/to/app --secret GITHUB_TOKEN=github-token
 recurse deploy path/to/app --as mcp --secret GITHUB_TOKEN=github-token
 ```
 
-Repeat `--secret` for multiple bindings. A run keeps the secret versions that were active when it
-started, so rotation affects future runs without changing one already in progress. Deleting a bound
-secret disables affected MCP deployments and blocks future runs. Each `--secret ENV=NAME` binding
-supplies the named secret as an environment variable inside tools. Keep the value itself out of
-the manifest, command arguments, and application archive. If a required value is deleted before
-use, the run ends with `secret_unavailable` before the tool executes.
+In `--secret GITHUB_TOKEN=github-token`, `github-token` is the stored name and `GITHUB_TOKEN` is the
+environment variable your application reads at run time. Neither name is the token value. Bound
+user secrets are not injected during application preparation. Repeat `--secret` for more bindings.
+
+Inside a tool, read the value and pass it directly to the service client that needs it:
+
+```python
+import os
+
+
+def call_service() -> None:
+    """Read the bound token inside a tool."""
+    token = os.environ["GITHUB_TOKEN"]
+    # Use token with your GitHub client here; do not print or return it.
+```
+
+Binding a user secret does not automatically send it to the model. However, tool output can become
+model input: if a tool returns the token, that text could reach the model. Keep values out of the
+manifest, command arguments, application archive, returned text, logs, artifacts, and other model
+input. Credential isolation does not prevent your application code from disclosing a user secret.
+
+A run keeps the secret versions selected when it started, so rotation affects future runs without
+changing one already in progress. Deleting a bound secret disables affected MCP deployments and
+blocks future runs that need it. If a required value is deleted before use, the run ends with
+`secret_unavailable` before the tool executes.
 
 ## Direct runs
 
