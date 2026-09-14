@@ -57,29 +57,68 @@ Keep tools safe to retry where possible. Prefix private helpers with `_`.
 
 ### Passing values between tools
 
-Return Python objects that other tools can accept directly. For example, the
-[skill's polygon example](https://recurse.run/SKILL.md#authoring-tools) has `build_polygon` return a
-`Polygon` and `measure_area` accept that object. The specialist can connect the tools without
-reconstructing the polygon from prose. Explain useful combinations in the return description.
+Tools can return Python objects that other tools accept directly. For example, put these two
+functions and their shared type in `tools.py`:
 
-The harness resolves dependencies between calls: a call waits for the values it needs, while
-independent calls can execute concurrently. Results can also be stored as Python objects in
-program memory and reused across iterations. Do not impose one tool call per turn or hide
-shared state in mutable globals; carry evolving state through typed parameters and returns so
-the harness can see the dependencies. Files under `recurse.context().workspace` serve a different
-purpose: durable artifacts available after the run.
+```python
+from dataclasses import dataclass
+from math import hypot
+
+
+@dataclass(frozen=True)
+class Point:
+    """A point in a two-dimensional coordinate system."""
+
+    x: float
+    y: float
+
+
+def make_point(x: float, y: float) -> Point:
+    """Create a point for measurement.
+
+    Args:
+        x: Horizontal coordinate.
+        y: Vertical coordinate in the same units as x.
+
+    Returns:
+        The point, accepted by distance_from_origin.
+    """
+    return Point(x, y)
+
+
+def distance_from_origin(point: Point) -> float:
+    """Measure a point's distance from the origin.
+
+    Args:
+        point: Point to measure.
+
+    Returns:
+        Distance in the same units as the point's coordinates.
+    """
+    return hypot(point.x, point.y)
+```
+
+`make_point` returns a `Point` that `distance_from_origin` accepts without reconstructing it from
+text. The harness resolves dependencies between calls: a call waits for the values it needs,
+while independent calls can execute concurrently. Results can also be stored as Python objects
+in program memory and reused across iterations.
+
+Pass shared state through typed parameters and return values. Mutable module globals hide
+dependencies from the harness and can lead to incorrect execution schedules. Files under
+`recurse.context().workspace` serve a different purpose: downloadable artifacts available after
+the run.
 
 ### Tool registration and settings
 
 Set `tools.source` to the application-relative tool file and register every public tool function
-by its exact name. A `~` entry uses defaults. For the polygon example:
+by its exact name. A `~` entry uses defaults. For the example above:
 
 ```yaml
 tools:
   source: tools.py
   register:
-    build_polygon: ~
-    measure_area: ~
+    make_point: ~
+    distance_from_origin: ~
 ```
 
 Use `tools.defaults` for shared settings and override individual registrations when needed:
@@ -109,7 +148,7 @@ The successful result is declared as a self-contained object JSON Schema under `
 the agent with only a JSON object matching that schema. Files written to the run workspace remain
 separate downloadable artifacts.
 
-## Designing a specialist loop
+## Model configuration
 
 Choose the specialist's model in `agent.yaml`:
 
@@ -126,124 +165,35 @@ To change a deployed specialist's model, edit the declaration and deploy a new v
 Unsupported selections fail rather than falling back. Model usage is charged at the selected
 model's rates, so the same token count can cost more with Astra.
 
-Use Recurse when feedback can guide refinement or exploration across many approaches. The aim is
-to improve an objective while meeting constraints; the best achievable result need not be known.
-The outer agent shapes the prompt, tools, verifiers, inputs, and allowances. The specialist explores
-candidates, measures results, and revises from evidence without supervision of every attempt.
+## Prompt configuration
 
-A single substantial search can justify a direct Recurse run. Use direct runs while shaping an
-agent; deploy it as an MCP after evidence shows it is reusable. Consider independent approaches
-concurrently when the allowance supports them, and sequence attempts that depend on earlier results.
+Set `agent.prompt` to the application-relative path of the system prompt file, such as `prompt.md`.
+Use that file to describe the task's objective, constraints, and completion conditions. Function
+signatures and parameter descriptions belong in tool docstrings.
 
-Choose independent verification such as a test suite, scorer, simulator, solver, or query.
-Give each part of the tool set a clear role:
+Caller-specific instructions can use `{{ input.NAME }}` substitution in `inputs.task`. For example,
+this fragment of `agent.yaml` declares a trial limit and includes it in the task:
 
-- **Action tools** apply choices made by the specialist and reject malformed proposals. They may
-  preserve basic invariants, but must not search for or reveal the answer.
-- **Validator tools** measure a proposal with the independent oracle. Return the observed score,
-  pass/fail state, and enough diagnostic evidence to inform the next attempt. Errors should name
-  what the specialist can change before retrying.
-- **Completion tool** decides whether the task is complete and, if so, preserves the best feasible
-  candidate and returns an authoritative receipt. Register it alongside action and validator tools.
-  The final JSON must match `outputs` and agree with the receipt. Artifacts hold durable evidence;
-  they are not the only explanation of the result. A quality target may remain unmet when an
-  agreed resource limit ends the search, but hard requirements still apply.
+```yaml
+inputs:
+  type: object
+  required: [max_trials]
+  properties:
+    max_trials:
+      type: integer
+      minimum: 1
+    task:
+      type: string
+      default: "Try at most {{ input.max_trials }} candidates and return the best measured result."
+```
 
-Carry evolving state through typed parameters and return values that other tools can compose.
-Do not use mutable module globals as run state. Keep the validator independent from candidate-producing
-tools, and do not encode target-specific answers or deterministic solution workflows into the tool set.
+With `{"max_trials": 10}` as run inputs, the resolved task contains `Try at most 10 candidates`.
+Tools can read the same value through `recurse.context().inputs["max_trials"]`.
 
-Evaluate prompt or tool changes on repeated examples rather than one favorable run. Use
-`recurse run` for one run-to-completion execution and `recurse deploy --as mcp` when the specialist
-should become a reusable tool.
-
-## Writing the agent prompt
-
-Create the application prompt file and point `agent.prompt` to it in `agent.yaml`. Start from the
-agreed proposal, the actual tools, and the verifiers. The prompt should tell the specialist:
-
-- The outcome to improve, how it is measured, and how to choose between feasible results.
-- Which requirements are hard constraints, which choices it can explore, and which domain facts
-  constrain those choices.
-- What each verifier measures, how the measurement relates to the goal, and what it does not
-  establish. Include the domain context needed to interpret failures and tradeoffs.
-- When to stop refinement, including acceptance conditions and the time or spending allowance.
-- Which measured facts and artifacts to return, and how final JSON must agree with the completion
-  receipt and the declared output schema.
-
-For a lighter mounting bracket, describe the material, loads, strength, stiffness, and manufacturing
-constraints. Explain how the checks establish feasibility and how mass ranks feasible designs.
-Let the specialist explore geometry and construction choices; do not prescribe a sequence of CAD
-edits or provide candidate answers. This leaves the decisions to the specialist while making the
-objective and verification explicit.
-
-Use `{{ input.NAME }}` in the declared task when caller inputs provide control values. Keep the
-prompt focused on the task and decision-making; put concrete signatures and parameter instructions
-in tool docstrings. Encourage hypotheses, alternatives, and refinement from observed measurements
-rather than a fixed sequence of calls. Teach it to evaluate hypotheses using the method in
-[Comparing revisions fairly](#comparing-revisions-fairly).
-
-Revise the prompt when run evidence shows recurring misinterpretation, ignored constraints, or
-unproductive exploration. Compare the revision with the baseline using the same cases, verifiers,
-and allowances. A longer prompt or a successful single run is not evidence of improvement by itself.
-
-## Outer-agent workflow
-
-Before cloud work, propose the input/output contract, artifact formats, objective, independent
-verification, hard constraints, and time/spending allowances. Explain why the approach fits and
-what the custom agent will own. Ask about material ambiguities and state narrow routine assumptions.
-Use arbitrary weights or thresholds sparingly; when needed, propose them with their tradeoffs.
-
-1. Prefer an existing specialist when its contract already matches the task.
-2. Establish a direct baseline. Consider independent approaches concurrently when allowances permit;
-   sequence attempts that depend on earlier results. Explain the concurrency and isolation needed
-   for the work and available resources, rather than choosing an arbitrary worker count.
-3. Use `recurse run` on representative cases and record success, quality, trials, time, and cost.
-4. Make small prompt, tool, or verifier changes supported by a hypothesis and observed evidence.
-   Compare revisions as described below and repeat variable results.
-5. Preserve the best feasible candidate when later attempts regress. One successful repair does
-   not establish that the specialist generalizes.
-6. Finalize using the acceptance target, justified diminishing returns, remaining allowance, or
-   a concrete blocker. Save the best agent design and its measured facts.
-7. Deploy as MCP only after evidence shows that the specialist is reusable.
-
-### Comparing revisions fairly
-
-A comparison needs the same cases, criteria, and allowances. Record success, quality, trials,
-time, and cost so that a larger budget is not mistaken for a better design. Repeat variable
-results. Prefer small changes supported by a concrete hypothesis over a larger redesign without
-evidence that it is needed.
-
-Explain why each hypothesis should help beyond a single repaired case. Do not reject a hypothesis
-solely because metrics regress. Resolve the conflict between the original reasoning and the
-observed results. This investigation may reveal an implementation flaw in a useful idea, or
-provide reasons to reject the hypothesis and formulate a better one. Continue to preserve the
-best feasible candidate while investigating.
-
-When a new kind of input exposes a missing check, strengthen the interpretation of the same user
-intent while retaining earlier requirements. For example, a geometry check that captures a bag's
-shape may overlook a shoe's laces. Version the revised check and evaluate both the baseline and
-contenders with it. Retain old scores as history; do not rank them against scores from the new
-check. Agree materially new requirements before changing what counts as acceptable.
-
-Separate feasibility from quality. Every hard requirement must pass before a candidate can win
-on the objective. Preserve the best feasible candidate when a later attempt has a higher score
-but fails a requirement. If no candidates are feasible after repeated attempts, examine the tools
-and verifiers instead of weakening the requirements to manufacture success.
-
-### Finalizing the agent design
-
-Finalizing the design means preserving the best prompt, tools, and verifiers supported by the
-runs, not just choosing a candidate from one run. Use the user's acceptance target when provided.
-Otherwise justify diminishing returns with the history of gains, remaining approaches, and the
-cost of another attempt. An arbitrary count of low-gain attempts does not establish convergence,
-and a runtime timeout does not establish diminishing returns or global optimality.
-
-Track aggregate time and spending across runs. Do not begin an attempt that cannot fit the
-remaining allowance. Before normal completion, save the best design and report its measurable
-facts and the reason for stopping: acceptance, diminishing returns, a resource limit, or a blocker.
-After abrupt failure, report only available evidence. Locate artifacts before claiming them,
-and identify diagnostic files as diagnostics rather than final results.
+For tool design, separating actions from independent validation is recommended so measurements
+can guide the agent's next choice. A completion tool can check acceptance conditions, save the
+result, and return measured facts. See the [agent design guidance](https://recurse.run/SKILL.md#agent-design-and-learning-from-evidence)
+for the broader workflow; the [Tiny Tuner walkthrough](#tiny-tuner-walkthrough) shows an SDK application.
 
 ## Building application artifacts
 
@@ -305,10 +255,8 @@ writable output directory. Every file written under the workspace is collected a
 artifact (64 MB total limit). Calling `recurse.context()` outside an active run raises
 `RunContextError`.
 
-Carry evolving values between tools through typed arguments, not mutable module globals. Ask the
-agent to save the first tool result under a stable key and pass that stored value into each later
-call. Module globals are suitable for constants, but are not a supported persistence mechanism for
-run state.
+Use the workspace for artifact files and typed tool arguments for values shared between calls,
+as shown in [Passing values between tools](#passing-values-between-tools).
 
 ## Login
 
@@ -456,7 +404,7 @@ artifacts: 0
 
 | Public reason | Meaning and next step |
 | --- | --- |
-| `insufficient_balance` | Check `recurse billing balance`. Redeem an available credit code or open checkout with `recurse billing top-up 5`; an agent must obtain user approval before adding funds. Then retry. |
+| `insufficient_balance` | Check `recurse billing balance`. Redeem an available credit code or open checkout with `recurse billing top-up 5`, then retry. |
 | `secret_unavailable` | A bound secret could not be supplied. Check `recurse secret list` and restore it with `recurse secret set NAME` if needed. |
 | `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
 | `invalid_agent` | Check the application declaration and packaged tool definitions. |
@@ -558,8 +506,6 @@ recurse billing redeem CODE
 accepts `$5.00` through `$500.00` with at most two decimal places and opens one-time hosted
 Checkout; `$5`, `$10`, and `$20` are ordinary examples, not separate plans. On a headless machine,
 add `--no-open` to print the hosted URL. `redeem` applies a Recurse-issued credit code once.
-Adding funds is a separate purchase decision, not an automatic response to insufficient balance;
-an agent must obtain user approval before purchasing credit.
 
 ## Tiny Tuner walkthrough
 
