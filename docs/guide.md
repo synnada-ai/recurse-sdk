@@ -405,7 +405,9 @@ with `2` as well, so inspect the printed status and error rather than treating t
 proof of a remote timeout. Other reported CLI errors exit with `1`.
 
 Confirmed run failures include the run ID, status, a stable public error identifier and a short
-explanation. For example:
+explanation. `recurse run` and `recurse status` display the service's public failure detail when
+available, falling back to a generic explanation otherwise. Terminal control characters are
+displayed as escapes. For example:
 
 ```text
 run: 77777777-7777-4777-8777-777777777777
@@ -421,7 +423,7 @@ artifacts: 0
 | `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
 | `invalid_agent` | Check the application declaration and packaged tool definitions. |
 | `invalid_output` | Check the final return value against the declared output schema. |
-| `execution_failed` | The agent failed; no more specific public cause is available. Keep the run ID when asking for help. |
+| `execution_failed` | The agent failed. Follow the public explanation when available and keep the run ID when asking for help. |
 | `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |

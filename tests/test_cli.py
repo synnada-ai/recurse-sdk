@@ -1163,7 +1163,9 @@ def test_status_without_failure_preserves_normal_output(
     run_status: str,
 ) -> None:
     """Error-reporting changes leave ordinary status output alone."""
-    service.run_views = [{**service.run_views[0], "status": run_status}]
+    service.run_views = [
+        {**service.run_views[0], "status": run_status, "error_detail": "Not a terminal failure."}
+    ]
 
     assert main(["status", service.run_id]) == 0
 
@@ -1244,6 +1246,107 @@ def test_run_failure_explains_the_confirmed_public_reason(  # noqa: PLR0913, PLR
     assert hint in output.out
     assert "may continue" not in output.out
     assert output.err == ""
+
+
+@pytest.mark.parametrize("command", ["run", "status"])
+@pytest.mark.parametrize(
+    ("state", "exit_status"),
+    [("failed", 1), ("timed_out", 2), ("cancelled", 3), ("infrastructure_failed", 4)],
+)
+def test_run_commands_display_public_failure_detail(  # noqa: PLR0913, PLR0917 - fixtures and CLI cases
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    state: str,
+    exit_status: int,
+) -> None:
+    """Both CLI paths retain the public explanation, code, identity and exit behavior."""
+    reason = "execution_failed" if state == "failed" else state
+    detail = "The run could not finish. Check the task input before retrying."
+    service.version_statuses = ["ready"]
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": state,
+            "error": reason,
+            "error_detail": detail,
+            "private_trace": "must-not-be-displayed",
+        }
+    ]
+    monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
+    target = str(write_app(tmp_path / "app")) if command == "run" else service.run_id
+
+    assert main([command, target]) == (exit_status if command == "run" else 0)
+
+    output = capsys.readouterr().out
+    assert f"run: {service.run_id}" in output
+    assert f"status: {state}" in output
+    assert f"error: {reason}: {detail}" in output
+    assert "No further public cause" not in output
+    assert "must-not-be-displayed" not in output
+    assert sum(path == f"/v1/runs/{service.run_id}" for _, path, _, _ in service.requests) == 1
+
+
+@pytest.mark.parametrize("detail", [None, "", " \t\n ", 42, {}, []])
+def test_status_falls_back_when_public_detail_is_unusable(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    detail: object,
+) -> None:
+    """Missing usable public text retains the existing safe explanation."""
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": "failed",
+            "error": "execution_failed",
+            "error_detail": detail,
+        }
+    ]
+
+    assert main(["status", service.run_id]) == 0
+
+    output = capsys.readouterr().out
+    assert f"run: {service.run_id}" in output
+    assert "error: execution_failed: The agent did not complete successfully." in output
+    assert "No further public cause is available." in output
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected"),
+    [
+        ("  Check café input.  ", "Check café input."),
+        ("Check\x1b[2J\r\b\x00\n\t\u202einput", r"Check\x1b[2J\r\x08\x00\n\t\u202einput"),
+    ],
+)
+def test_status_escapes_controls_in_public_detail(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    detail: str,
+    expected: str,
+) -> None:
+    """Public text stays readable without executing terminal or directional controls."""
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": "failed",
+            "error": "execution_failed",
+            "error_detail": detail,
+        }
+    ]
+
+    assert main(["status", service.run_id]) == 0
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"run: {service.run_id}",
+        "status: failed",
+        f"error: execution_failed: {expected}",
+        "artifacts: 0",
+    ]
 
 
 @pytest.mark.parametrize("reason", ["private provider payload", {"private": "payload"}, None])
