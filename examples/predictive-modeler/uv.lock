@@ -118,6 +118,15 @@ wheels = [
 ]
 
 [[package]]
+name = "filelock"
+version = "3.32.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/46/126b1831dca12060d4a8296bf9c4fe5c93c4f22197fa239cb0cc82042bba/filelock-3.32.6.tar.gz", hash = "sha256:a3f55a18af3652a94d8f47d6055df434f254ca1d02ef2524850c6d249ca2512c", size = 225172, upload-time = "2026-09-08T22:57:11.528Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cc/06/4f138f618dbea66803291274f228f01daf29f306fe8b96bc30dab765df75/filelock-3.32.6-py3-none-any.whl", hash = "sha256:3f16ecd0117feae0dfc147e8c62eb5daeccd8bd800378c3ddf416de9b4feb6b1", size = 100189, upload-time = "2026-09-08T22:57:10.182Z" },
+]
+
+[[package]]
 name = "jaraco-classes"
 version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -347,7 +356,7 @@ requires-dist = [
     { name = "openpyxl", specifier = "==3.1.5" },
     { name = "pandas", specifier = "==3.0.5" },
     { name = "pyarrow", specifier = "==25.0.1" },
-    { name = "recurse-sdk", specifier = "==0.1.3" },
+    { name = "recurse-sdk", specifier = "==0.1.4" },
     { name = "scikit-learn", specifier = "==1.9.1" },
     { name = "xlrd", specifier = "==2.0.2" },
 ]
@@ -432,16 +441,17 @@ wheels = [
 
 [[package]]
 name = "recurse-sdk"
-version = "0.1.3"
+version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "filelock" },
     { name = "jsonschema" },
     { name = "keyring" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/ae/75ecaac7a2cef0abcdf4605393c26e698b79eab19703df45163d71a89ead/recurse_sdk-0.1.3.tar.gz", hash = "sha256:2537fd9faa16e8fb84a97235953df6c0a31581517175bb90c2c9683caaa02298", size = 257232, upload-time = "2026-09-14T06:20:52.825Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/3b/1bf7367f6ce491a6772fe94246da1c3d621f0f5210eaeba6fc7e987fceaa/recurse_sdk-0.1.4.tar.gz", hash = "sha256:9a42e3dbc0f884be4b3d9cb947eddafa002322adb97aa0368434e1d4e1e0efa6", size = 268434, upload-time = "2026-09-15T23:42:15.668Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/79/6f/e22e76b8582e9ea8a0ec58db576c87644ba96fd9800fdbed6ebb6e468048/recurse_sdk-0.1.3-py3-none-any.whl", hash = "sha256:14afd96a37ae4c40152077256dad1a5d882e00f65cddc3cad8d4dfcf6517c828", size = 38521, upload-time = "2026-09-14T06:20:53.887Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/7b/d42a2e1416cfdf8817a6fbe01e2d14f3a8881860b7b0988aa1b6e4638dd7/recurse_sdk-0.1.4-py3-none-any.whl", hash = "sha256:3c17921cdd10e44eb634170ac80861c775e038e7b3b18253525478c9d832228f", size = 40121, upload-time = "2026-09-15T23:42:14.408Z" },
 ]
 
 [[package]]

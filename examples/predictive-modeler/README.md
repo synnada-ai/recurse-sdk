@@ -225,7 +225,16 @@ uv run --directory examples/predictive-modeler/tests --locked \
 ```
 
 The default suite uses small generated fixtures solely for deterministic edge cases and requires
-100% statement and branch coverage. The real-data suite is opt-in and uses full datasets:
+100% statement and branch coverage. That test environment uses the editable SDK checkout.
+To check the SDK release pinned by the example instead, use its application environment:
+
+```sh
+uv run --directory examples/predictive-modeler --locked \
+  --with 'pytest>=8,<9' --with pytest-cov --with pytest-xdist \
+  python -c 'import os, pytest; os.chdir("tests"); raise SystemExit(pytest.main(["--cov", "--cov-branch", "--cov-report=term-missing", "-q"]))'
+```
+
+The real-data suite is opt-in and uses full datasets:
 
 ```sh
 uv run --directory examples/predictive-modeler/tests --locked \

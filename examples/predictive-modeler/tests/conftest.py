@@ -11,7 +11,6 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT.parents[1] / "src"))
 
 from modeler.contracts import resolve  # noqa: E402 - example import path
 

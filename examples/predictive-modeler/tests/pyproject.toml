@@ -19,7 +19,7 @@ markers = ["integration: downloads and exercises real datasets"]
 [tool.coverage.run]
 branch = true
 source = [".."]
-omit = ["*/tests/*"]
+omit = ["*/tests/*", "*/.venv/*"]
 
 [tool.coverage.report]
 fail_under = 100

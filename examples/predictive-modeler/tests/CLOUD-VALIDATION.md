@@ -129,3 +129,8 @@ Local verification of this revision: **145 modeler unit tests at 100% statement/
 **six full real-data tool-chain integrations**, and **434 SDK tests at 100% coverage** passed.
 Strict typing, lint, docstrings, packaged manifest checks, and SDK builds also passed.
 These are local checks; the new inline interface and extraction behavior await cloud validation.
+
+The example and installed operational CLI have subsequently been upgraded to `recurse-sdk==0.1.4`.
+Future remote operations should use the upgraded installed `recurse` command; `uv run recurse`
+from this SDK source checkout still invokes its editable development version. Cloud runs remain
+paused until the user confirms the backend fix.
