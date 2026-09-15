@@ -237,7 +237,7 @@ def test_api_origins_and_logins_cannot_share_tokens(
         other.close()
 
 
-@pytest.mark.parametrize("operation", ["get_password", "set_password", "delete_password"])
+@pytest.mark.parametrize("operation", ["get_password", "delete_password"])
 def test_cache_keyring_failure_is_reported_safely(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
@@ -246,6 +246,7 @@ def test_cache_keyring_failure_is_reported_safely(
 ) -> None:
     """Cache access errors are reported without printing credentials or returning stale tokens."""
     cli._access_token()
+    before = dict(logged_in)
 
     def fail(*args: object) -> None:
         """Simulate the keyring becoming unavailable."""
@@ -254,6 +255,74 @@ def test_cache_keyring_failure_is_reported_safely(
     monkeypatch.setattr(keyring, operation, fail)
     with pytest.raises(cli._CliError, match="keychain"):
         cli._access_token(rejected_token="access-1")  # noqa: S106 - fake bearer
+    assert service.device_grants == ["device-1"]
+    assert logged_in == before
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_cache_write_failure_keeps_fresh_token_without_hiding_degraded_reuse(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    cached: bool,
+) -> None:
+    """A cache-only write failure must not discard a valid exchange or reuse a rejected token."""
+    service.token_responses = ["access-old", "access-new", "access-next"]
+    if cached:
+        assert cli._access_token() == "access-old"
+
+    def fail(*args: object) -> None:
+        """Reject only keyring writes, with sensitive text that must not reach stderr."""
+        raise keyring.errors.PasswordSetError("device-1 access-new")
+
+    monkeypatch.setattr(keyring, "set_password", fail)
+    token = cli._access_token(rejected_token="access-old" if cached else None)
+    assert token == ("access-new" if cached else "access-old")
+    assert cache_key(service.url) not in logged_in
+    assert cli._device_credential() == "device-1"
+    assert service.device_grants == ["device-1"] * (2 if cached else 1)
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "cannot save" in output.err
+    assert "reuse" in output.err
+    assert "device-1" not in output.err
+    assert "access-" not in output.err
+
+    # A failed cache write must not leave an in-memory bearer reused on the next call.
+    assert cli._access_token() == ("access-next" if cached else "access-new")
+    assert service.device_grants == ["device-1"] * (3 if cached else 2)
+
+
+@pytest.mark.parametrize("arguments,exit_code", [(["--help"], 0), (["billing", "balance"], 1)])
+def test_missing_home_only_blocks_commands_requiring_authentication(
+    service: FakeService, tmp_path: Path, arguments: list[str], exit_code: int
+) -> None:
+    """Missing home resolution cannot break help; auth fails clearly before any exchange."""
+    env = process_environment(tmp_path, service.url)
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and isolated synthetic environment
+        [
+            sys.executable,
+            "-c",
+            "import os.path, sys; os.path.expanduser = lambda path: path; "
+            "from _recurse_cli import main; raise SystemExit(main(sys.argv[1:]))",
+            *arguments,
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == exit_code
+    if exit_code == 0:
+        assert "usage: recurse" in result.stdout
+        assert result.stderr == ""
+    else:
+        assert result.stdout == ""
+        assert "login lock" in result.stderr
+        assert "Traceback" not in result.stderr
+    assert service.requests == []
 
 
 def test_lock_timeout_and_permissions(
@@ -282,16 +351,25 @@ def test_lock_timeout_and_permissions(
     assert service.device_grants == []
 
 
+@pytest.mark.parametrize("missing_home", [False, True])
 def test_unavailable_lock_directory_does_not_exchange(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    missing_home: bool,
 ) -> None:
     """A filesystem failure cannot bypass refresh coordination."""
     path = tmp_path / "not-a-directory"
     path.write_text("occupied")
     monkeypatch.setattr(cli, "_AUTH_LOCK_DIRECTORY", path)
+    if missing_home:
+
+        def fail_expanduser(self: Path) -> Path:
+            """Simulate Python failing to resolve a home directory."""
+            raise RuntimeError("Could not determine home directory.")
+
+        monkeypatch.setattr(Path, "expanduser", fail_expanduser)
     with pytest.raises(cli._CliError, match="login lock"):
         cli._access_token()
     assert service.device_grants == []

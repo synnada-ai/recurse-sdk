@@ -286,6 +286,11 @@ to both the active API URL and saved login, and refreshed thirty seconds before 
 expiry. TEST and production logins can coexist. No credentials are written into application
 directories, lock files, or MCP configuration.
 
+Token reuse requires a writable keychain. If only saving a freshly issued token fails,
+the command continues with that token and prints a warning to stderr. Later commands
+must exchange again and may hit sign-in rate limits until keychain writes are restored.
+Failures reading the keychain or removing a stale token still stop authentication.
+
 Log out when you want to revoke the device credential:
 
 ```sh

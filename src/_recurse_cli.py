@@ -42,7 +42,7 @@ from recurse import RecurseError, _build_bundle
 
 _DEFAULT_API_URL = "https://api.recurse.run"
 _REQUEST_TIMEOUT_SECONDS = 60
-_AUTH_LOCK_DIRECTORY = Path.home() / ".recurse" / "locks"
+_AUTH_LOCK_DIRECTORY = Path("~") / ".recurse" / "locks"
 _TOKEN_REFRESH_MARGIN_SECONDS = 30
 _POLL_SECONDS = 2.0
 _RUN_TIMEOUT_SECONDS = 15 * 60
@@ -450,11 +450,15 @@ def _auth_lock() -> Iterator[None]:
         _CliError: If locking times out, storage fails, or the keychain is unavailable.
     """
     try:
-        _AUTH_LOCK_DIRECTORY.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory = _AUTH_LOCK_DIRECTORY.expanduser()
+    except RuntimeError as error:
+        raise _CliError(
+            "could not resolve the home directory for the Recurse login lock"
+        ) from error
+    try:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         identity = hashlib.sha256(api_base_url().encode()).hexdigest()
-        with FileLock(
-            _AUTH_LOCK_DIRECTORY / f"{identity}.lock", timeout=_REQUEST_TIMEOUT_SECONDS, mode=0o600
-        ):
+        with FileLock(directory / f"{identity}.lock", timeout=_REQUEST_TIMEOUT_SECONDS, mode=0o600):
             yield
     except Timeout as error:
         raise _CliError("another Recurse process is refreshing your login; try again") from error
@@ -532,7 +536,8 @@ def _access_token(rejected_token: str | None = None) -> str:
         rejected_token: Bearer rejected by the service; a newer cached bearer is reusable.
 
     Returns:
-        A cached or freshly issued access token.
+        A cached or freshly issued access token. If saving the cache fails, the
+        fresh token remains usable and a warning is printed to stderr.
 
     Raises:
         _CliError: If no login is stored or local coordination/storage fails.
@@ -558,17 +563,24 @@ def _access_token(rejected_token: str | None = None) -> str:
             or expires_in <= 0
         ):
             raise ServiceError("the Recurse service returned an invalid response: expires_in")
-        keyring.set_password(
-            _KEYCHAIN_SERVICE,
-            cache_name,
-            json.dumps(
-                {
-                    "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
-                    "access_token": token,
-                    "expires_at": started_at + expires_in,
-                }
-            ),
-        )
+        try:
+            keyring.set_password(
+                _KEYCHAIN_SERVICE,
+                cache_name,
+                json.dumps(
+                    {
+                        "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
+                        "access_token": token,
+                        "expires_at": started_at + expires_in,
+                    }
+                ),
+            )
+        except keyring.errors.KeyringError:
+            print(
+                "warning: cannot save the login token for reuse; allow keychain writes "
+                "to avoid repeated sign-ins and rate limits. Continuing with this token.",
+                file=sys.stderr,
+            )
         return token
 
 
