@@ -22,23 +22,28 @@ def test_generated_references_are_not_stale() -> None:
     assert generate_docs.main(["--check"]) == 0
 
 
-def test_guide_explains_how_to_shape_a_specialist_loop() -> None:
-    """Authoring guidance covers the decisions that make recursion useful."""
+def test_guide_covers_tool_authoring_and_links_to_design_guidance() -> None:
+    """Keep SDK authoring instructions local and the design workflow discoverable."""
     guide = (ROOT / "docs" / "guide.md").read_text()
+    text = " ".join(guide.split())
 
     for phrase in (
-        "## Designing a specialist loop",
-        "## Outer-agent workflow",
-        "bounded candidate-validator loop",
-        "Building tools",
-        "Validator tools",
-        "construct, measure, and revise",
-        "authoritative receipt",
-        "mutable module globals",
-        "Establish a direct baseline",
-        "Deploy as MCP only",
+        "`tools.source`",
+        "`tools.register`",
+        "Google-style docstring",
+        "Supply type parameters",
+        "pinned Agentia version",
+        "passed between tools by reference",
+        "Repeated references retain object identity",
+        "`storable`",
+        "`no_storage`",
+        "`volatile`",
+        "`pure_args`",
     ):
-        assert phrase in guide
+        assert phrase in text
+
+    links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", guide)
+    assert "https://recurse.run/SKILL.md#agent-design-and-learning-from-evidence" in links
 
 
 def test_every_example_has_a_public_readme() -> None:
