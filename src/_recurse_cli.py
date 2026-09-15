@@ -1802,7 +1802,14 @@ def _print_run_view(view: dict[str, Any]) -> None:
         error = view.get("error") if view["status"] == "failed" else view["status"]
         if not isinstance(error, str) or error not in _RUN_FAILURE_MESSAGES:
             error = "unknown_error"
-        print(f"error: {error}: {_RUN_FAILURE_MESSAGES[error]}")
+        detail = view.get("error_detail")
+        explanation = _RUN_FAILURE_MESSAGES[error]
+        if isinstance(detail, str) and detail.strip():
+            explanation = "".join(
+                character if character.isprintable() else repr(character)[1:-1]
+                for character in detail.strip()
+            )
+        print(f"error: {error}: {explanation}")
     print(f"artifacts: {len(view['artifacts'])}")
     if view["payload_expired"]:
         print("payloads: expired")
