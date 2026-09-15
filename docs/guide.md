@@ -487,6 +487,10 @@ standard output. Each tool call is submitted once and can continue while the loc
 for its result. A host cancellation cancels that call; temporary connection interruptions resume
 waiting for the same call instead of submitting it again.
 
+Completed tool results, terminal task errors, and remote polling errors after task admission include
+a `Task: task_…` reference for support.
+This reference does not change the agent's declared structured output or artifact links.
+
 An MCP host may override the deployment's resource ceilings for one call through standard request
 metadata. Include either or both fields under `params._meta` in the `tools/call` request:
 
