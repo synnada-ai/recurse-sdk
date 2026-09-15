@@ -36,12 +36,121 @@ An application directory contains:
 - `pyproject.toml` with an explicit standards-based build backend, and the uv lockfile declared by
   `runtime.lockfile`.
 
+### Tool interfaces
+
 Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
-`Returns:`; tools returning `None` must not have a `Returns:` section. Tool parameters
-and results may be scalars (`bool`, `int`, `float`, `str`, `None`), your own classes, or
-tuples of your own classes; class instances are passed between tools by reference.
+`Returns:`; tools returning `None` must not have a `Returns:` section. Supply type parameters
+for generic types whenever possible, such as `list[Candidate]` rather than bare `list`, so the
+harness can reflect them in the tool schema. Use bare generics only when their element types
+are unconstrained or unknown.
+
+Tool parameters and results use the annotation support of the engine's pinned Agentia version.
+Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your own classes,
+`list[int]`, `dict[str, float]`, `tuple[int, ...]`, `tuple[int, str]`, optional values such as
+`str | None`, unions such as `list[int] | str`, and `Literal["a", "b"]` (from `typing`).
+These examples are not exhaustive; support depends on that Agentia version. Collections can
+also be nested, such as `list[dict[str, tuple[int, ...]]]`.
+
+The harness turns the docstring summary, body, and `Returns:` section into the tool description.
+Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
+as instructions the specialist can use: what the tool does, when to choose it, valid ranges or
+units, side effects, and what another tool can do with the result. Keep signatures and parameter
+instructions here; the agent prompt explains their role in the task.
+
+Use safe defaults and make errors explain both the problem and what the specialist can correct.
+Keep tools safe to retry where possible. Prefix private helpers with `_`.
+
+### Passing values between tools
+
+Tools can return Python objects that other tools accept directly. For example, put these two
+functions and their shared type in `tools.py`:
+
+```python
+from dataclasses import dataclass
+from math import hypot
+
+
+@dataclass(frozen=True)
+class Point:
+    """A point in a two-dimensional coordinate system."""
+
+    x: float
+    y: float
+
+
+def make_point(x: float, y: float) -> Point:
+    """Create a point for measurement.
+
+    Args:
+        x: Horizontal coordinate.
+        y: Vertical coordinate in the same units as x.
+
+    Returns:
+        The point, accepted by distance_from_origin.
+    """
+    return Point(x, y)
+
+
+def distance_from_origin(point: Point) -> float:
+    """Measure a point's distance from the origin.
+
+    Args:
+        point: Point to measure.
+
+    Returns:
+        Distance in the same units as the point's coordinates.
+    """
+    return hypot(point.x, point.y)
+```
+
+`make_point` returns a `Point` that `distance_from_origin` accepts without reconstructing it from
+text. The harness resolves dependencies between calls: a call waits for the values it needs,
+while independent calls can execute concurrently. Results can also be stored as Python objects
+in program memory and reused across iterations.
+
+Collections can contain application objects directly, such as `list[Candidate]`; ordinary
+collections do not need wrapper classes. Class instances are passed between tools by reference,
+including inside collections. Repeated references retain object identity, so a mutation through
+one reference is visible through the others.
+
+Pass shared state through typed parameters and return values. Mutable module globals hide
+dependencies from the harness and can lead to incorrect execution schedules. Files under
+`recurse.context().workspace` serve a different purpose: downloadable artifacts available after
+the run.
+
+### Tool registration and settings
+
+Set `tools.source` to the application-relative tool file and register every public tool function
+by its exact name. A `~` entry uses defaults. For the example above:
+
+```yaml
+tools:
+  source: tools.py
+  register:
+    make_point: ~
+    distance_from_origin: ~
+```
+
+Use `tools.defaults` for shared settings and override individual registrations when needed:
+
+- `storable` allows a return value to be saved in program memory; a non-`None` return type enables
+  it by default. Disable it only for results used solely as context text or with no composable
+  Python object. This storage is separate from workspace artifacts.
+- `no_storage` lists parameters that must receive inline values instead of stored objects.
+  Use it for identifiers or control flags where Python object passing is unnecessary.
+  It defaults to an empty list.
+- `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
+  results; repeated calls or recurring patterns then do not alert the harness to a stuck loop.
+- `pure_args` lists parameters the tool guarantees not to mutate in place. It defaults to an
+  empty list; `null` declares all parameters pure. The harness uses it to plan execution, so an
+  incorrect declaration can cause races. Keep the conservative default when unsure.
+
+`tools.built-in` defaults to `true` and controls built-in tools such as notes, TODO management,
+and planning. Set per-tool options only when their behavior calls for them.
+
+### Input and output contracts
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
 `task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
@@ -51,7 +160,7 @@ The successful result is declared as a self-contained object JSON Schema under `
 the agent with only a JSON object matching that schema. Files written to the run workspace remain
 separate downloadable artifacts.
 
-## Designing a specialist loop
+## Model configuration
 
 Choose the specialist's model in `agent.yaml`:
 
@@ -68,53 +177,35 @@ To change a deployed specialist's model, edit the declaration and deploy a new v
 Unsupported selections fail rather than falling back. Model usage is charged at the selected
 model's rates, so the same token count can cost more with Astra.
 
-Recurse is useful when an outer agent needs a reusable specialist for a domain with a checkable
-outcome. The outer agent chooses the specialist's prompt, tools, inputs, and limits. The inner
-specialist then works in a shorter loop: construct, measure, and revise until it succeeds or reaches
-its declared search budget.
+## Prompt configuration
 
-The practical decision is whether a bounded candidate-validator loop can operate through a small,
-stable tool set without outer-agent supervision between attempts. A single substantial search can
-justify a direct Recurse run. Expected reuse is the threshold for deploying the specialist as an
-MCP, not for a direct run. A checkable result alone is insufficient: ordinary coding, editing, or
-deterministic work is usually clearer when handled directly.
+Set `agent.prompt` to the application-relative path of the system prompt file, such as `prompt.md`.
+Use that file to describe the task's objective, constraints, and completion conditions. Function
+signatures and parameter descriptions belong in tool docstrings.
 
-Start with the validator. A useful target has an independent oracle such as a test suite, scorer,
-simulator, query executor, or human review gate. Work directly on one-shot tasks, independent
-batches, deterministic workflows, or tasks without a checkable outcome.
+Caller-specific instructions can use `{{ input.NAME }}` substitution in `inputs.task`. For example,
+this fragment of `agent.yaml` declares a trial limit and includes it in the task:
 
-Keep the tool set small and give each part one role:
+```yaml
+inputs:
+  type: object
+  required: [max_trials]
+  properties:
+    max_trials:
+      type: integer
+      minimum: 1
+    task:
+      type: string
+      default: "Try at most {{ input.max_trials }} candidates and return the best measured result."
+```
 
-- **Building tools** apply choices made by the specialist and reject malformed proposals. They may
-  preserve basic invariants, but must not search for or reveal the answer.
-- **Validator tools** measure a proposal with the independent oracle. Return the observed score,
-  pass/fail state, and enough diagnostic evidence to inform the next attempt. Errors should name
-  what the specialist can change before retrying.
-- **Result tools** preserve the best measured proposal, including when the target was not reached.
-  Return a concise, authoritative receipt containing the facts the calling agent needs; artifacts
-  are durable evidence, not a substitute for a readable result.
+With `{"max_trials": 10}` as run inputs, the resolved task contains `Try at most 10 candidates`.
+Tools can read the same value through `recurse.context().inputs["max_trials"]`.
 
-Carry evolving state through typed tool values and one stable agent storage key. Do not use mutable
-module globals as run state. Keep the validator independent from candidate-producing tools, and do
-not encode target-specific answers or deterministic solution workflows into the tool set.
-
-Evaluate prompt or tool changes on repeated examples rather than one favorable run. Use
-`recurse run` for one run-to-completion execution and `recurse deploy --as mcp` when the specialist
-should become a reusable tool.
-
-## Outer-agent workflow
-
-1. Prefer an existing specialist when its contract already matches the task.
-2. Name the candidate, independent validator, stopping rule, and smallest useful tool boundary. If
-   any is unclear, work directly until the loop is understood.
-3. Establish a direct baseline or unchanged fallback before shaping the specialist.
-4. Use `recurse run` on a small representative cohort and record result quality, failures, time,
-   and cost.
-5. Make one supported change to the prompt, tools, diagnostics, or search limits in response to
-   recurring evidence.
-6. Retain the revision only when the same cohort supports its improvement. One favorable run is not
-   sufficient evidence.
-7. Deploy as MCP only after the loop is stable and likely to be reused.
+For tool design, separating actions from independent validation is recommended so measurements
+can guide the agent's next choice. A completion tool can check acceptance conditions, save the
+result, and return measured facts. See the [agent design guidance](https://recurse.run/SKILL.md#agent-design-and-learning-from-evidence)
+for the broader workflow; the [Tiny Tuner walkthrough](#tiny-tuner-walkthrough) shows an SDK application.
 
 ## Building application artifacts
 
@@ -176,10 +267,8 @@ writable output directory. Every file written under the workspace is collected a
 artifact (64 MB total limit). Calling `recurse.context()` outside an active run raises
 `RunContextError`.
 
-Carry evolving values between tools through typed arguments, not mutable module globals. Ask the
-agent to save the first tool result under a stable key and pass that stored value into each later
-call. Module globals are suitable for constants, but are not a supported persistence mechanism for
-run state.
+Use the workspace for artifact files and typed tool arguments for values shared between calls,
+as shown in [Passing values between tools](#passing-values-between-tools).
 
 ## Login
 
@@ -206,7 +295,11 @@ service failure can be retried safely.
 
 ## Runtime-secret management
 
-Store an account-owned credential with two hidden prompts:
+User secrets are credentials you supply for your application, such as a GitHub token or simulator
+API key. Recurse separately manages its own credentials for calling the model; your application
+does not receive those credentials.
+
+Store your token under a name, using two hidden prompts:
 
 ```sh
 recurse secret set github-token
@@ -238,11 +331,30 @@ recurse run path/to/app --secret GITHUB_TOKEN=github-token
 recurse deploy path/to/app --as mcp --secret GITHUB_TOKEN=github-token
 ```
 
-Repeat `--secret` for multiple bindings. A run keeps the secret versions that were active when it
-started, so rotation affects future runs without changing one already in progress. Deleting a bound
-secret disables affected MCP deployments and blocks future runs. Secret values are available only
-to the application tools that declare them; they are never exposed during application preparation
-or model calls. If a required value is deleted before use, the run ends with
+In `--secret GITHUB_TOKEN=github-token`, `github-token` is the stored name and `GITHUB_TOKEN` is the
+environment variable your application reads at run time. Neither name is the token value. Bound
+user secrets are not injected during application preparation. Repeat `--secret` for more bindings.
+
+Inside a tool, read the value and pass it directly to the service client that needs it:
+
+```python
+import os
+
+
+def call_service() -> None:
+    """Read the bound token inside a tool."""
+    token = os.environ["GITHUB_TOKEN"]
+    # Use token with your GitHub client here; do not print or return it.
+```
+
+Binding a user secret does not automatically send it to the model. However, tool output can become
+model input: if a tool returns the token, that text could reach the model. Keep values out of the
+manifest, command arguments, application archive, returned text, logs, artifacts, and other model
+input. Credential isolation does not prevent your application code from disclosing a user secret.
+
+A run keeps the secret versions selected when it started, so rotation affects future runs without
+changing one already in progress. Deleting a bound secret disables affected MCP deployments and
+blocks future runs that need it. If a required value is deleted before use, the run ends with
 `secret_unavailable` before the tool executes.
 
 ## Direct runs
@@ -304,7 +416,7 @@ artifacts: 0
 
 | Public reason | Meaning and next step |
 | --- | --- |
-| `insufficient_balance` | Add wallet balance with `recurse billing top-up 5` or redeem a credit code, then retry. |
+| `insufficient_balance` | Check `recurse billing balance`. Redeem an available credit code or open checkout with `recurse billing top-up 5`, then retry. |
 | `secret_unavailable` | A bound secret could not be supplied. Check `recurse secret list` and restore it with `recurse secret set NAME` if needed. |
 | `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
 | `invalid_agent` | Check the application declaration and packaged tool definitions. |
@@ -342,6 +454,9 @@ CPU and `1024` MiB. These are billable run ceilings, not consumption measurement
 reports `build_failed`; an account with too little balance reports the top-up and redemption
 commands needed before retrying.
 
+Local prompt, tool, dependency, or model edits do not update an existing deployment. Deploy again,
+then replace the deployment ID in the MCP host configuration and reconnect to use the new version.
+
 ## Local MCP access
 
 Run `recurse login` once, then configure each local MCP host with the deployment identifier:
@@ -362,6 +477,8 @@ args = ["mcp", "serve", "<deployment-id>"]
 startup_timeout_sec = 180
 tool_timeout_sec = 1140
 ```
+
+Give other MCP hosts comparable startup and tool-call headroom around the execution limit.
 
 Both commands start the same small stdio bridge. Each process reads the shared device
 credential from the operating system keychain and obtains its own short-lived access token.
