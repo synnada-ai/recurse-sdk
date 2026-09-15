@@ -279,10 +279,17 @@ recurse login
 Your browser opens the hosted Recurse login page; sign in with GitHub or Google. The
 CLI listens on `http://127.0.0.1:8765/callback`, protects the flow with a PKCE
 challenge and a single-use state value, and stores one opaque device credential in your
-operating system keychain (service `recurse-cli`). Short-lived access tokens are obtained
-when a command starts. The keychain entry is scoped to the active Recurse API URL, so TEST
-and production logins can coexist. No credentials are written into application directories
-or MCP configuration.
+operating system keychain (service `recurse-cli`). Commands and MCP processes sharing that
+login reuse a short-lived access token stored in the same keychain. A local lock coordinates
+refreshes, so concurrent callers do not each exchange the device credential. Tokens are scoped
+to both the active API URL and saved login, and refreshed thirty seconds before their returned
+expiry. TEST and production logins can coexist. No credentials are written into application
+directories, lock files, or MCP configuration.
+
+Token reuse requires a writable keychain. If only saving a freshly issued token fails,
+the command continues with that token and prints a warning to stderr. Later commands
+must exchange again and may hit sign-in rate limits until keychain writes are restored.
+Failures reading the keychain or removing a stale token still stop authentication.
 
 Log out when you want to revoke the device credential:
 
@@ -290,8 +297,11 @@ Log out when you want to revoke the device credential:
 recurse logout
 ```
 
-The local keychain entry is removed only after revocation succeeds, so a temporary
-service failure can be retried safely.
+The local login and cached token are removed only after revocation succeeds, so a temporary
+service failure can be retried safely. Logging in again replaces the previous login's cache.
+Remote revocation of a device credential does not immediately invalidate an already-issued
+access token: local commands can reuse it until refresh is due (currently within fifteen
+minutes). A running request may already hold that token. Local logout prevents further cache reuse.
 
 ## Runtime-secret management
 
@@ -483,7 +493,7 @@ tool_timeout_sec = 1140
 Give other MCP hosts comparable startup and tool-call headroom around the execution limit.
 
 Both commands start the same small stdio bridge. Each process reads the shared device
-credential from the operating system keychain and obtains its own short-lived access token.
+credential and reuses its short-lived access token through the operating system keychain.
 The device credential is never written to host configuration, environment variables, or
 standard output. Each tool call is submitted once and can continue while the local process polls
 for its result. A host cancellation cancels that call; temporary connection interruptions resume

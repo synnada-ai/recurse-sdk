@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from tests.conftest import write_app
+from tests.keyring_backend import process_environment
 from tests.test_cli import FakeService
 
 
@@ -27,16 +28,12 @@ def service() -> Iterator[FakeService]:
 
 def start_cli(service: FakeService, app: Path) -> subprocess.Popen[bytes]:
     """Run the real CLI with a fake keychain and its actual packaging/HTTP paths."""
-    environment = os.environ.copy()
-    environment["RECURSE_API_URL"] = service.url
-    environment["PYTHONPATH"] = str(Path.cwd() / "src")
+    environment = process_environment(app.parent, service.url)
     command = [
         sys.executable,
         "-u",
         "-c",
-        "import keyring, sys; from _recurse_cli import main; "
-        "keyring.get_password = lambda *args: 'device-1'; "
-        "raise SystemExit(main(sys.argv[1:]))",
+        "import sys; from _recurse_cli import main; raise SystemExit(main(sys.argv[1:]))",
         "run",
         str(app),
         "--inputs",

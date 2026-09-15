@@ -10,7 +10,6 @@ import hashlib
 import http.client
 import io
 import json
-import os
 import queue
 import socket
 import subprocess
@@ -22,6 +21,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from email.message import Message
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -34,6 +34,7 @@ import pytest
 import _recurse_cli as cli
 from _recurse_cli import _LoginServer, main
 from tests.conftest import write_app
+from tests.keyring_backend import process_environment
 
 
 class FakeService:
@@ -55,6 +56,9 @@ class FakeService:
         self.mcp_failures: list[tuple[int, dict[str, Any]]] = []
         self.mcp_poll_failures: list[tuple[int, dict[str, Any]]] = []
         self.mcp_raw_responses: list[bytes] = []
+        self.mcp_handler: (
+            Callable[[dict[str, Any], str | None], tuple[int, dict[str, Any]]] | None
+        ) = None
         self.mcp_responses: list[dict[str, Any]] = []
         self.mcp_live_task_id: str | None = None
         self.artifact_bytes = b'{"f1":0.8}'
@@ -122,7 +126,7 @@ class FakeService:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def _handle(self) -> None:  # noqa: PLR0912,PLR0915 - explicit contract double
+            def _handle(self) -> None:  # noqa: PLR0911,PLR0912,PLR0915 - explicit contract double
                 """Record the request and answer it from the scripted routes."""
                 path = self.path
                 length = int(self.headers.get("Content-Length", "0"))
@@ -136,6 +140,12 @@ class FakeService:
                         (self.command, path, raw, self.headers.get("Authorization"))
                     )
                     method = self.headers.get("Mcp-Method")
+                    if service.mcp_handler is not None:
+                        status, payload = service.mcp_handler(
+                            request_payload, self.headers.get("Authorization")
+                        )
+                        self._reply(status, payload)
+                        return
                     if method == "tasks/get" and service.mcp_poll_failures:
                         status, payload = service.mcp_poll_failures.pop(0)
                         self._reply(status, payload)
@@ -386,9 +396,10 @@ def service(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeService]:
 
 
 @pytest.fixture(autouse=True)
-def _ephemeral_callback_port(monkeypatch: pytest.MonkeyPatch) -> None:
+def _ephemeral_callback_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Bind the login callback to an ephemeral port so tests never collide."""
     monkeypatch.setattr("_recurse_cli._CALLBACK_PORT", 0)
+    monkeypatch.setattr(cli, "_AUTH_LOCK_DIRECTORY", tmp_path / "locks")
 
 
 @pytest.fixture
@@ -636,7 +647,10 @@ def test_deploy_builds_uploads_and_prints_only_public_results(
         ("POST", "/v1/deployments"),
     ]
     assert service.device_grants == ["device-1"]
-    assert logged_in == {_credential_key(service.url): "device-1"}
+
+    assert logged_in[_credential_key(service.url)] == "device-1"
+    cached = json.loads(logged_in[("recurse-cli", f"access-token:{service.url}")])
+    assert cached["access_token"] == "access-1"  # noqa: S105 - fake bearer
     registration = service.requests[1][2]
     assert isinstance(registration, dict)
     assert registration["agent_name"] == "receipt-writer"
@@ -908,7 +922,7 @@ def test_run_reauthenticates_once_after_401_during_admission(
     admissions: list[tuple[str, dict[str, Any]]] = []
 
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
-    monkeypatch.setattr(cli, "_access_token", lambda: "access-new")
+    monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
     def respond(
@@ -965,7 +979,7 @@ def test_run_reauthenticates_once_after_401_during_polling(
     tokens: list[str] = []
 
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
-    monkeypatch.setattr(cli, "_access_token", lambda: "access-new")
+    monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
     def respond(
@@ -3037,7 +3051,52 @@ def test_device_credential_is_exchanged_without_rotation(
             None,
         )
     ]
-    assert logged_in == {_credential_key(service.url): "device-1"}
+    assert logged_in[_credential_key(service.url)] == "device-1"
+    cached = json.loads(logged_in[("recurse-cli", f"access-token:{service.url}")])
+    assert cached["access_token"] == "access-1"  # noqa: S105 - fake bearer
+
+
+def test_parallel_access_token_requests_share_one_exchange(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+) -> None:
+    """Twelve concurrent callers must not consume twelve provider sign-ins."""
+    barrier = threading.Barrier(12)
+
+    def obtain_token(_: int) -> str:
+        """Start all callers together, using the real token HTTP endpoint."""
+        barrier.wait(timeout=10)
+        return cli._access_token()
+
+    with ThreadPoolExecutor(max_workers=12) as workers:
+        assert list(workers.map(obtain_token, range(12))) == ["access-1"] * 12
+    assert service.device_grants == ["device-1"]
+
+
+def test_parallel_rejected_tokens_share_one_refresh(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Late failures of an old bearer reuse, rather than discard, its replacement."""
+    service.token_responses = ["access-old", "access-new"]
+    old = cli._access_token()
+
+    def reject_old(*args: Any, **kwargs: Any) -> tuple[int, bytes]:
+        """Reject only the old bearer at the MCP boundary."""
+        if args[3] == old:
+            return 401, b'{"detail":"expired"}'
+        return 200, b'{"jsonrpc":"2.0","id":1,"result":{}}'
+
+    monkeypatch.setattr(cli, "_mcp_request", reject_old)
+
+    def invoke(_: int) -> str:
+        """Exercise the bridge's existing one-retry request path."""
+        return cli._remote_mcp_request("mcp_test", 1, "tools/list", {}, old)[1]
+
+    with ThreadPoolExecutor(max_workers=12) as workers:
+        assert list(workers.map(invoke, range(12))) == ["access-new"] * 12
+    assert service.device_grants == ["device-1", "device-1"]
 
 
 def test_logout_revokes_then_removes_the_device_credential(
@@ -3527,7 +3586,6 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     run_id = "77777777-7777-4777-8777-777777777777"
     output_id = "99999999-9999-4999-8999-999999999999"
     uri = f"recurse://artifact/{run_id}/{output_id}"
-    service.token_responses = ["access-1", "access-2"]
     service.mcp_responses = [_remote_discovery_reply(1)]
     input_stream, output_stream = _bridge_frames(
         _initialize_frame(1),
@@ -3560,9 +3618,9 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
         "GET",
         f"/v1/runs/{run_id}/artifacts/{output_id}",
         None,
-        "Bearer access-2",
+        "Bearer access-1",
     )
-    assert service.device_grants == ["device-1", "device-1"]
+    assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
     assert service.artifact_download_user_agent == "recurse-sdk/0.1.3"
 
@@ -5003,30 +5061,12 @@ def test_mcp_cli_dispatches_standard_input_and_output(
     assert received == [("mcp_1234", standard_input.buffer, standard_output.buffer)]
 
 
-def test_two_bridge_processes_share_one_keychain_credential(
+def test_twelve_bridge_processes_share_one_access_token(
     service: FakeService,
     tmp_path: Path,
 ) -> None:
-    """Independent bridge processes can exchange the same read-only device credential."""
-    backend = tmp_path / "shared_keyring.py"
-    backend.write_text(
-        "from keyring.backend import KeyringBackend\n\n"
-        "class Backend(KeyringBackend):\n"
-        "    priority = 1\n"
-        "    def get_password(self, service, username):\n"
-        f"        if (service, username) == "
-        f"('recurse-cli', 'device-credential:{service.url}'):\n"
-        "            return 'device-1'\n"
-        "        return None\n"
-        "    def set_password(self, service, username, password):\n"
-        "        raise AssertionError('unexpected write')\n"
-        "    def delete_password(self, service, username):\n"
-        "        raise AssertionError('unexpected delete')\n"
-    )
-    env = os.environ.copy()
-    env["RECURSE_API_URL"] = service.url
-    env["PYTHON_KEYRING_BACKEND"] = "shared_keyring.Backend"
-    env["PYTHONPATH"] = os.pathsep.join([str(tmp_path), str(Path.cwd() / "src")])
+    """Independent bridge startups share one token without twelve provider exchanges."""
+    env = process_environment(tmp_path, service.url)
     frame = json.dumps(_initialize_frame(1, "2025-06-18")).encode() + b"\n"
     command = [
         sys.executable,
@@ -5037,15 +5077,15 @@ def test_two_bridge_processes_share_one_keychain_credential(
         subprocess.Popen(  # noqa: S603 - fixed current-interpreter test command
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
         )
-        for _ in range(2)
+        for _ in range(12)
     ]
 
     results = [process.communicate(frame, timeout=10) for process in processes]
 
-    assert [process.returncode for process in processes] == [0, 0]
-    assert [json.loads(stdout)["id"] for stdout, _ in results] == [1, 1]
-    assert [stderr for _, stderr in results] == [b"", b""]
-    assert service.device_grants.count("device-1") == 2
+    assert [process.returncode for process in processes] == [0] * 12, results
+    assert [json.loads(stdout)["id"] for stdout, _ in results] == [1] * 12
+    assert [stderr for _, stderr in results] == [b""] * 12
+    assert service.device_grants == ["device-1"]
 
 
 def test_mcp_bridge_never_outputs_or_forwards_the_device_credential(
