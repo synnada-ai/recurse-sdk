@@ -1,0 +1,18 @@
+{
+  "dataset": "example:tourism-monthly",
+  "task": "Forecast value for the next 12 months for every series, using date as the monthly time column. Use only observed history and calendar features. Minimize MASE scaled by a 12-month seasonal naive baseline, averaging equally over series and forecast origins.",
+  "quality": {
+    "objective": {
+      "metric": "mase",
+      "direction": "minimize",
+      "parameters": {
+        "seasonal_period": 1
+      }
+    },
+    "constraints": []
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}

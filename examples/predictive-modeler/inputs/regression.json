@@ -1,0 +1,15 @@
+{
+  "dataset": "example:concrete",
+  "task": "Predict strength in MPa from the eight mixture and age features. Minimize MAE.",
+  "quality": {
+    "objective": {
+      "metric": "mae",
+      "direction": "minimize"
+    },
+    "constraints": []
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}

@@ -25,6 +25,7 @@ dev = [
   "mypy>=1.19,<2",
   "pytest>=8,<9",
   "pytest-cov>=6,<8",
+  "pytest-xdist>=3.8.0",
   "ruff>=0.14,<1",
   "types-jsonschema>=4,<5",
   "types-pyyaml>=6,<7",
@@ -46,7 +47,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src", "tools", "examples/tiny-tuner"]
+source = ["src", "tools"]
 
 [tool.coverage.report]
 fail_under = 100
@@ -77,5 +78,5 @@ convention = "google"
 python_version = "3.14"
 strict = true
 warn_unreachable = true
-files = ["src", "tests", "tools", "examples"]
-exclude = ["^examples/rna-fold-lab/", "^examples/backpack-3d/"]
+files = ["src", "tests", "tools"]
+exclude = ["^examples/rna-fold-lab/", "^examples/backpack-3d/", "^examples/predictive-modeler/"]

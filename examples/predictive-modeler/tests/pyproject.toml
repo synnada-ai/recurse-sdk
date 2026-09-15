@@ -1,0 +1,31 @@
+[project]
+name = "predictive-modeler-tests"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+  "recurse-sdk", "numpy", "pandas", "scikit-learn", "pyarrow", "openpyxl", "xlrd",
+  "pytest>=8,<9", "pytest-cov", "pytest-xdist", "mypy", "pandas-stubs", "ruff",
+  "types-jsonschema", "types-pyyaml",
+]
+
+[tool.uv.sources]
+recurse-sdk = { path = "../../..", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-n auto -m 'not integration'"
+markers = ["integration: downloads and exercises real datasets"]
+
+[tool.coverage.run]
+branch = true
+source = [".."]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
