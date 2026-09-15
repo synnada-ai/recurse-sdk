@@ -13,12 +13,13 @@ recurse-sdk = { path = "../../..", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
-addopts = "-n auto"
+addopts = "-n auto -m 'not integration'"
 markers = ["integration: downloads and exercises real datasets"]
 
 [tool.coverage.run]
 branch = true
-source = ["../modeler", "../tools.py"]
+source = [".."]
+omit = ["*/tests/*"]
 
 [tool.coverage.report]
 fail_under = 100

@@ -1,0 +1,15 @@
+{
+  "dataset": "example:bike-sharing",
+  "task": "Forecast cnt for the next 14 days using dteday as the daily time column. Use only historical demand and calendar features; future observed weather and casual/registered counts are unavailable. Minimize MAE.",
+  "quality": {
+    "objective": {
+      "metric": "mae",
+      "direction": "minimize"
+    },
+    "constraints": []
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}
