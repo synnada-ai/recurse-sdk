@@ -1103,7 +1103,12 @@ def _call_mcp_tool(
             continue
         result, error = _response_parts(response, request_id)
         if error is not None:
-            return error, access_token
+            return (
+                _terminal_task_response(
+                    {"status": "failed", "error": error["error"]}, request_id, task_id
+                ),
+                access_token,
+            )
         result = cast(dict[str, Any], result)
 
 

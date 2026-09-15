@@ -4423,7 +4423,7 @@ def test_mcp_bridge_waits_through_the_platform_run_deadline(
                     "error": {"code": -32000, "message": "poll failed"},
                 },
             ],
-            "poll failed",
+            "poll failed Task: task_" + "f" * 32,
         ),
     ],
 )
@@ -4447,8 +4447,93 @@ def test_mcp_bridge_translates_remote_errors_for_each_forwarded_operation(
         "jsonrpc": "2.0",
         "id": 2,
         "error": {
-            "code": -32000 if message == "poll failed" else -32602,
+            "code": remote_responses[-1]["error"]["code"],
             "message": message,
+        },
+    }
+
+
+def test_mcp_bridge_retains_the_admitted_task_reference_on_poll_errors(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+) -> None:
+    """A rejected poll preserves correlation and public error data without resubmission."""
+    task_id = "task_" + "a" * 32
+    public_error = {
+        "code": -32004,
+        "message": "Task status is unavailable.",
+        "data": {"retryable": False},
+    }
+    service.mcp_responses = [
+        _remote_discovery_reply("host-init"),
+        _remote_reply(
+            "host-call",
+            {"taskId": task_id, "status": "working", "pollIntervalMs": 0},
+        ),
+        {
+            "jsonrpc": "2.0",
+            "id": "remote-poll",
+            "error": public_error,
+            "private_trace": "must-not-be-forwarded",
+        },
+    ]
+    input_stream, output_stream = _bridge_frames(
+        _initialize_frame("host-init"),
+        {
+            "jsonrpc": "2.0",
+            "id": "host-call",
+            "method": "tools/call",
+            "params": {"name": "tune", "arguments": {}},
+        },
+    )
+
+    cli._serve_mcp("mcp_1234", input_stream, output_stream)
+
+    assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
+        "jsonrpc": "2.0",
+        "id": "host-call",
+        "error": {
+            "code": -32004,
+            "message": f"Task status is unavailable. Task: {task_id}",
+            "data": {"retryable": False},
+        },
+    }
+    assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
+        "server/discover",
+        "tools/call",
+        "tasks/get",
+    ]
+    assert json.loads(service.mcp_bodies[-1])["params"]["taskId"] == task_id
+
+
+@pytest.mark.parametrize("message", [None, {"private": "must-not-be-stringified"}])
+def test_mcp_bridge_rejects_malformed_poll_error_messages(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    message: object,
+) -> None:
+    """Appending correlation must not turn a non-text error into public diagnostics."""
+    service.mcp_responses = [
+        _remote_discovery_reply(1),
+        _remote_reply(
+            2,
+            {"taskId": "task_" + "a" * 32, "status": "working", "pollIntervalMs": 0},
+        ),
+        {"jsonrpc": "2.0", "id": 2, "error": {"code": -32000, "message": message}},
+    ]
+    input_stream, output_stream = _bridge_frames(
+        _initialize_frame(1),
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "tune"}},
+    )
+
+    cli._serve_mcp("mcp_1234", input_stream, output_stream)
+
+    assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {
+            "code": -32000,
+            "message": "the Recurse service returned an invalid MCP task response",
         },
     }
 
