@@ -66,6 +66,10 @@ def partition(
         parts = (train, validation, test)
     if min(len(part) for part in parts) < _MIN_TRAIN:
         raise ModelerError("Each split needs at least ten observations; supply more data.")
+    if spec["kind"] in {"binary", "multiclass"}:
+        trained_classes = set(data.iloc[parts[0]][spec["targets"][0]].astype(str))
+        if trained_classes != set(spec["classes"]):
+            raise ModelerError("The training split must contain every target class.")
     return parts[0], parts[1], parts[2]
 
 

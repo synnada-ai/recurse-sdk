@@ -72,7 +72,7 @@ def review_inputs(
     detected = list(conflicts)
     for key, value in task_quality.get("objective", {}).items():
         actual = supplied.get("objective", {}).get(key)
-        if actual is not None and actual != value:
+        if actual is not None and _disagrees(value, actual):
             detected.append(
                 f"Prose objective {key}={value!r} conflicts with quality value {actual!r}."
             )
@@ -148,7 +148,7 @@ def resolve_problem(specification: dict[str, Any]) -> dict[str, Any]:
             raise contracts.ModelerError("The contract is already frozen.")
         review = state.get(connection, "review")
         supplied = get_request().get("quality", {})
-        quality = review["task_quality"] | supplied
+        quality = _merge(review["task_quality"], supplied)
         # Prose-only constraints still apply when structured quality adds other requirements.
         quality["constraints"] = list(supplied.get("constraints", []))
         for item in review["task_quality"].get("constraints", []):
@@ -479,3 +479,21 @@ def _select(
     if passed:
         _package(path, contract)
     return ("succeeded" if passed else "no_feasible_model"), evaluation
+
+
+def _disagrees(prose: Any, structured: Any) -> bool:
+    """Compare shared requirements while permitting compatible additional metric options."""
+    if isinstance(prose, dict) and isinstance(structured, dict):
+        return any(
+            _disagrees(prose[key], structured[key]) for key in prose.keys() & structured.keys()
+        )
+    return bool(prose != structured)
+
+
+def _merge(prose: dict[str, Any], structured: dict[str, Any]) -> dict[str, Any]:
+    """Preserve nested prose requirements after the consistency check has passed."""
+    result = prose | structured
+    for key in prose.keys() & structured.keys():
+        if isinstance(prose[key], dict) and isinstance(structured[key], dict):
+            result[key] = _merge(prose[key], structured[key])
+    return result

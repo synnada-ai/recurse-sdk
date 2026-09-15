@@ -313,3 +313,42 @@ def test_matching_prose_constraint_is_not_duplicated(run: Path, tools: Any) -> N
     tools.inspect_dataset()
     contract = tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["x"]})
     assert len(contract["quality"]["constraints"]) == 1
+
+
+def test_additional_metric_options_are_compatible_and_prose_options_survive(
+    run: Path, tools: Any
+) -> None:
+    """Structured averaging can augment prose without dropping the prose's positive label."""
+    deactivate()
+    activate(
+        {
+            "dataset": "fixture",
+            "quality": {
+                "objective": {
+                    "metric": "recall",
+                    "direction": "maximize",
+                    "parameters": {"average": "binary"},
+                }
+            },
+        },
+        run,
+    )
+    review = tools.review_inputs(
+        "Maximize recall for label 0.",
+        {
+            "objective": {
+                "metric": "recall",
+                "direction": "maximize",
+                "parameters": {"positive_label": "0"},
+            }
+        },
+        [],
+        [],
+    )
+    assert review["status"] == "aligned"
+    tools.inspect_dataset()
+    contract = tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["category"]})
+    assert contract["quality"]["objective"]["parameters"] == {
+        "positive_label": "0",
+        "average": "binary",
+    }

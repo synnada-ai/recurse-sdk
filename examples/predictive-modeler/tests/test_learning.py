@@ -218,3 +218,13 @@ def test_undefined_forecast_scale_propagates_across_series(frame: pd.DataFrame) 
     assert measure(model, frame.iloc[train], frame.iloc[validation]) == {
         'mase:{"seasonal_period": 1}': None
     }
+
+
+def test_classification_split_cannot_omit_a_training_class(
+    frame: pd.DataFrame, spec: dict[str, Any]
+) -> None:
+    """An official split with a class only in held-out data cannot yield a usable classifier."""
+    spec["split"] = "official"
+    frame.loc[frame["_split"].eq("train"), "y"] = "0"
+    with pytest.raises(ModelerError, match="training split"):
+        partition(frame, spec)
