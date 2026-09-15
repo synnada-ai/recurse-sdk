@@ -3321,7 +3321,7 @@ def test_mcp_bridge_polls_an_async_call_and_returns_the_embedded_result(
 ) -> None:
     """A working task is polled at server intervals and becomes a normal tool result."""
     task_id = "task_" + "a" * 32
-    call_result = {
+    call_result: dict[str, Any] = {
         "content": [{"type": "text", "text": "done"}],
         "structuredContent": {"status": "succeeded"},
         "isError": False,
@@ -3384,7 +3384,10 @@ def test_mcp_bridge_polls_an_async_call_and_returns_the_embedded_result(
     assert responses[-1] == {
         "jsonrpc": "2.0",
         "id": "host-call",
-        "result": call_result,
+        "result": {
+            **call_result,
+            "content": [*call_result["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
     assert 0.018 <= elapsed < 1
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -4090,7 +4093,7 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
 ) -> None:
     """Transient polling failures neither reauthenticate nor resubmit the tool call."""
     task_id = "task_" + "e" * 32
-    call_result = {
+    call_result: dict[str, Any] = {
         "content": [{"type": "text", "text": "done after rollout"}],
         "isError": False,
     }
@@ -4136,7 +4139,10 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "result": call_result,
+        "result": {
+            **call_result,
+            "content": [*call_result["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
     assert 0.015 <= elapsed < 1
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -4150,16 +4156,22 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
     assert service.device_grants == ["device-1"]
 
 
-def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
+@pytest.mark.parametrize("is_error", [False, True])
+def test_mcp_bridge_retains_task_identity_without_changing_declared_output(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
+    is_error: bool,
 ) -> None:
-    """A completed execution failure reaches the host as CallToolResult with isError."""
+    """Terminal results retain public identity but not private task-envelope fields."""
     task_id = "task_" + "b" * 32
-    failure = {
-        "content": [{"type": "text", "text": "execution_failed"}],
-        "structuredContent": {"status": "failed"},
-        "isError": True,
+    failure: dict[str, Any] = {
+        "content": [
+            {"type": "text", "text": "Run: 11111111-1111-4111-8111-111111111111."},
+            {"type": "resource_link", "name": "receipt.json", "uri": "recurse://fixture"},
+        ],
+        "structuredContent": {"score": 0.75},
+        "isError": is_error,
+        "_meta": {"recurse/model": "public-model"},
     }
     service.mcp_responses = [
         _remote_discovery_reply(1),
@@ -4179,6 +4191,7 @@ def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
                 "taskId": task_id,
                 "status": "completed",
                 "result": failure,
+                "private_trace": "must-not-be-forwarded",
             },
         ),
     ]
@@ -4197,8 +4210,17 @@ def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "result": failure,
+        "result": {
+            **failure,
+            "content": [*failure["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
+    assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
+        "server/discover",
+        "tools/call",
+        "tasks/get",
+    ]
+    assert json.loads(service.mcp_bodies[-1])["params"]["taskId"] == task_id
 
 
 @pytest.mark.parametrize(
@@ -4257,7 +4279,7 @@ def test_mcp_bridge_returns_terminal_task_errors_with_the_host_id(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": "call-id",
-        "error": expected_error,
+        "error": {**expected_error, "message": f"{expected_error['message']} Task: {task_id}"},
     }
 
 
@@ -4296,7 +4318,7 @@ def test_mcp_bridge_bounds_task_polling(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "error": {"code": -32000, "message": "tool call timed out"},
+        "error": {"code": -32000, "message": f"tool call timed out Task: {task_id}"},
     }
     assert len(service.mcp_bodies) == 2
 
@@ -4346,7 +4368,7 @@ def test_mcp_bridge_waits_through_the_platform_run_deadline(
     assert response == {
         "jsonrpc": "2.0",
         "id": "call-id",
-        "result": {"content": []},
+        "result": {"content": [{"type": "text", "text": f"Task: {task_id}"}]},
     }
     assert token == "access-1"  # noqa: S105 - inert authentication fixture
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -4522,7 +4544,11 @@ def test_mcp_bridge_rejects_invalid_task_poll_intervals(
     "task_result",
     [
         {"taskId": "task_" + "2" * 32, "status": "completed"},
+        {"taskId": "task_" + "2" * 32, "status": "completed", "result": {}},
+        {"taskId": "task_" + "2" * 32, "status": "completed", "result": {"content": None}},
         {"taskId": "task_" + "3" * 32, "status": "failed"},
+        {"taskId": "task_" + "3" * 32, "status": "failed", "error": {}},
+        {"taskId": "task_" + "3" * 32, "status": "failed", "error": {"message": None}},
         {"taskId": "task_" + "4" * 32, "status": "unknown"},
         {"status": "working", "pollIntervalMs": 0},
     ],

@@ -970,12 +970,15 @@ def _poll_interval_seconds(result: dict[str, Any]) -> float:
     return interval / 1000
 
 
-def _terminal_task_response(result: dict[str, Any], request_id: object) -> dict[str, Any] | None:
+def _terminal_task_response(
+    result: dict[str, Any], request_id: object, task_id: str
+) -> dict[str, Any] | None:
     """Translate a terminal task status, or identify a working task.
 
     Args:
         result: Remote task status result.
         request_id: Host request identifier.
+        task_id: Public task identifier retained from admission.
 
     Returns:
         Host response for a terminal status, or ``None`` while work continues.
@@ -988,19 +991,31 @@ def _terminal_task_response(result: dict[str, Any], request_id: object) -> dict[
         return None
     if status == "completed":
         call_result = result.get("result")
-        if not isinstance(call_result, dict):
+        if not isinstance(call_result, dict) or not isinstance(call_result.get("content"), list):
             raise ServiceError("the Recurse service returned an invalid MCP task response")
-        return _host_result(request_id, call_result)
+        return _host_result(
+            request_id,
+            {
+                **call_result,
+                "content": [
+                    *call_result["content"],
+                    {"type": "text", "text": f"Task: {task_id}"},
+                ],
+            },
+        )
     if status == "cancelled":
         return _host_error(
             request_id,
-            {"code": _JSONRPC_REQUEST_CANCELLED, "message": "tool call was cancelled"},
+            {
+                "code": _JSONRPC_REQUEST_CANCELLED,
+                "message": f"tool call was cancelled Task: {task_id}",
+            },
         )
     if status == "failed":
         error = result.get("error")
-        if not isinstance(error, dict):
+        if not isinstance(error, dict) or not isinstance(error.get("message"), str):
             raise ServiceError("the Recurse service returned an invalid MCP task response")
-        return _host_error(request_id, error)
+        return _host_error(request_id, {**error, "message": f"{error['message']} Task: {task_id}"})
     raise ServiceError("the Recurse service returned an invalid MCP task response")
 
 
@@ -1060,7 +1075,7 @@ def _call_mcp_tool(
             )
             _response_parts(cast(dict[str, Any], response), request_id)
             return None, access_token
-        terminal = _terminal_task_response(result, request_id)
+        terminal = _terminal_task_response(result, request_id, task_id)
         if terminal is not None:
             return terminal, access_token
         interval = _poll_interval_seconds(result)
@@ -1068,7 +1083,10 @@ def _call_mcp_tool(
             return (
                 _host_error(
                     request_id,
-                    {"code": _JSONRPC_SERVER_ERROR, "message": "tool call timed out"},
+                    {
+                        "code": _JSONRPC_SERVER_ERROR,
+                        "message": f"tool call timed out Task: {task_id}",
+                    },
                 ),
                 access_token,
             )
