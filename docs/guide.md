@@ -39,9 +39,19 @@ An application directory contains:
 Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
-`Returns:`; tools returning `None` must not have a `Returns:` section. Tool parameters
-and results may be scalars (`bool`, `int`, `float`, `str`, `None`), your own classes, or
-tuples of your own classes; class instances are passed between tools by reference.
+`Returns:`; tools returning `None` must not have a `Returns:` section.
+
+Tool parameters and results use the annotation support of the engine's pinned Agentia version.
+Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your own classes,
+`list[int]`, `dict[str, float]`, `tuple[int, ...]`, `tuple[int, str]`, optional values such as
+`str | None`, unions such as `list[int] | str`, and `Literal["a", "b"]` (from `typing`).
+These examples are not exhaustive; support depends on that Agentia version. Specify collection
+element types, including in nested collections such as `list[dict[str, tuple[int, ...]]]`.
+
+Collections can contain application objects directly, such as `list[Candidate]`; ordinary
+collections do not need wrapper classes. Class instances are passed between tools by reference,
+including inside collections. Repeated references retain object identity, so a mutation through
+one reference is visible through the others.
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
 `task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
