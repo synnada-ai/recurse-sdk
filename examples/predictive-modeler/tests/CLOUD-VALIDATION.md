@@ -1,5 +1,8 @@
 # Autonomous-agent validation
 
+Latest status: the retry batch completed; see **Retry after reported infrastructure fix** below.
+The following first-attempt record is retained as history.
+
 The user authorized this batch on September 15, 2026. Two runs were attempted; both ended in
 `infrastructure_failed` without agent output or artifacts. The remaining ten were not launched
 because the failure repeated. Local tests exercise the tools with supplied interpretations and
@@ -53,3 +56,52 @@ there are no training trials, and no resolved evaluation contract or accepted mo
 Record run IDs, agent version/model, costs, failures, and artifact locations. Revisit prompt or
 tools when evidence warrants it and track replacement runs against the authorized scope and
 remaining allowance. Keep local tool-chain results distinct from autonomous-agent outcomes.
+
+## Retry after reported infrastructure fix
+
+The user authorized another attempt, then requested that work stop after all launched runs
+finished so they could investigate the backend. All twelve cases reached a terminal state.
+Runtime source was unchanged (repository commit `6903176`; its change was documentation only).
+All runs used `gpt-5.6-luna`, one CPU, and 2 GiB memory.
+
+| Case | Run ID | Result |
+| --- | --- | --- |
+| inconsistent-panel-forecast | `f2072869-5024-449b-bdae-08b72ae9c52c` | `inconsistent_inputs` |
+| valid-forecast | `7c0ba37d-374b-47d2-a073-3af5a5f2003f` | `execution_failed` |
+| valid-multilabel | `5d2e850f-b2db-430d-bcd9-2d0f95f6fb80` | `unsupported_task` |
+| valid-panel-forecast | `5221feeb-354c-4507-a69e-7a5ea2cbf401` | `unsupported_task` |
+| inconsistent-binary | `c7dc6841-af1b-4acf-8f7c-9f7988f782c0` | `inconsistent_inputs` |
+| inconsistent-forecast | `8c6d54ad-bed7-4650-8ab0-c7a2e25735f2` | `execution_failed` |
+| inconsistent-multiclass | `acd71dd0-8082-4cd1-bbfb-260ed18aae25` | `inconsistent_inputs` |
+| inconsistent-multilabel | `0b3137c2-1122-4318-a58b-46ab05756ceb` | `inconsistent_inputs` |
+| inconsistent-regression | `9ebe44a8-8755-419d-9f07-bb26d2665d03` | `inconsistent_inputs` |
+| valid-multiclass | `baa49d44-3b55-464b-aa10-6d2ccbdb5775` | `execution_failed` |
+| valid-binary | `7e9da036-77c7-4cc9-8f98-a9f9b08a908d` | `execution_failed` |
+| valid-regression | `511a873b-7fbd-4696-9c13-f66d4fc73689` | `execution_failed` |
+
+Five contradictory requests returned `inconsistent_inputs`. Their reports identify the actual
+metric disagreements. All five retrieved review databases confirm no dataset or trial state. The forecast contradiction
+failed. Both valid-task receipts confirm no frozen contract or training trials.
+
+No valid task produced a trained model. Binary, multiclass, regression, and single-series
+forecasting ended `execution_failed`, with null output and no artifacts. Multilabel and panel
+forecasting returned `unsupported_task`: the agents reported that `resolve_problem` rejected
+literal specifications through its storage-reference argument interface. These are tool-interface
+failures, not evidence that these prediction tasks are unsupported. Backend traces are needed
+to verify the reported cause; the public service exposes no diagnostic trace.
+
+Additional finding: successful rejection summaries correctly compare prose and structured quality,
+but recorded `task_quality` values copied supplied quality rather than independently extracting
+the prose. The regression extraction was also incorrectly unwrapped. No runtime changes or further
+runs were made after the user asked to stop.
+
+Four CLI launches failed authentication rate limiting before admission (no run ID). Three were
+retried; the panel contradiction encountered the rate limit twice. The last four cases reused one
+authenticated preparation. Those four share version ID `0da700ff-e8cd-4eba-9b87-b57b5f38bc47`.
+Public status snapshots, receipts, reports, and SQLite evidence are retained under the ignored
+`.baseline-results/cloud/` directory. The PR remains a draft pending backend diagnosis and complete
+autonomous validation.
+
+Retry balance: **$102.065671 → $100.758708**, an observed account decrease of **$1.306963**.
+Including the original two infrastructure failures, the total observed decrease is **$1.327568**.
+These are account balance deltas, not itemized run charges. No funds were added.
