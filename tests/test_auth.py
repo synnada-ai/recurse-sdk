@@ -481,7 +481,16 @@ def test_concurrent_bridge_calls_deliver_every_admitted_result(
     assert errors == []
     assert sorted(admitted) == list(range(24))
     assert responses == [
-        cli._host_result(index, {"content": [{"type": "text", "text": str(index)}]})
+        {
+            "jsonrpc": "2.0",
+            "id": index,
+            "result": {
+                "content": [
+                    {"type": "text", "text": str(index)},
+                    {"type": "text", "text": f"Task: {index}"},
+                ]
+            },
+        }
         for index in range(24)
     ]
     assert service.device_grants == ["device-1"] * (2 if rejection else 1)
