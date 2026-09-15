@@ -90,6 +90,7 @@ def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict
     """Reject unsupported choices and bound each model's computational footprint."""
     defaults: dict[str, Any] = {
         "family": "linear",
+        "feature_subset": None,
         "scale": True,
         "regularization": 1.0,
         "trees": 100,
@@ -106,6 +107,16 @@ def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict
     if set(config) - set(defaults):
         raise ModelerError(f"Unknown candidate options: {set(config) - set(defaults)}")
     result = defaults | config
+    subset = result["feature_subset"]
+    if subset is not None and (
+        not isinstance(subset, list)
+        or not subset
+        or len(set(subset)) != len(subset)
+        or not set(subset) <= set(spec["features"])
+    ):
+        raise ModelerError(
+            "feature_subset must be a nonempty distinct subset of eligible features."
+        )
     if result["family"] not in {"baseline", "linear", "extra_trees", "seasonal"}:
         raise ModelerError("family must be baseline, linear, extra_trees, or seasonal.")
     if result["family"] == "seasonal" and spec["kind"] != "forecast":
@@ -321,6 +332,13 @@ class PredictionModel:
 
 def fit(data: pd.DataFrame, spec: dict[str, Any], config: dict[str, Any]) -> PredictionModel:
     """Fit only the supplied training observations, including all preprocessing."""
+    if config["feature_subset"] is not None:
+        spec = spec | {
+            "features": config["feature_subset"],
+            "text_features": [
+                name for name in spec["text_features"] if name in config["feature_subset"]
+            ],
+        }
     if spec["kind"] != "forecast":
         estimator = _pipeline(data, spec, config)
         target = (

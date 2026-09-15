@@ -352,3 +352,26 @@ def test_additional_metric_options_are_compatible_and_prose_options_survive(
         "positive_label": "0",
         "average": "binary",
     }
+
+
+@pytest.mark.parametrize(
+    "name", ["binary", "multiclass", "multilabel", "regression", "forecast", "panel-forecast"]
+)
+def test_each_real_task_has_a_rejected_contradictory_request(
+    run: Path, tools: Any, name: str
+) -> None:
+    """Each real-data task has a concrete mismatch case for future cloud-agent validation."""
+    original = json.loads((ROOT / "inputs" / f"{name}.json").read_text())
+    inconsistent = json.loads((ROOT / "tests/inconsistent-inputs" / f"{name}.json").read_text())
+    schema = yaml.safe_load((ROOT / "agent.yaml").read_text())
+    Draft202012Validator(schema["inputs"]).validate(inconsistent)
+    assert inconsistent["dataset"] == original["dataset"]
+    assert inconsistent["task"] == original["task"]
+    deactivate()
+    activate({key: value for key, value in inconsistent.items() if key != "task"}, run)
+    review = tools.review_inputs(original["task"], original["quality"], [], [])
+    assert review["status"] == "inconsistent_inputs"
+    receipt = tools.finish_run("inconsistent_inputs", "The task and quality requirements disagree.")
+    assert receipt["status"] == "inconsistent_inputs"
+    assert not (run / "resolved-contract.json").exists()
+    assert tools.experiment_history() == []

@@ -204,7 +204,8 @@ def train_candidate(configuration: dict[str, Any], hypothesis: str) -> dict[str,
         configuration: family (baseline/linear/extra_trees; seasonal for forecasts), scale,
             regularization, trees, max_depth, min_samples_leaf, class_weight (null/balanced),
             threshold, multilabel strategy (independent/chain), forecast lags, seasonal_period,
-            text max_features and ngram_max. Omitted values use documented defaults.
+            text max_features and ngram_max, and feature_subset (eligible tabular columns).
+            Omitted values use documented defaults.
         hypothesis: Why this experiment should improve the frozen objective or feasibility.
 
     Returns:

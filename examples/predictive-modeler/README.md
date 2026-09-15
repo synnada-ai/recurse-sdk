@@ -34,7 +34,8 @@ requirements. Semantic understanding itself remains an LLM judgment, not a deter
 Neither input source silently overrides the other. Compatible additional options are preserved.
 
 After inspecting the table, the agent freezes a resolved contract: task family, targets, features,
-label interpretation, split policy, metric options, and dataset fingerprint. Changing these rules
+label interpretation, split policy, metric options, and dataset fingerprint. Candidate
+`feature_subset` may select among those eligible tabular features. Changing eligibility or these rules
 requires a new run. Prose-only requirements still apply. With no supplied objective, use the
 prose objective or default to F1 for classification and MAE for regression/forecasting. The agent
 never invents a mandatory quality threshold.
@@ -114,7 +115,7 @@ diminishing returns. No global-optimality claim or exhaustive enumeration is mad
 ### Modeling toolbox
 
 - **Tabular:** training-only median/most-frequent imputation, optional numeric scaling, one-hot
-  categories, and TF–IDF for selected text columns.
+  categories, TF–IDF for selected text columns, and optional subsets of eligible predictors.
 - **Classification:** prior baseline, logistic regression, extra trees; optional class weighting.
 - **Multilabel:** independent classifiers or classifier chains; a shared prediction threshold.
 - **Regression:** mean baseline, ridge regression, extra trees.

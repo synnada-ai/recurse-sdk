@@ -51,7 +51,8 @@ prove a semantic interpretation correct; your report must explain assumptions.
 ## Experiment and revise
 
 Establish a simple baseline, then form testable hypotheses about what limits it. Choose models,
-preprocessing, regularization, class weights, text ngrams, multilabel strategy, decision thresholds,
+feature subsets from the frozen eligible columns, preprocessing, regularization, class weights,
+text ngrams, multilabel strategy, decision thresholds,
 forecast lags and seasonality. Compare substantively different approaches before local tuning.
 train_candidate fits; evaluate_candidate independently scores. Evaluate every successfully
 trained candidate. Use experiment_history to inspect all evidence; failed fits consume budget.

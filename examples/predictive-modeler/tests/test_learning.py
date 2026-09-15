@@ -228,3 +228,22 @@ def test_classification_split_cannot_omit_a_training_class(
     frame.loc[frame["_split"].eq("train"), "y"] = "0"
     with pytest.raises(ModelerError, match="training split"):
         partition(frame, spec)
+
+
+def test_candidate_feature_selection_stays_within_frozen_eligible_columns(
+    frame: pd.DataFrame,
+) -> None:
+    """The agent can test feature subsets without admitting target-derived or undeclared columns."""
+    spec = resolve(
+        {"kind": "binary", "targets": ["y"], "features": ["x", "text"], "text_features": ["text"]},
+        frame,
+        {},
+    )
+    config = validate_configuration({"feature_subset": ["text"]}, spec)
+    model = fit(frame.iloc[:90], spec, config)
+    assert model.specification["features"] == ["text"]
+    assert spec["features"] == ["x", "text"]
+    assert model.predict(frame[["text"]]).tolist() == frame["y"].tolist()
+    for subset in [[], ["y"], ["x", "x"], "text"]:
+        with pytest.raises(ModelerError, match="feature_subset"):
+            validate_configuration({"feature_subset": subset}, spec)
