@@ -46,6 +46,13 @@ for generic types whenever possible, such as `list[Candidate]` rather than bare 
 harness can reflect them in the tool schema. Use bare generics only when their element types
 are unconstrained or unknown.
 
+Tool parameters and results use the annotation support of the engine's pinned Agentia version.
+Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your own classes,
+`list[int]`, `dict[str, float]`, `tuple[int, ...]`, `tuple[int, str]`, optional values such as
+`str | None`, unions such as `list[int] | str`, and `Literal["a", "b"]` (from `typing`).
+These examples are not exhaustive; support depends on that Agentia version. Collections can
+also be nested, such as `list[dict[str, tuple[int, ...]]]`.
+
 The harness turns the docstring summary, body, and `Returns:` section into the tool description.
 Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
 as instructions the specialist can use: what the tool does, when to choose it, valid ranges or
@@ -102,6 +109,11 @@ def distance_from_origin(point: Point) -> float:
 text. The harness resolves dependencies between calls: a call waits for the values it needs,
 while independent calls can execute concurrently. Results can also be stored as Python objects
 in program memory and reused across iterations.
+
+Collections can contain application objects directly, such as `list[Candidate]`; ordinary
+collections do not need wrapper classes. Class instances are passed between tools by reference,
+including inside collections. Repeated references retain object identity, so a mutation through
+one reference is visible through the others.
 
 Pass shared state through typed parameters and return values. Mutable module globals hide
 dependencies from the harness and can lead to incorrect execution schedules. Files under
