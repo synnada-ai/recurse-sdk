@@ -7,6 +7,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.14"
 dependencies = [
+  "filelock>=3.20,<4",
   "jsonschema>=4,<5",
   "keyring>=25,<26",
   "pyyaml>=6,<7",
