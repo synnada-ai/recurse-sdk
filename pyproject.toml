@@ -47,7 +47,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src", "tools", "examples/tiny-tuner"]
+source = ["src", "tools"]
 
 [tool.coverage.report]
 fail_under = 100
@@ -78,5 +78,5 @@ convention = "google"
 python_version = "3.14"
 strict = true
 warn_unreachable = true
-files = ["src", "tests", "tools", "examples"]
+files = ["src", "tests", "tools"]
 exclude = ["^examples/rna-fold-lab/", "^examples/backpack-3d/", "^examples/predictive-modeler/"]

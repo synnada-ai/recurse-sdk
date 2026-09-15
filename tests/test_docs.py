@@ -61,9 +61,11 @@ def test_every_example_has_a_public_readme() -> None:
         ):
             assert heading in readme
 
-    tiny_tuner = " ".join((examples / "tiny-tuner" / "README.md").read_text().split())
+    predictive_modeler = " ".join(
+        (examples / "predictive-modeler" / "README.md").read_text().split()
+    )
     rna_fold_lab = " ".join((examples / "rna-fold-lab" / "README.md").read_text().split())
-    assert "A direct implementation is simpler" in tiny_tuner
+    assert "A direct implementation is simpler" in predictive_modeler
     assert "first candidate do not justify Recurse" in rna_fold_lab
 
 
