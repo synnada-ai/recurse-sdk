@@ -107,6 +107,7 @@ outputs:
       - needs_clarification
       - inconsistent_inputs
       - unsupported_task
+      - tool_error
     stop_reason:
       enum:
       - budget_exhausted
@@ -114,6 +115,7 @@ outputs:
       - needs_clarification
       - inconsistent_inputs
       - unsupported_task
+      - tool_error
     summary:
       type: string
     questions:
@@ -132,6 +134,8 @@ outputs:
           type: string
         report:
           type: string
+        review:
+          type: string
         trials:
           type: string
         resolved_contract:
@@ -145,10 +149,18 @@ tools:
   built_in: true
   register:
     get_request: null
-    review_inputs: null
+    review_inputs:
+      no_storage:
+      - task_quality
+      - conflicts
+      - questions
     inspect_dataset: null
-    resolve_problem: null
-    train_candidate: null
+    resolve_problem:
+      no_storage:
+      - specification
+    train_candidate:
+      no_storage:
+      - configuration
     evaluate_candidate: null
     experiment_history: null
     finish_run: null

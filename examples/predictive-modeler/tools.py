@@ -68,6 +68,25 @@ def review_inputs(
     """
     if not task_summary.strip():
         raise contracts.ModelerError("A meaningful task interpretation is required.")
+    objective = task_quality.get("objective", {})
+    constraints = task_quality.get("constraints", [])
+    if (
+        task_quality.keys() - {"objective", "constraints"}
+        or not isinstance(objective, dict)
+        or objective.keys() - {"metric", "direction", "parameters"}
+        or not isinstance(constraints, list)
+        or any(
+            not isinstance(item, dict)
+            or not {"metric", "operator", "value"} <= item.keys()
+            or item.keys() - {"metric", "operator", "value", "parameters"}
+            for item in constraints
+        )
+    ):
+        raise contracts.ModelerError(
+            "task_quality must contain an objective object and/or a constraints list of metric, "
+            "operator, value objects. Extract these from the prose; do not pass quality.objective "
+            "as task_quality. Omit requirements not stated in the prose."
+        )
     supplied = get_request().get("quality", {})
     detected = list(conflicts)
     for key, value in task_quality.get("objective", {}).items():
@@ -360,8 +379,10 @@ def finish_run(stop_reason: str, explanation: str) -> dict[str, Any]:
 
     Args:
         stop_reason: budget_exhausted, diminishing_returns, inconsistent_inputs,
-            needs_clarification, or unsupported_task. Explain untried approaches for early stops.
-        explanation: Evidence-backed selection rationale or actionable input diagnostic.
+            needs_clarification, unsupported_task, or tool_error. Explain untried approaches
+            for early stops. Tool failures do not establish that the task is unsupported.
+        explanation: Evidence-backed selection rationale or actionable diagnostic. For tool_error,
+            identify the failing tool, observed error, attempted correction, and unfinished work.
 
     Returns:
         Final status, stop reason, summary, conflicts/questions, and relative artifact paths.
@@ -399,6 +420,7 @@ def _finalize(
         "inconsistent_inputs",
         "needs_clarification",
         "unsupported_task",
+        "tool_error",
     }
     if reason not in allowed or not explanation.strip():
         raise contracts.ModelerError("Supply a supported stop reason and substantive explanation.")
@@ -408,11 +430,16 @@ def _finalize(
         raise contracts.ModelerError("No inconsistent-input finding was recorded.")
     status = (
         reason
-        if reason in {"inconsistent_inputs", "needs_clarification", "unsupported_task"}
+        if reason
+        in {"inconsistent_inputs", "needs_clarification", "unsupported_task", "tool_error"}
         else "no_feasible_model"
     )
     evaluation: dict[str, Any] = {}
-    artifacts: dict[str, str] = {"report": "report.md", "trials": "trials.jsonl"}
+    artifacts: dict[str, str] = {
+        "report": "report.md",
+        "review": "review.json",
+        "trials": "trials.jsonl",
+    }
     if reason in {"budget_exhausted", "diminishing_returns"}:
         contract = state.require(connection, "contract")
         if any(item["status"] == "trained" for item in history):
@@ -439,6 +466,7 @@ def _finalize(
             splits="splits.json",
         )
     workspace = recurse.context().workspace
+    _write(workspace / "review.json", review)
     _write(workspace / "evaluation.json", evaluation)
     (workspace / "trials.jsonl").write_text("".join(json.dumps(item) + "\n" for item in history))
     receipt = {

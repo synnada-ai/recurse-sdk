@@ -117,6 +117,44 @@ def test_rejected_review_prevents_dataset_access(
     assert result["questions"] == questions
     assert result["conflicts"] == conflicts
     assert tools.experiment_history() == []
+    assert json.loads((run / result["artifacts"]["review"]).read_text()) == review
+
+
+@pytest.mark.parametrize("stage", ["review", "dataset", "trained", "evaluated"])
+def test_tool_failure_preserves_evidence_without_claiming_a_model(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """An operational blocker retains its diagnostic and trials without claiming unsupported ML."""
+    review = tools.review_inputs("Predict y.", {}, [], [])
+    if stage != "review":
+        tools.inspect_dataset()
+    if stage in {"trained", "evaluated"}:
+        tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["x"]})
+        _inline(tools, monkeypatch)
+        trial = tools.train_candidate({"family": "linear"}, "Measure separability.")
+        if stage == "evaluated":
+            tools.evaluate_candidate(trial["id"])
+    history = tools.experiment_history()
+    explanation = (
+        "Resolver argument validation blocked progress after correcting the specification."
+    )
+    receipt = tools.finish_run("tool_error", explanation)
+    assert receipt == {
+        "status": "tool_error",
+        "stop_reason": "tool_error",
+        "summary": explanation,
+        "questions": [],
+        "conflicts": [],
+        "artifacts": {"report": "report.md", "review": "review.json", "trials": "trials.jsonl"},
+    }
+    manifest = yaml.safe_load((ROOT / "agent.yaml").read_text())
+    Draft202012Validator(manifest["outputs"]).validate(receipt)
+    assert tools.experiment_history() == history
+    assert json.loads((run / "review.json").read_text()) == review
+    assert json.loads((run / "evaluation.json").read_text()) == {}
+    assert not (run / "model-bundle.zip").exists()
+    assert explanation in (run / "report.md").read_text()
+    assert receipt == tools.finish_run("tool_error", "Idempotent repeat.")
 
 
 def test_review_compares_independent_prose_requirements(run: Path, tools: Any) -> None:
@@ -143,6 +181,30 @@ def test_review_compares_independent_prose_requirements(run: Path, tools: Any) -
     )
     assert result["status"] == "inconsistent_inputs"
     assert len(result["conflicts"]) == 2
+
+
+@pytest.mark.parametrize(
+    "quality",
+    [
+        {"metric": "rmse", "direction": "minimize"},
+        {"objective": "mae"},
+        {"objective": {"metrics": "mae"}},
+        {"constraints": {}},
+        {"constraints": ["mae"]},
+        {"constraints": [{}]},
+        {"constraints": [{"metric": "recall", "operator": ">=", "value": 0.5, "extra": 1}]},
+    ],
+)
+def test_malformed_prose_quality_can_be_corrected_before_review_is_frozen(
+    run: Path, tools: Any, quality: dict[str, Any]
+) -> None:
+    """Malformed extractions get an actionable error rather than an immutable accepted review."""
+    with pytest.raises(ModelerError, match="Extract these from the prose"):
+        tools.review_inputs("Minimize MAE.", quality, [], [])
+    with state.transaction(run / ".modeler") as connection:
+        assert state.get(connection, "review") is None
+    review = tools.review_inputs("Minimize MAE.", {"objective": {"metric": "mae"}}, [], [])
+    assert review["status"] == "aligned"
 
 
 def test_gate_is_immutable_and_prerequisites_are_enforced(run: Path, tools: Any) -> None:

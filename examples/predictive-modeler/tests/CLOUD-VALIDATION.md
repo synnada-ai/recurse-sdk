@@ -105,3 +105,27 @@ autonomous validation.
 Retry balance: **$102.065671 → $100.758708**, an observed account decrease of **$1.306963**.
 Including the original two infrastructure failures, the total observed decrease is **$1.327568**.
 These are account balance deltas, not itemized run charges. No funds were added.
+
+## Local improvements after the retry
+
+The user authorized improvements from this evidence and explicitly paused further cloud execution
+until they confirm the backend diagnostic issue is fixed. No new cloud runs have been launched.
+
+- `no_storage` now declares review quality/conflict/question fields, problem specifications, and
+  candidate configurations as inline JSON inputs. Previously those agent-authored objects had no
+  upstream producer, which is consistent with the reported storage-reference failures. The packaged
+  manifest is tested locally; actual backend argument handling remains unverified.
+- The review gate rejects malformed quality wrappers, nested container shapes, and unexpected
+  fields before freezing the interpretation. The prompt illustrates independent prose extraction.
+  This does not prove semantic extraction accuracy; that still needs autonomous validation.
+- `tool_error` is an explicit receipt status/stop reason for a blocking tool failure. It preserves
+  diagnostics and trial history without claiming the prediction task is unsupported or infeasible.
+  It cannot recover diagnostics from a runtime termination that prevents finalization.
+- Every finalized run now exposes `review.json` for direct inspection of the extraction and conflicts.
+
+The original run records above remain unchanged evidence from the earlier agent version.
+
+Local verification of this revision: **145 modeler unit tests at 100% statement/branch coverage**,
+**six full real-data tool-chain integrations**, and **434 SDK tests at 100% coverage** passed.
+Strict typing, lint, docstrings, packaged manifest checks, and SDK builds also passed.
+These are local checks; the new inline interface and extraction behavior await cloud validation.

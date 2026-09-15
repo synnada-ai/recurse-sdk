@@ -108,6 +108,12 @@ horizon. It does not reproduce the competition's original evaluation protocol.
 7. `finish_run` selects the best feasible evaluated candidate, measures it once on the final test,
    writes the report, and packages an accepted pipeline.
 
+Agent-authored review fields, problem specifications, and candidate configurations use the
+manifest's `no_storage` setting to accept inline JSON, including nested and empty lists. They
+are proposals, not references to previously returned objects. The review rejects malformed
+quality wrappers before freezing state; extracting the correct prose meaning remains an LLM
+responsibility. Every finalized run includes `review.json` so that interpretation can be audited.
+
 The agent compares hypotheses and decides which follow-up experiments are justified. A constraint
 passing does not itself end optimization. Stops distinguish exhausted budget from explained
 diminishing returns. No global-optimality claim or exhaustive enumeration is made.
@@ -174,13 +180,17 @@ recurse deploy examples/predictive-modeler --as mcp --memory-mib 2048
 The agent returns the exact completion receipt, with `status`, `stop_reason`, `summary`,
 `questions`, `conflicts`, and workspace-relative `artifacts` paths. Supported statuses are
 `succeeded`, `no_feasible_model`, `inconsistent_inputs`, `needs_clarification`, and
-`unsupported_task`. Infrastructure failures remain runtime failures.
+`unsupported_task`, and `tool_error`. Use `tool_error` for a blocking tool failure after correcting
+its arguments, with the tool name, observed error, attempted correction, and unfinished work in
+the summary. It does not claim that the prediction task is unsupported or infeasible, and it
+returns no accepted model. Abrupt runtime failures may still prevent any receipt from being saved.
 
 Artifacts include:
 
 - `model-bundle.zip` on accepted results: the complete fitted pipeline, importable prediction
   code, contract, and pinned prediction dependencies.
 - `report.md`: task interpretation, agent rationale, trial configurations, metrics, and limitations.
+- `review.json`: independent prose-quality extraction, task summary, conflicts, and questions.
 - `trials.jsonl`: every attempted configuration, hypothesis, duration, failure, and validation result.
 - `resolved-contract.json` and `splits.json`: exact semantics, data fingerprint, and row membership.
 - `evaluation.json`: selected trial, validation metrics, final-test measurements, and acceptance.

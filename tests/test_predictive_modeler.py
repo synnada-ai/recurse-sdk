@@ -6,6 +6,7 @@ import tarfile
 from pathlib import Path
 
 import pytest
+import yaml
 from jsonschema import Draft202012Validator
 
 import recurse
@@ -30,6 +31,16 @@ def test_modeler_bundle_contains_runtime_without_test_or_data_payloads() -> None
     artifacts, _ = recurse.build_bundle(ROOT)
     with tarfile.open(fileobj=io.BytesIO(artifacts["source"]), mode="r:gz") as archive:
         paths = {"/".join(Path(name).parts[1:]) for name in archive.getnames()}
+        member = next(item for item in archive.getmembers() if item.name.endswith("/agent.yaml"))
+        source = archive.extractfile(member)
+        assert source is not None
+        with source:
+            manifest = yaml.safe_load(source)
+    # These proposals have no upstream object producer; requiring references prevents construction.
+    settings = manifest["tools"]["register"]
+    assert settings["review_inputs"]["no_storage"] == ["task_quality", "conflicts", "questions"]
+    assert settings["resolve_problem"]["no_storage"] == ["specification"]
+    assert settings["train_candidate"]["no_storage"] == ["configuration"]
     assert {
         "agent.yaml",
         "prompt.md",
