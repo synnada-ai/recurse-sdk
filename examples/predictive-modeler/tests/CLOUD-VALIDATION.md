@@ -189,3 +189,20 @@ suite also prevents `Any` from returning anywhere in registered tool input annot
 Local results: 146 modeler tests at 100% statement/branch coverage, 434 SDK tests at 100%,
 strict types, lint, and docstrings pass. These checks reproduce and address the authoring failure;
 cloud verification follows separately.
+
+## Corrected tool types verified in cloud
+
+Run `3c4debd5-6615-4b9c-aa31-2b465c029de9` with SDK 0.1.6 successfully froze the regression
+contract and attempted three fits. This confirms that the concrete tool types resolve the
+storage-reference blocker. All eight artifacts were downloaded to
+`.baseline-results/cloud/typed-input-regression/`.
+
+All three workers failed with `ModuleNotFoundError: No module named 'joblib'`, although the parent
+tool module imports that package successfully. The service returned `succeeded`; the authoritative
+receipt was `tool_error`. No trained model was accepted.
+
+A regression test reproduces this dependency visibility gap by disabling automatic site-package
+loading in the child interpreter. It fails with the same missing-joblib traceback before the fix.
+Workers now inherit the parent's effective import paths through `PYTHONPATH`; the test then trains
+and evaluates successfully. All 147 modeler unit tests pass with 100% statement/branch coverage.
+This subprocess fix still requires cloud verification.

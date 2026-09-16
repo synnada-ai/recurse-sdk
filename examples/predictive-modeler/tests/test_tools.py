@@ -368,6 +368,26 @@ def test_training_subprocess_enforces_timeout(
     assert seconds >= 0
 
 
+def test_training_worker_inherits_parent_application_dependencies(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A runtime-injected dependency path survives launching a fresh Python interpreter."""
+    _ready(tools)
+    execute = subprocess.run
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
+    def without_site_packages(
+        command: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        """Disable automatic site setup to reproduce a harness-injected import environment."""
+        return execute([command[0], "-S", *command[1:]], **kwargs)
+
+    monkeypatch.setattr(tools.subprocess, "run", without_site_packages)
+    trial = tools.train_candidate({"family": "linear"}, "Measure linear separability.")
+    assert trial["status"] == "trained", trial["diagnostic"]
+    assert tools.evaluate_candidate(trial["id"])["status"] == "evaluated"
+
+
 def test_worker_module_runs_the_recorded_job(
     run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

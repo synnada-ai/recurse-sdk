@@ -195,6 +195,8 @@ def _execute(identifier: int, remaining: float) -> tuple[str, str, float]:
     """Run one isolated fit with a hard deadline and one native compute thread."""
     started = time.monotonic()
     environment = os.environ | {
+        # Preserve dependency paths injected by the harness into the parent interpreter.
+        "PYTHONPATH": os.pathsep.join(dict.fromkeys([str(Path(__file__).parent), *sys.path])),
         "OMP_NUM_THREADS": "1",
         "OPENBLAS_NUM_THREADS": "1",
         "MKL_NUM_THREADS": "1",
