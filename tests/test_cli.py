@@ -656,7 +656,8 @@ def test_deploy_builds_uploads_and_prints_only_public_results(
     assert registration["agent_name"] == "receipt-writer"
     assert registration["summary"] == "Writes one receipt file."
     application_record = registration["application_record"]
-    assert application_record["api_version"] == "recurse.application/v1alpha1"
+    assert set(application_record) == {"apiVersion", "source"}
+    assert application_record["apiVersion"] == "recurse.application/v1alpha1"
     source_upload = service.requests[2][2]
     assert isinstance(source_upload, bytes)
     assert source_upload.startswith(b"source-prefix:")
@@ -710,6 +711,13 @@ def test_run_prepares_and_waits_for_one_direct_run(
         == 0
     )
 
+    registration = next(
+        body for method, path, body, _ in service.requests if path == "/v1/agent-versions"
+    )
+    assert isinstance(registration, dict)
+    application_record = registration["application_record"]
+    assert set(application_record) == {"apiVersion", "source"}
+    assert application_record["apiVersion"] == "recurse.application/v1alpha1"
     admission = next(body for method, path, body, _ in service.requests if path == "/v1/runs")
     assert isinstance(admission, dict)
     assert admission == {

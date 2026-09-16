@@ -291,7 +291,7 @@ def test_example_builds_as_a_complete_locked_application() -> None:
     artifacts, identity = recurse.build_bundle(_APP)
 
     assert set(artifacts) == {"source"}
-    assert identity["api_version"] == "recurse.application/v1alpha1"
+    assert identity["apiVersion"] == "recurse.application/v1alpha1"
     assert b'name = "viennarna"' in recurse._sdist_file(artifacts["source"], "uv.lock").lower()
     manifest = yaml.safe_load((_APP / "agent.yaml").read_text())
     Draft202012Validator(manifest["outputs"]).validate(

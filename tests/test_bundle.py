@@ -62,7 +62,7 @@ def test_build_uses_one_standard_sdist_containing_the_exact_lockfile(app: Path) 
 
     assert set(artifacts) == {"source"}
     assert record == {
-        "api_version": "recurse.application/v1alpha1",
+        "apiVersion": "recurse.application/v1alpha1",
         "source": {
             "sha256": hashlib.sha256(artifacts["source"]).hexdigest(),
             "size_bytes": len(artifacts["source"]),
