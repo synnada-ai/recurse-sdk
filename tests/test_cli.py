@@ -2118,11 +2118,18 @@ def test_artifact_download_refuses_unusable_metadata_or_destination(
         destination.write_text("keep")
     monkeypatch.setattr(
         cli,
-        "_get_run",
-        lambda _run_id, _token: {
-            "payload_expired": case == "expired",
-            "artifacts": [artifact],
-        },
+        "_run_request",
+        lambda *_args, **_kwargs: (
+            {
+                "run_id": "run-id",
+                "status": "succeeded",
+                "result": {"answer": "done"},
+                "error": None,
+                "payload_expired": case == "expired",
+                "artifacts": [artifact],
+            },
+            "token",
+        ),
     )
     with pytest.raises((cli.ServiceError, cli._CliError)):
         cli._artifacts("run-id", str(tmp_path))
@@ -2137,15 +2144,26 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
 ) -> None:
     """A failed final rename is concise and leaves no partial bytes behind."""
     monkeypatch.setattr(cli, "_access_token", lambda: "token")
-    monkeypatch.setattr(
-        cli,
-        "_get_run",
-        lambda _run_id, _token: {
-            "payload_expired": False,
-            "artifacts": [{"output_id": "output-id", "path": "result.json"}],
-        },
-    )
-    monkeypatch.setattr(cli, "request", lambda *args, **kwargs: {})
+
+    def run_request(
+        method: str, path: str, *, token: str, **_kwargs: Any
+    ) -> tuple[dict[str, Any], str]:
+        """Return one complete run view from the safe status request."""
+        del method, path
+        return (
+            {
+                "run_id": "run-id",
+                "status": "succeeded",
+                "result": {"answer": "done"},
+                "error": None,
+                "payload_expired": False,
+                "artifacts": [{"output_id": "output-id", "path": "result.json"}],
+            },
+            token,
+        )
+
+    monkeypatch.setattr(cli, "_run_request", run_request)
+    monkeypatch.setattr(cli, "_authenticated_request", lambda *_args, **_kwargs: ({}, "token"))
     monkeypatch.setattr(cli, "_download_artifact", lambda _grant: b"result")
 
     def fail_replace(source: str, destination: Path) -> None:
