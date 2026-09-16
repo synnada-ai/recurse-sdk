@@ -1,12 +1,13 @@
 [project]
 name = "recurse-sdk"
-version = "0.1.3"
+version = "0.1.6"
 description = "Author, package, and deploy Recurse applications."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.14"
 dependencies = [
+  "filelock>=3.20,<4",
   "jsonschema>=4,<5",
   "keyring>=25,<26",
   "pyyaml>=6,<7",
@@ -40,7 +41,7 @@ sources = ["src"]
 only-include = ["src/recurse.py", "src/_recurse_cli.py", "src/agent.schema.json"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "docs", "tools", "examples", "README.md", "LICENSE", "check.sh", ".pre-commit-config.yaml"]
+only-include = ["src", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

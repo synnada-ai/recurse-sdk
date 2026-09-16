@@ -231,7 +231,7 @@ Default behavior settings applied to every registered tool. Per-tool settings ov
 
 *array, optional*
 
-Parameter names that must receive inline values instead of stored-object references. Names must exist in the tool signature. Defaults to an empty list.
+Parameter names for which the optional stored-object reference alternative is removed. This does not relax type requirements: in Recurse's strict mode, Any, including values inside dict[str, Any] or list[Any], still requires stored-object references. Use concrete types for inline data. Names must exist in the tool signature. Defaults to an empty list.
 
 Default: `[]`
 

@@ -10,7 +10,6 @@ import hashlib
 import http.client
 import io
 import json
-import os
 import queue
 import socket
 import subprocess
@@ -22,6 +21,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from email.message import Message
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -34,6 +34,7 @@ import pytest
 import _recurse_cli as cli
 from _recurse_cli import _LoginServer, main
 from tests.conftest import write_app
+from tests.keyring_backend import process_environment
 
 
 class FakeService:
@@ -55,6 +56,9 @@ class FakeService:
         self.mcp_failures: list[tuple[int, dict[str, Any]]] = []
         self.mcp_poll_failures: list[tuple[int, dict[str, Any]]] = []
         self.mcp_raw_responses: list[bytes] = []
+        self.mcp_handler: (
+            Callable[[dict[str, Any], str | None], tuple[int, dict[str, Any]]] | None
+        ) = None
         self.mcp_responses: list[dict[str, Any]] = []
         self.mcp_live_task_id: str | None = None
         self.artifact_bytes = b'{"f1":0.8}'
@@ -122,7 +126,7 @@ class FakeService:
                 self.end_headers()
                 self.wfile.write(body)
 
-            def _handle(self) -> None:  # noqa: PLR0912,PLR0915 - explicit contract double
+            def _handle(self) -> None:  # noqa: PLR0911,PLR0912,PLR0915 - explicit contract double
                 """Record the request and answer it from the scripted routes."""
                 path = self.path
                 length = int(self.headers.get("Content-Length", "0"))
@@ -136,6 +140,12 @@ class FakeService:
                         (self.command, path, raw, self.headers.get("Authorization"))
                     )
                     method = self.headers.get("Mcp-Method")
+                    if service.mcp_handler is not None:
+                        status, payload = service.mcp_handler(
+                            request_payload, self.headers.get("Authorization")
+                        )
+                        self._reply(status, payload)
+                        return
                     if method == "tasks/get" and service.mcp_poll_failures:
                         status, payload = service.mcp_poll_failures.pop(0)
                         self._reply(status, payload)
@@ -386,9 +396,10 @@ def service(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeService]:
 
 
 @pytest.fixture(autouse=True)
-def _ephemeral_callback_port(monkeypatch: pytest.MonkeyPatch) -> None:
+def _ephemeral_callback_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Bind the login callback to an ephemeral port so tests never collide."""
     monkeypatch.setattr("_recurse_cli._CALLBACK_PORT", 0)
+    monkeypatch.setattr(cli, "_AUTH_LOCK_DIRECTORY", tmp_path / "locks")
 
 
 @pytest.fixture
@@ -636,7 +647,10 @@ def test_deploy_builds_uploads_and_prints_only_public_results(
         ("POST", "/v1/deployments"),
     ]
     assert service.device_grants == ["device-1"]
-    assert logged_in == {_credential_key(service.url): "device-1"}
+
+    assert logged_in[_credential_key(service.url)] == "device-1"
+    cached = json.loads(logged_in[("recurse-cli", f"access-token:{service.url}")])
+    assert cached["access_token"] == "access-1"  # noqa: S105 - fake bearer
     registration = service.requests[1][2]
     assert isinstance(registration, dict)
     assert registration["agent_name"] == "receipt-writer"
@@ -908,7 +922,7 @@ def test_run_reauthenticates_once_after_401_during_admission(
     admissions: list[tuple[str, dict[str, Any]]] = []
 
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
-    monkeypatch.setattr(cli, "_access_token", lambda: "access-new")
+    monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
     def respond(
@@ -965,7 +979,7 @@ def test_run_reauthenticates_once_after_401_during_polling(
     tokens: list[str] = []
 
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
-    monkeypatch.setattr(cli, "_access_token", lambda: "access-new")
+    monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
     def respond(
@@ -1163,7 +1177,9 @@ def test_status_without_failure_preserves_normal_output(
     run_status: str,
 ) -> None:
     """Error-reporting changes leave ordinary status output alone."""
-    service.run_views = [{**service.run_views[0], "status": run_status}]
+    service.run_views = [
+        {**service.run_views[0], "status": run_status, "error_detail": "Not a terminal failure."}
+    ]
 
     assert main(["status", service.run_id]) == 0
 
@@ -1244,6 +1260,107 @@ def test_run_failure_explains_the_confirmed_public_reason(  # noqa: PLR0913, PLR
     assert hint in output.out
     assert "may continue" not in output.out
     assert output.err == ""
+
+
+@pytest.mark.parametrize("command", ["run", "status"])
+@pytest.mark.parametrize(
+    ("state", "exit_status"),
+    [("failed", 1), ("timed_out", 2), ("cancelled", 3), ("infrastructure_failed", 4)],
+)
+def test_run_commands_display_public_failure_detail(  # noqa: PLR0913, PLR0917 - fixtures and CLI cases
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    state: str,
+    exit_status: int,
+) -> None:
+    """Both CLI paths retain the public explanation, code, identity and exit behavior."""
+    reason = "execution_failed" if state == "failed" else state
+    detail = "The run could not finish. Check the task input before retrying."
+    service.version_statuses = ["ready"]
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": state,
+            "error": reason,
+            "error_detail": detail,
+            "private_trace": "must-not-be-displayed",
+        }
+    ]
+    monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
+    target = str(write_app(tmp_path / "app")) if command == "run" else service.run_id
+
+    assert main([command, target]) == (exit_status if command == "run" else 0)
+
+    output = capsys.readouterr().out
+    assert f"run: {service.run_id}" in output
+    assert f"status: {state}" in output
+    assert f"error: {reason}: {detail}" in output
+    assert "No further public cause" not in output
+    assert "must-not-be-displayed" not in output
+    assert sum(path == f"/v1/runs/{service.run_id}" for _, path, _, _ in service.requests) == 1
+
+
+@pytest.mark.parametrize("detail", [None, "", " \t\n ", 42, {}, []])
+def test_status_falls_back_when_public_detail_is_unusable(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    detail: object,
+) -> None:
+    """Missing usable public text retains the existing safe explanation."""
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": "failed",
+            "error": "execution_failed",
+            "error_detail": detail,
+        }
+    ]
+
+    assert main(["status", service.run_id]) == 0
+
+    output = capsys.readouterr().out
+    assert f"run: {service.run_id}" in output
+    assert "error: execution_failed: The agent did not complete successfully." in output
+    assert "No further public cause is available." in output
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected"),
+    [
+        ("  Check café input.  ", "Check café input."),
+        ("Check\x1b[2J\r\b\x00\n\t\u202einput", r"Check\x1b[2J\r\x08\x00\n\t\u202einput"),
+    ],
+)
+def test_status_escapes_controls_in_public_detail(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+    detail: str,
+    expected: str,
+) -> None:
+    """Public text stays readable without executing terminal or directional controls."""
+    service.run_views = [
+        {
+            **service.run_views[0],
+            "status": "failed",
+            "error": "execution_failed",
+            "error_detail": detail,
+        }
+    ]
+
+    assert main(["status", service.run_id]) == 0
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"run: {service.run_id}",
+        "status: failed",
+        f"error: execution_failed: {expected}",
+        "artifacts: 0",
+    ]
 
 
 @pytest.mark.parametrize("reason", ["private provider payload", {"private": "payload"}, None])
@@ -2934,7 +3051,52 @@ def test_device_credential_is_exchanged_without_rotation(
             None,
         )
     ]
-    assert logged_in == {_credential_key(service.url): "device-1"}
+    assert logged_in[_credential_key(service.url)] == "device-1"
+    cached = json.loads(logged_in[("recurse-cli", f"access-token:{service.url}")])
+    assert cached["access_token"] == "access-1"  # noqa: S105 - fake bearer
+
+
+def test_parallel_access_token_requests_share_one_exchange(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+) -> None:
+    """Twelve concurrent callers must not consume twelve provider sign-ins."""
+    barrier = threading.Barrier(12)
+
+    def obtain_token(_: int) -> str:
+        """Start all callers together, using the real token HTTP endpoint."""
+        barrier.wait(timeout=10)
+        return cli._access_token()
+
+    with ThreadPoolExecutor(max_workers=12) as workers:
+        assert list(workers.map(obtain_token, range(12))) == ["access-1"] * 12
+    assert service.device_grants == ["device-1"]
+
+
+def test_parallel_rejected_tokens_share_one_refresh(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Late failures of an old bearer reuse, rather than discard, its replacement."""
+    service.token_responses = ["access-old", "access-new"]
+    old = cli._access_token()
+
+    def reject_old(*args: Any, **kwargs: Any) -> tuple[int, bytes]:
+        """Reject only the old bearer at the MCP boundary."""
+        if args[3] == old:
+            return 401, b'{"detail":"expired"}'
+        return 200, b'{"jsonrpc":"2.0","id":1,"result":{}}'
+
+    monkeypatch.setattr(cli, "_mcp_request", reject_old)
+
+    def invoke(_: int) -> str:
+        """Exercise the bridge's existing one-retry request path."""
+        return cli._remote_mcp_request("mcp_test", 1, "tools/list", {}, old)[1]
+
+    with ThreadPoolExecutor(max_workers=12) as workers:
+        assert list(workers.map(invoke, range(12))) == ["access-new"] * 12
+    assert service.device_grants == ["device-1", "device-1"]
 
 
 def test_logout_revokes_then_removes_the_device_credential(
@@ -3171,7 +3333,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.1.3",
+                    "version": "0.1.6",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -3321,7 +3483,7 @@ def test_mcp_bridge_polls_an_async_call_and_returns_the_embedded_result(
 ) -> None:
     """A working task is polled at server intervals and becomes a normal tool result."""
     task_id = "task_" + "a" * 32
-    call_result = {
+    call_result: dict[str, Any] = {
         "content": [{"type": "text", "text": "done"}],
         "structuredContent": {"status": "succeeded"},
         "isError": False,
@@ -3384,7 +3546,10 @@ def test_mcp_bridge_polls_an_async_call_and_returns_the_embedded_result(
     assert responses[-1] == {
         "jsonrpc": "2.0",
         "id": "host-call",
-        "result": call_result,
+        "result": {
+            **call_result,
+            "content": [*call_result["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
     assert 0.018 <= elapsed < 1
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -3421,7 +3586,6 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     run_id = "77777777-7777-4777-8777-777777777777"
     output_id = "99999999-9999-4999-8999-999999999999"
     uri = f"recurse://artifact/{run_id}/{output_id}"
-    service.token_responses = ["access-1", "access-2"]
     service.mcp_responses = [_remote_discovery_reply(1)]
     input_stream, output_stream = _bridge_frames(
         _initialize_frame(1),
@@ -3454,11 +3618,11 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
         "GET",
         f"/v1/runs/{run_id}/artifacts/{output_id}",
         None,
-        "Bearer access-2",
+        "Bearer access-1",
     )
-    assert service.device_grants == ["device-1", "device-1"]
+    assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.1.3"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.1.6"
 
 
 @pytest.mark.parametrize(
@@ -4090,7 +4254,7 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
 ) -> None:
     """Transient polling failures neither reauthenticate nor resubmit the tool call."""
     task_id = "task_" + "e" * 32
-    call_result = {
+    call_result: dict[str, Any] = {
         "content": [{"type": "text", "text": "done after rollout"}],
         "isError": False,
     }
@@ -4136,7 +4300,10 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "result": call_result,
+        "result": {
+            **call_result,
+            "content": [*call_result["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
     assert 0.015 <= elapsed < 1
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -4150,16 +4317,22 @@ def test_mcp_bridge_tolerates_transient_unavailability_only_while_polling(
     assert service.device_grants == ["device-1"]
 
 
-def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
+@pytest.mark.parametrize("is_error", [False, True])
+def test_mcp_bridge_retains_task_identity_without_changing_declared_output(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
+    is_error: bool,
 ) -> None:
-    """A completed execution failure reaches the host as CallToolResult with isError."""
+    """Terminal results retain public identity but not private task-envelope fields."""
     task_id = "task_" + "b" * 32
-    failure = {
-        "content": [{"type": "text", "text": "execution_failed"}],
-        "structuredContent": {"status": "failed"},
-        "isError": True,
+    failure: dict[str, Any] = {
+        "content": [
+            {"type": "text", "text": "Run: 11111111-1111-4111-8111-111111111111."},
+            {"type": "resource_link", "name": "receipt.json", "uri": "recurse://fixture"},
+        ],
+        "structuredContent": {"score": 0.75},
+        "isError": is_error,
+        "_meta": {"recurse/model": "public-model"},
     }
     service.mcp_responses = [
         _remote_discovery_reply(1),
@@ -4179,6 +4352,7 @@ def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
                 "taskId": task_id,
                 "status": "completed",
                 "result": failure,
+                "private_trace": "must-not-be-forwarded",
             },
         ),
     ]
@@ -4197,8 +4371,17 @@ def test_mcp_bridge_returns_a_completed_tool_failure_as_a_normal_call_result(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "result": failure,
+        "result": {
+            **failure,
+            "content": [*failure["content"], {"type": "text", "text": f"Task: {task_id}"}],
+        },
     }
+    assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
+        "server/discover",
+        "tools/call",
+        "tasks/get",
+    ]
+    assert json.loads(service.mcp_bodies[-1])["params"]["taskId"] == task_id
 
 
 @pytest.mark.parametrize(
@@ -4257,7 +4440,7 @@ def test_mcp_bridge_returns_terminal_task_errors_with_the_host_id(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": "call-id",
-        "error": expected_error,
+        "error": {**expected_error, "message": f"{expected_error['message']} Task: {task_id}"},
     }
 
 
@@ -4296,7 +4479,7 @@ def test_mcp_bridge_bounds_task_polling(
     assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
         "jsonrpc": "2.0",
         "id": 2,
-        "error": {"code": -32000, "message": "tool call timed out"},
+        "error": {"code": -32000, "message": f"tool call timed out Task: {task_id}"},
     }
     assert len(service.mcp_bodies) == 2
 
@@ -4346,7 +4529,7 @@ def test_mcp_bridge_waits_through_the_platform_run_deadline(
     assert response == {
         "jsonrpc": "2.0",
         "id": "call-id",
-        "result": {"content": []},
+        "result": {"content": [{"type": "text", "text": f"Task: {task_id}"}]},
     }
     assert token == "access-1"  # noqa: S105 - inert authentication fixture
     assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
@@ -4401,7 +4584,7 @@ def test_mcp_bridge_waits_through_the_platform_run_deadline(
                     "error": {"code": -32000, "message": "poll failed"},
                 },
             ],
-            "poll failed",
+            "poll failed Task: task_" + "f" * 32,
         ),
     ],
 )
@@ -4425,8 +4608,93 @@ def test_mcp_bridge_translates_remote_errors_for_each_forwarded_operation(
         "jsonrpc": "2.0",
         "id": 2,
         "error": {
-            "code": -32000 if message == "poll failed" else -32602,
+            "code": remote_responses[-1]["error"]["code"],
             "message": message,
+        },
+    }
+
+
+def test_mcp_bridge_retains_the_admitted_task_reference_on_poll_errors(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+) -> None:
+    """A rejected poll preserves correlation and public error data without resubmission."""
+    task_id = "task_" + "a" * 32
+    public_error = {
+        "code": -32004,
+        "message": "Task status is unavailable.",
+        "data": {"retryable": False},
+    }
+    service.mcp_responses = [
+        _remote_discovery_reply("host-init"),
+        _remote_reply(
+            "host-call",
+            {"taskId": task_id, "status": "working", "pollIntervalMs": 0},
+        ),
+        {
+            "jsonrpc": "2.0",
+            "id": "remote-poll",
+            "error": public_error,
+            "private_trace": "must-not-be-forwarded",
+        },
+    ]
+    input_stream, output_stream = _bridge_frames(
+        _initialize_frame("host-init"),
+        {
+            "jsonrpc": "2.0",
+            "id": "host-call",
+            "method": "tools/call",
+            "params": {"name": "tune", "arguments": {}},
+        },
+    )
+
+    cli._serve_mcp("mcp_1234", input_stream, output_stream)
+
+    assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
+        "jsonrpc": "2.0",
+        "id": "host-call",
+        "error": {
+            "code": -32004,
+            "message": f"Task status is unavailable. Task: {task_id}",
+            "data": {"retryable": False},
+        },
+    }
+    assert [headers["Mcp-Method"] for headers in service.mcp_headers] == [
+        "server/discover",
+        "tools/call",
+        "tasks/get",
+    ]
+    assert json.loads(service.mcp_bodies[-1])["params"]["taskId"] == task_id
+
+
+@pytest.mark.parametrize("message", [None, {"private": "must-not-be-stringified"}])
+def test_mcp_bridge_rejects_malformed_poll_error_messages(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    message: object,
+) -> None:
+    """Appending correlation must not turn a non-text error into public diagnostics."""
+    service.mcp_responses = [
+        _remote_discovery_reply(1),
+        _remote_reply(
+            2,
+            {"taskId": "task_" + "a" * 32, "status": "working", "pollIntervalMs": 0},
+        ),
+        {"jsonrpc": "2.0", "id": 2, "error": {"code": -32000, "message": message}},
+    ]
+    input_stream, output_stream = _bridge_frames(
+        _initialize_frame(1),
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "tune"}},
+    )
+
+    cli._serve_mcp("mcp_1234", input_stream, output_stream)
+
+    assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "error": {
+            "code": -32000,
+            "message": "the Recurse service returned an invalid MCP task response",
         },
     }
 
@@ -4522,7 +4790,11 @@ def test_mcp_bridge_rejects_invalid_task_poll_intervals(
     "task_result",
     [
         {"taskId": "task_" + "2" * 32, "status": "completed"},
+        {"taskId": "task_" + "2" * 32, "status": "completed", "result": {}},
+        {"taskId": "task_" + "2" * 32, "status": "completed", "result": {"content": None}},
         {"taskId": "task_" + "3" * 32, "status": "failed"},
+        {"taskId": "task_" + "3" * 32, "status": "failed", "error": {}},
+        {"taskId": "task_" + "3" * 32, "status": "failed", "error": {"message": None}},
         {"taskId": "task_" + "4" * 32, "status": "unknown"},
         {"status": "working", "pollIntervalMs": 0},
     ],
@@ -4789,30 +5061,12 @@ def test_mcp_cli_dispatches_standard_input_and_output(
     assert received == [("mcp_1234", standard_input.buffer, standard_output.buffer)]
 
 
-def test_two_bridge_processes_share_one_keychain_credential(
+def test_twelve_bridge_processes_share_one_access_token(
     service: FakeService,
     tmp_path: Path,
 ) -> None:
-    """Independent bridge processes can exchange the same read-only device credential."""
-    backend = tmp_path / "shared_keyring.py"
-    backend.write_text(
-        "from keyring.backend import KeyringBackend\n\n"
-        "class Backend(KeyringBackend):\n"
-        "    priority = 1\n"
-        "    def get_password(self, service, username):\n"
-        f"        if (service, username) == "
-        f"('recurse-cli', 'device-credential:{service.url}'):\n"
-        "            return 'device-1'\n"
-        "        return None\n"
-        "    def set_password(self, service, username, password):\n"
-        "        raise AssertionError('unexpected write')\n"
-        "    def delete_password(self, service, username):\n"
-        "        raise AssertionError('unexpected delete')\n"
-    )
-    env = os.environ.copy()
-    env["RECURSE_API_URL"] = service.url
-    env["PYTHON_KEYRING_BACKEND"] = "shared_keyring.Backend"
-    env["PYTHONPATH"] = os.pathsep.join([str(tmp_path), str(Path.cwd() / "src")])
+    """Independent bridge startups share one token without twelve provider exchanges."""
+    env = process_environment(tmp_path, service.url)
     frame = json.dumps(_initialize_frame(1, "2025-06-18")).encode() + b"\n"
     command = [
         sys.executable,
@@ -4823,15 +5077,15 @@ def test_two_bridge_processes_share_one_keychain_credential(
         subprocess.Popen(  # noqa: S603 - fixed current-interpreter test command
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
         )
-        for _ in range(2)
+        for _ in range(12)
     ]
 
     results = [process.communicate(frame, timeout=10) for process in processes]
 
-    assert [process.returncode for process in processes] == [0, 0]
-    assert [json.loads(stdout)["id"] for stdout, _ in results] == [1, 1]
-    assert [stderr for _, stderr in results] == [b"", b""]
-    assert service.device_grants.count("device-1") == 2
+    assert [process.returncode for process in processes] == [0] * 12, results
+    assert [json.loads(stdout)["id"] for stdout, _ in results] == [1] * 12
+    assert [stderr for _, stderr in results] == [b""] * 12
+    assert service.device_grants == ["device-1"]
 
 
 def test_mcp_bridge_never_outputs_or_forwards_the_device_credential(

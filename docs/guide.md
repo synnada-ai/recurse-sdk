@@ -42,21 +42,21 @@ Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
 `Returns:`; tools returning `None` must not have a `Returns:` section. Supply type parameters
-for generic types whenever possible, such as `list[Candidate]` rather than bare `list`, so the
-harness can reflect them in the tool schema. Use bare generics only when their element types
-are unconstrained or unknown.
+for generic types, such as `list[Candidate]` rather than bare `list`, so Recurse can describe
+and validate their contents. Bare collections are not unrestricted JSON containers: in strict
+mode, bare `list` elements require stored-object references, and bare `dict` does not accept an
+ordinary inline JSON object. Use `list[int]` for inline integers or `dict[str, str]` for inline
+string values. For mixed values, declare the allowed types explicitly, for example
+`dict[str, str | int | list[str] | None]`.
 
-Tool parameters and results use the annotation support of the engine's pinned Agentia version.
+Recurse uses Python annotations to define tool parameters and results.
 Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your own classes,
 `list[int]`, `dict[str, float]`, `tuple[int, ...]`, `tuple[int, str]`, optional values such as
 `str | None`, unions such as `list[int] | str`, and `Literal["a", "b"]` (from `typing`).
-These examples are not exhaustive; support depends on that Agentia version. Collections can
-also be nested, such as `list[dict[str, tuple[int, ...]]]`.
-
-In strict tool mode, `Any` denotes a value obtained from storage, including inside collections:
-`dict[str, Any]` requires storage references for its values. Use concrete scalar/container types
-or typed dictionaries for values the agent must author inline. `no_storage` suppresses the outer
-optional storage-reference wrapper; it does not turn nested `Any` into arbitrary JSON.
+Collections can also be nested, such as `list[dict[str, tuple[int, ...]]]`. Use a `TypedDict`,
+dataclass, or Pydantic model with concrete field types for a structured inline object. If using
+Pydantic, include it in your application's dependencies. Plain custom classes instead require
+stored-object references; an inline dictionary is not a substitute for an instance.
 
 The harness turns the docstring summary, body, and `Returns:` section into the tool description.
 Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
@@ -116,14 +116,32 @@ while independent calls can execute concurrently. Results can also be stored as 
 in program memory and reused across iterations.
 
 Collections can contain application objects directly, such as `list[Candidate]`; ordinary
-collections do not need wrapper classes. Class instances are passed between tools by reference,
-including inside collections. Repeated references retain object identity, so a mutation through
-one reference is visible through the others.
+collections do not need wrapper classes. Stored class instances can be passed between tools by
+reference. Repeated references retain object identity, so a mutation through one reference is
+visible through the others. However, reference support inside an inline collection depends on
+its element type: `list[PlainClass]` accepts individual object references, whereas `list[Point]`
+for the dataclass above expects inline point objects. To pass existing points together, use a
+reference to the whole stored list rather than individual references inside an inline list.
 
 Pass shared state through typed parameters and return values. Mutable module globals hide
 dependencies from the harness and can lead to incorrect execution schedules. Files under
 `recurse.context().workspace` serve a different purpose: downloadable artifacts available after
 the run.
+
+#### Reading reference-related tool errors
+
+These fields appear in the specialist's tool calls, not in your Python function signatures or
+the inputs you send to a deployed MCP:
+
+- `save_as: "point"` saves a storable tool result for later calls. `save_as: null` does not save it.
+- `{"storage_key": "point"}` refers to the whole saved object.
+- `{"storage_jsonpath": "points[0]"}` selects an item or field within a saved object.
+
+`storage_key` is a literal name: `{"storage_key": "point.x"}` looks for an object named
+`point.x`, not the `x` field of `point`. Use `{"storage_jsonpath": "point.x"}` for that field.
+If an error says a stored-object reference was expected, check the receiving parameter's type:
+use concrete types for inline data, or pass a reference to a compatible saved object. Changing
+`no_storage` does not make an `Any` value accept inline data.
 
 ### Tool registration and settings
 
@@ -143,17 +161,27 @@ Use `tools.defaults` for shared settings and override individual registrations w
 - `storable` allows a return value to be saved in program memory; a non-`None` return type enables
   it by default. Disable it only for results used solely as context text or with no composable
   Python object. This storage is separate from workspace artifacts.
-- `no_storage` lists parameters that must receive inline values instead of stored objects.
+- `no_storage` removes the optional stored-object reference alternative for listed parameters.
+  It does not relax type requirements: Recurse uses strict mode, so `Any`, including values
+  inside `dict[str, Any]` or `list[Any]`, still requires stored-object references. Use concrete
+  types for inline data, such as `dict[str, str]` for a dictionary of inline strings.
   Use it for identifiers or control flags where Python object passing is unnecessary.
   It defaults to an empty list.
 - `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
   results; repeated calls or recurring patterns then do not alert the harness to a stuck loop.
 - `pure_args` lists parameters the tool guarantees not to mutate in place. It defaults to an
-  empty list; `null` declares all parameters pure. The harness uses it to plan execution, so an
-  incorrect declaration can cause races. Keep the conservative default when unsure.
+  empty list; `null` declares all parameters pure. Recurse uses it to decide whether to refresh
+  the stored-object previews shown to the specialist after a call. An incorrect declaration can
+  leave those previews stale. It does not control execution order or make concurrent mutations
+  safe. Keep the conservative default when unsure.
 
-`tools.built-in` defaults to `true` and controls built-in tools such as notes, TODO management,
+`tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
+
+Each application tool call has a 30-second timeout, separate from the 15-minute run limit.
+A tool timeout is reported to the specialist for recovery; it does not necessarily end the run
+immediately. Design individual calls to fit that budget, breaking longer work into smaller steps
+where practical. The manifest does not expose a per-tool timeout setting.
 
 ### Input and output contracts
 
@@ -284,10 +312,17 @@ recurse login
 Your browser opens the hosted Recurse login page; sign in with GitHub or Google. The
 CLI listens on `http://127.0.0.1:8765/callback`, protects the flow with a PKCE
 challenge and a single-use state value, and stores one opaque device credential in your
-operating system keychain (service `recurse-cli`). Short-lived access tokens are obtained
-when a command starts. The keychain entry is scoped to the active Recurse API URL, so TEST
-and production logins can coexist. No credentials are written into application directories
-or MCP configuration.
+operating system keychain (service `recurse-cli`). Commands and MCP processes sharing that
+login reuse a short-lived access token stored in the same keychain. A local lock coordinates
+refreshes, so concurrent callers do not each exchange the device credential. Tokens are scoped
+to both the active API URL and saved login, and refreshed thirty seconds before their returned
+expiry. TEST and production logins can coexist. No credentials are written into application
+directories, lock files, or MCP configuration.
+
+Token reuse requires a writable keychain. If only saving a freshly issued token fails,
+the command continues with that token and prints a warning to stderr. Later commands
+must exchange again and may hit sign-in rate limits until keychain writes are restored.
+Failures reading the keychain or removing a stale token still stop authentication.
 
 Log out when you want to revoke the device credential:
 
@@ -295,8 +330,11 @@ Log out when you want to revoke the device credential:
 recurse logout
 ```
 
-The local keychain entry is removed only after revocation succeeds, so a temporary
-service failure can be retried safely.
+The local login and cached token are removed only after revocation succeeds, so a temporary
+service failure can be retried safely. Logging in again replaces the previous login's cache.
+Remote revocation of a device credential does not immediately invalidate an already-issued
+access token: local commands can reuse it until refresh is due (currently within fifteen
+minutes). A running request may already hold that token. Local logout prevents further cache reuse.
 
 ## Runtime-secret management
 
@@ -410,7 +448,9 @@ with `2` as well, so inspect the printed status and error rather than treating t
 proof of a remote timeout. Other reported CLI errors exit with `1`.
 
 Confirmed run failures include the run ID, status, a stable public error identifier and a short
-explanation. For example:
+explanation. `recurse run` and `recurse status` display the service's public failure detail when
+available, falling back to a generic explanation otherwise. Terminal control characters are
+displayed as escapes. For example:
 
 ```text
 run: 77777777-7777-4777-8777-777777777777
@@ -426,7 +466,7 @@ artifacts: 0
 | `invalid_inputs` | Check `--inputs` against the input schema in `agent.yaml`. |
 | `invalid_agent` | Check the application declaration and packaged tool definitions. |
 | `invalid_output` | Check the final return value against the declared output schema. |
-| `execution_failed` | The agent failed; no more specific public cause is available. Keep the run ID when asking for help. |
+| `execution_failed` | The agent failed. Follow the public explanation when available and keep the run ID when asking for help. |
 | `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
@@ -486,11 +526,15 @@ tool_timeout_sec = 1140
 Give other MCP hosts comparable startup and tool-call headroom around the execution limit.
 
 Both commands start the same small stdio bridge. Each process reads the shared device
-credential from the operating system keychain and obtains its own short-lived access token.
+credential and reuses its short-lived access token through the operating system keychain.
 The device credential is never written to host configuration, environment variables, or
 standard output. Each tool call is submitted once and can continue while the local process polls
 for its result. A host cancellation cancels that call; temporary connection interruptions resume
 waiting for the same call instead of submitting it again.
+
+Completed tool results, terminal task errors, and remote polling errors after task admission include
+a `Task: task_…` reference for support.
+This reference does not change the agent's declared structured output or artifact links.
 
 An MCP host may override the deployment's resource ceilings for one call through standard request
 metadata. Include either or both fields under `params._meta` in the `tools/call` request:

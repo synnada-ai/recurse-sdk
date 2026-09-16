@@ -25,7 +25,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from decimal import Decimal, DecimalException
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -35,11 +36,14 @@ from uuid import UUID, uuid4
 
 import keyring
 import keyring.errors
+from filelock import FileLock, Timeout
 
 from recurse import RecurseError, _build_bundle
 
 _DEFAULT_API_URL = "https://api.recurse.run"
 _REQUEST_TIMEOUT_SECONDS = 60
+_AUTH_LOCK_DIRECTORY = Path("~") / ".recurse" / "locks"
+_TOKEN_REFRESH_MARGIN_SECONDS = 30
 _POLL_SECONDS = 2.0
 _RUN_TIMEOUT_SECONDS = 15 * 60
 _MCP_TASK_TIMEOUT_SECONDS = _RUN_TIMEOUT_SECONDS + _REQUEST_TIMEOUT_SECONDS
@@ -426,43 +430,158 @@ def _store_device_credential(tokens: dict[str, object]) -> None:
         _CliError: If the operating system keychain rejects the write.
     """
     credential = required_field(tokens, "device_credential")
-    try:
+    with _auth_lock():
+        _clear_cached_access()
         keyring.set_password(_KEYCHAIN_SERVICE, _keychain_credential_name(), credential)
+
+
+@contextmanager
+def _auth_lock() -> Iterator[None]:
+    """Serialize keychain login/cache changes across threads and local processes.
+
+    Only a hash of the API URL is written in the owner-only lock filename;
+    credentials and tokens remain in the OS keychain. The OS releases the lock
+    if its owning process exits.
+
+    Yields:
+        Control while the endpoint-scoped lock is held.
+
+    Raises:
+        _CliError: If locking times out, storage fails, or the keychain is unavailable.
+    """
+    try:
+        directory = _AUTH_LOCK_DIRECTORY.expanduser()
+    except RuntimeError as error:
+        raise _CliError(
+            "could not resolve the home directory for the Recurse login lock"
+        ) from error
+    try:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        identity = hashlib.sha256(api_base_url().encode()).hexdigest()
+        with FileLock(directory / f"{identity}.lock", timeout=_REQUEST_TIMEOUT_SECONDS, mode=0o600):
+            yield
+    except Timeout as error:
+        raise _CliError("another Recurse process is refreshing your login; try again") from error
+    except OSError as error:
+        raise _CliError("could not access the local Recurse login lock") from error
     except keyring.errors.KeyringError as error:
         raise _CliError(f"the system keychain is unavailable: {error}") from error
 
 
-def _exchange_device_credential(credential: str) -> str:
+def _clear_cached_access() -> None:
+    """Remove the endpoint's cached bearer while the caller holds its auth lock."""
+    name = f"access-token:{api_base_url()}"
+    if keyring.get_password(_KEYCHAIN_SERVICE, name) is not None:
+        keyring.delete_password(_KEYCHAIN_SERVICE, name)
+
+
+def _cached_access_token(
+    raw: str | None, credential: str, rejected_token: str | None
+) -> str | None:
+    """Return a valid cached bearer only for the current saved login.
+
+    Args:
+        raw: Serialized keychain cache entry, if present.
+        credential: Currently saved device credential.
+        rejected_token: Bearer rejected by the server, which must not be reused.
+
+    Returns:
+        A usable token, or ``None`` for missing, malformed, stale or mismatched data.
+    """
+    try:
+        cached = json.loads(raw or "null")
+        if not isinstance(cached, dict):
+            return None
+        token = cached.get("access_token")
+        expires_at = cached.get("expires_at")
+        if (
+            cached.get("credential_sha256") != hashlib.sha256(credential.encode()).hexdigest()
+            or not isinstance(token, str)
+            or not token
+            or token == rejected_token
+            or isinstance(expires_at, bool)
+            or not isinstance(expires_at, (int, float))
+            or not math.isfinite(expires_at)
+            or expires_at <= time.time() + _TOKEN_REFRESH_MARGIN_SECONDS
+        ):
+            return None
+        return token
+    except ValueError:
+        return None
+
+
+def _exchange_device_credential(credential: str) -> dict[str, Any]:
     """Exchange one durable credential for a short-lived access token.
 
     Args:
         credential: Opaque device credential read from the keychain.
 
     Returns:
-        A short-lived access token.
+        The token response, including its lifetime.
 
     Raises:
         ServiceError: If the service rejects the exchange.
     """
-    tokens = request(
+    return request(
         "POST",
         "/v1/auth/token",
         json_body={"grant_type": "device_credential", "device_credential": credential},
     )
-    return required_field(tokens, "access_token")
 
 
-def _access_token() -> str:
-    """Obtain an access token from the stored device credential.
+def _access_token(rejected_token: str | None = None) -> str:
+    """Reuse the saved login's bearer, coordinating a refresh when necessary.
+
+    Args:
+        rejected_token: Bearer rejected by the service; a newer cached bearer is reusable.
 
     Returns:
-        A fresh access token.
+        A cached or freshly issued access token. If saving the cache fails, the
+        fresh token remains usable and a warning is printed to stderr.
 
     Raises:
-        _CliError: If no device credential is stored.
-        ServiceError: If the service rejects the exchange.
+        _CliError: If no login is stored or local coordination/storage fails.
+        ServiceError: If the exchange fails or its token/lifetime is invalid.
     """
-    return _exchange_device_credential(_device_credential())
+    with _auth_lock():
+        credential = _device_credential()
+        cache_name = f"access-token:{api_base_url()}"
+        raw = keyring.get_password(_KEYCHAIN_SERVICE, cache_name)
+        cached = _cached_access_token(raw, credential, rejected_token)
+        if cached is not None:
+            return cached
+        if raw is not None:
+            keyring.delete_password(_KEYCHAIN_SERVICE, cache_name)
+        started_at = time.time()
+        tokens = _exchange_device_credential(credential)
+        token = required_field(tokens, "access_token")
+        expires_in = tokens.get("expires_in")
+        if (
+            isinstance(expires_in, bool)
+            or not isinstance(expires_in, (int, float))
+            or not math.isfinite(expires_in)
+            or expires_in <= 0
+        ):
+            raise ServiceError("the Recurse service returned an invalid response: expires_in")
+        try:
+            keyring.set_password(
+                _KEYCHAIN_SERVICE,
+                cache_name,
+                json.dumps(
+                    {
+                        "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
+                        "access_token": token,
+                        "expires_at": started_at + expires_in,
+                    }
+                ),
+            )
+        except keyring.errors.KeyringError:
+            print(
+                "warning: cannot save the login token for reuse; allow keychain writes "
+                "to avoid repeated sign-ins and rate limits. Continuing with this token.",
+                file=sys.stderr,
+            )
+        return token
 
 
 def _login() -> None:
@@ -535,19 +654,18 @@ def _logout() -> None:
         _CliError: If the keychain cannot be read or changed.
         ServiceError: If the credential cannot be exchanged or revoked.
     """
-    credential = _device_credential()
-    access_token = _exchange_device_credential(credential)
-    request(
-        "POST",
-        "/v1/auth/logout",
-        token=access_token,
-        json_body={"device_credential": credential},
-        json_response=False,
-    )
-    try:
+    with _auth_lock():
+        credential = _device_credential()
+        access_token = required_field(_exchange_device_credential(credential), "access_token")
+        request(
+            "POST",
+            "/v1/auth/logout",
+            token=access_token,
+            json_body={"device_credential": credential},
+            json_response=False,
+        )
+        _clear_cached_access()
         keyring.delete_password(_KEYCHAIN_SERVICE, _keychain_credential_name())
-    except keyring.errors.KeyringError as error:
-        raise _CliError(f"the system keychain is unavailable: {error}") from error
     print(f"Logged out of Recurse at {api_base_url()}.")
     print("Your saved CLI login was removed from your keychain.")
 
@@ -608,7 +726,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.1.3",
+            "version": "0.1.6",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -698,7 +816,7 @@ def _remote_mcp_request(
     name = params.get("name") if method == "tools/call" else None
     status, response_body = _mcp_request(deployment_id, body, method, access_token, name=name)
     if status == HTTPStatus.UNAUTHORIZED:
-        access_token = _access_token()
+        access_token = _access_token(rejected_token=access_token)
         status, response_body = _mcp_request(deployment_id, body, method, access_token, name=name)
     if method == "tasks/get" and status in {
         HTTPStatus.BAD_GATEWAY,
@@ -889,7 +1007,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.1.3",
+            "User-Agent": "recurse-sdk/0.1.6",
         },
         method="GET",
     )
@@ -915,11 +1033,14 @@ def _read_mcp_resource(message: dict[str, Any]) -> tuple[dict[str, Any], str]:
     request_id = message["id"]
     uri, run_id, output_id = _artifact_ids(message["params"].get("uri"))
     access_token = _access_token()
-    grant = request(
-        "GET",
-        f"/v1/runs/{run_id}/artifacts/{output_id}",
-        token=access_token,
-    )
+    path = f"/v1/runs/{run_id}/artifacts/{output_id}"
+    try:
+        grant = request("GET", path, token=access_token)
+    except ServiceError as error:
+        if error.status_code != HTTPStatus.UNAUTHORIZED:
+            raise
+        access_token = _access_token(rejected_token=access_token)
+        grant = request("GET", path, token=access_token)
     body = _download_artifact(grant)
     return (
         _host_result(
@@ -970,12 +1091,15 @@ def _poll_interval_seconds(result: dict[str, Any]) -> float:
     return interval / 1000
 
 
-def _terminal_task_response(result: dict[str, Any], request_id: object) -> dict[str, Any] | None:
+def _terminal_task_response(
+    result: dict[str, Any], request_id: object, task_id: str
+) -> dict[str, Any] | None:
     """Translate a terminal task status, or identify a working task.
 
     Args:
         result: Remote task status result.
         request_id: Host request identifier.
+        task_id: Public task identifier retained from admission.
 
     Returns:
         Host response for a terminal status, or ``None`` while work continues.
@@ -988,19 +1112,31 @@ def _terminal_task_response(result: dict[str, Any], request_id: object) -> dict[
         return None
     if status == "completed":
         call_result = result.get("result")
-        if not isinstance(call_result, dict):
+        if not isinstance(call_result, dict) or not isinstance(call_result.get("content"), list):
             raise ServiceError("the Recurse service returned an invalid MCP task response")
-        return _host_result(request_id, call_result)
+        return _host_result(
+            request_id,
+            {
+                **call_result,
+                "content": [
+                    *call_result["content"],
+                    {"type": "text", "text": f"Task: {task_id}"},
+                ],
+            },
+        )
     if status == "cancelled":
         return _host_error(
             request_id,
-            {"code": _JSONRPC_REQUEST_CANCELLED, "message": "tool call was cancelled"},
+            {
+                "code": _JSONRPC_REQUEST_CANCELLED,
+                "message": f"tool call was cancelled Task: {task_id}",
+            },
         )
     if status == "failed":
         error = result.get("error")
-        if not isinstance(error, dict):
+        if not isinstance(error, dict) or not isinstance(error.get("message"), str):
             raise ServiceError("the Recurse service returned an invalid MCP task response")
-        return _host_error(request_id, error)
+        return _host_error(request_id, {**error, "message": f"{error['message']} Task: {task_id}"})
     raise ServiceError("the Recurse service returned an invalid MCP task response")
 
 
@@ -1060,7 +1196,7 @@ def _call_mcp_tool(
             )
             _response_parts(cast(dict[str, Any], response), request_id)
             return None, access_token
-        terminal = _terminal_task_response(result, request_id)
+        terminal = _terminal_task_response(result, request_id, task_id)
         if terminal is not None:
             return terminal, access_token
         interval = _poll_interval_seconds(result)
@@ -1068,7 +1204,10 @@ def _call_mcp_tool(
             return (
                 _host_error(
                     request_id,
-                    {"code": _JSONRPC_SERVER_ERROR, "message": "tool call timed out"},
+                    {
+                        "code": _JSONRPC_SERVER_ERROR,
+                        "message": f"tool call timed out Task: {task_id}",
+                    },
                 ),
                 access_token,
             )
@@ -1085,7 +1224,12 @@ def _call_mcp_tool(
             continue
         result, error = _response_parts(response, request_id)
         if error is not None:
-            return error, access_token
+            return (
+                _terminal_task_response(
+                    {"status": "failed", "error": error["error"]}, request_id, task_id
+                ),
+                access_token,
+            )
         result = cast(dict[str, Any], result)
 
 
@@ -1153,14 +1297,15 @@ def _serve_mcp(  # noqa: PLR0915 - coordinates one explicit protocol dispatcher
     def run_request(
         key: str,
         message: dict[str, Any],
-        token: str,
         cancelled: threading.Event,
         method: str,
     ) -> None:
         """Complete one blocking host request without blocking protocol dispatch."""
         try:
             if method == "tools/call":
-                response, _token = _call_mcp_tool(deployment_id, message, token, cancelled)
+                response, _token = _call_mcp_tool(
+                    deployment_id, message, _access_token(), cancelled
+                )
             else:
                 response, _token = _read_mcp_resource(message)
         except _CliError as error:
@@ -1224,7 +1369,7 @@ def _serve_mcp(  # noqa: PLR0915 - coordinates one explicit protocol dispatcher
                 cancelled = threading.Event()
                 thread = threading.Thread(
                     target=run_request,
-                    args=(key, message, access_token, cancelled, method),
+                    args=(key, message, cancelled, method),
                 )
                 with active_lock:
                     if key in active_requests:
@@ -1673,7 +1818,7 @@ def _run_request(
     except ServiceError as error:
         if error.status_code != HTTPStatus.UNAUTHORIZED:
             raise
-    token = _access_token()
+    token = _access_token(rejected_token=token)
     return _retry_request(method, path, token=token, json_body=json_body), token
 
 
@@ -1779,7 +1924,14 @@ def _print_run_view(view: dict[str, Any]) -> None:
         error = view.get("error") if view["status"] == "failed" else view["status"]
         if not isinstance(error, str) or error not in _RUN_FAILURE_MESSAGES:
             error = "unknown_error"
-        print(f"error: {error}: {_RUN_FAILURE_MESSAGES[error]}")
+        detail = view.get("error_detail")
+        explanation = _RUN_FAILURE_MESSAGES[error]
+        if isinstance(detail, str) and detail.strip():
+            explanation = "".join(
+                character if character.isprintable() else repr(character)[1:-1]
+                for character in detail.strip()
+            )
+        print(f"error: {error}: {explanation}")
     print(f"artifacts: {len(view['artifacts'])}")
     if view["payload_expired"]:
         print("payloads: expired")
