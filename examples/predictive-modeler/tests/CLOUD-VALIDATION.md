@@ -134,3 +134,23 @@ The example and installed operational CLI have subsequently been upgraded to `re
 Future remote operations should use the upgraded installed `recurse` command; `uv run recurse`
 from this SDK source checkout still invokes its editable development version. Cloud runs remain
 paused until the user confirms the backend fix.
+
+## Verification after the next backend fix
+
+The user reported another backend fix and authorized verification. One previously failing valid
+regression case was run using SDK 0.1.4 and agent source commit `9f50307`:
+
+- Run: `dd7e5957-9ddf-4ac9-b838-07feca807a5e` (`gpt-5.6-luna`, one CPU, 2 GiB).
+- Service status: `succeeded`; authoritative agent receipt: `tool_error`.
+- The review correctly extracted the prose objective as minimize MAE. Dataset inspection completed.
+- The agent reported that `resolve_problem` rejected literal specification values and required
+  storage references, including for the scalar `kind`, despite the `no_storage: [specification]`
+  declaration. It reported trying to omit optional null fields and use available references.
+  This is the agent's diagnostic; backend traces are still needed to establish the cause.
+- Retrieved SQLite state contains only `review`, `dataset`, and `receipt`; no contract and zero
+  trials. The public receipt agrees with SQLite. All six artifacts were retrieved under the ignored
+  `.baseline-results/cloud/backend-fix-regression/` directory.
+
+This attempt returned useful diagnostic artifacts instead of an opaque execution failure, but it
+produced no model. It does not establish that all backend failures are fixed. No further cases were
+launched. Observed balance change: **$100.758708 → $100.520942** (decrease **$0.237766**).
