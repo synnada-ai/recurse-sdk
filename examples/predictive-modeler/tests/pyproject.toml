@@ -13,8 +13,11 @@ recurse-sdk = { path = "../../..", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
-addopts = "-n auto -m 'not integration'"
-markers = ["integration: downloads and exercises real datasets"]
+addopts = "-n auto -m 'not integration and not harness'"
+markers = [
+  "integration: downloads and exercises real datasets",
+  "harness: requires an Agentia source checkout on PYTHONPATH",
+]
 
 [tool.coverage.run]
 branch = true

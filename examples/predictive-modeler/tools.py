@@ -15,6 +15,7 @@ from typing import Any, cast
 import joblib
 import pandas as pd
 from modeler import contracts, datasets, learning, state
+from modeler.proposals import ProposalValue, ProseQuality
 
 import recurse
 
@@ -52,7 +53,7 @@ def get_request() -> dict[str, Any]:
 
 
 def review_inputs(
-    task_summary: str, task_quality: dict[str, Any], conflicts: list[str], questions: list[str]
+    task_summary: str, task_quality: ProseQuality, conflicts: list[str], questions: list[str]
 ) -> dict[str, Any]:
     """Record the first semantic review before downloading data or fitting anything.
 
@@ -68,10 +69,12 @@ def review_inputs(
     """
     if not task_summary.strip():
         raise contracts.ModelerError("A meaningful task interpretation is required.")
-    objective = task_quality.get("objective", {})
-    constraints = task_quality.get("constraints", [])
+    # Direct Python callers also get validation; the harness checks the TypedDict schema first.
+    quality = cast(dict[str, Any], task_quality)
+    objective = quality.get("objective", {})
+    constraints = quality.get("constraints", [])
     if (
-        task_quality.keys() - {"objective", "constraints"}
+        quality.keys() - {"objective", "constraints"}
         or not isinstance(objective, dict)
         or objective.keys() - {"metric", "direction", "parameters"}
         or not isinstance(constraints, list)
@@ -89,13 +92,13 @@ def review_inputs(
         )
     supplied = get_request().get("quality", {})
     detected = list(conflicts)
-    for key, value in task_quality.get("objective", {}).items():
+    for key, value in objective.items():
         actual = supplied.get("objective", {}).get(key)
         if actual is not None and _disagrees(value, actual):
             detected.append(
                 f"Prose objective {key}={value!r} conflicts with quality value {actual!r}."
             )
-    for constraint in task_quality.get("constraints", []):
+    for constraint in constraints:
         matching = [
             item
             for item in supplied.get("constraints", [])
@@ -148,7 +151,7 @@ def inspect_dataset() -> dict[str, Any]:
     return result
 
 
-def resolve_problem(specification: dict[str, Any]) -> dict[str, Any]:
+def resolve_problem(specification: dict[str, ProposalValue]) -> dict[str, Any]:
     """Freeze targets, prediction semantics, quality, and split membership before search.
 
     Args:
@@ -216,7 +219,7 @@ def _execute(identifier: int, remaining: float) -> tuple[str, str, float]:
     return status, diagnostic, time.monotonic() - started
 
 
-def train_candidate(configuration: dict[str, Any], hypothesis: str) -> dict[str, Any]:
+def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) -> dict[str, Any]:
     """Fit a proposed candidate without revealing validation or final-test measurements.
 
     Args:

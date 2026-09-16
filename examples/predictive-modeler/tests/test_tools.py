@@ -1,5 +1,6 @@
 """The agent's tools enforce consistency, budgets, measured selection, and receipts."""
 
+import inspect
 import json
 import runpy
 import subprocess
@@ -7,7 +8,7 @@ import sys
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeAliasType, cast, get_args, get_type_hints, is_typeddict
 
 import joblib
 import pandas as pd
@@ -21,6 +22,29 @@ from recurse import _activate as activate
 from recurse import _deactivate as deactivate
 
 ROOT = Path(__file__).parents[1]
+
+
+def test_agent_inputs_never_require_opaque_any_values(tools: Any) -> None:
+    """Every agent-authored value has a concrete annotation, including nested dictionary values."""
+
+    def check(annotation: Any) -> None:
+        """Follow aliases and record fields to detect an opaque leaf."""
+        assert annotation is not Any, "Any becomes a mandatory storage reference in strict mode"
+        if isinstance(annotation, TypeAliasType):
+            check(annotation.__value__)
+        elif is_typeddict(annotation):
+            for value in get_type_hints(annotation, include_extras=True).values():
+                check(value)
+        else:
+            for value in get_args(annotation):
+                check(value)
+
+    manifest = yaml.safe_load((ROOT / "agent.yaml").read_text())
+    for name in manifest["tools"]["register"]:
+        function = getattr(tools, name)
+        hints = get_type_hints(function)
+        for parameter in inspect.signature(function).parameters:
+            check(hints[parameter])
 
 
 @pytest.fixture

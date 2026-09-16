@@ -110,7 +110,10 @@ horizon. It does not reproduce the competition's original evaluation protocol.
 
 Agent-authored review fields, problem specifications, and candidate configurations use the
 manifest's `no_storage` setting to accept inline JSON, including nested and empty lists. They
-are proposals, not references to previously returned objects. The review rejects malformed
+also use concrete scalar/list unions and typed dictionaries. In the strict harness, `Any`
+requires a stored object even inside a dictionary; `no_storage` only removes the outer optional
+reference wrapper. Using `dict[str, Any]` for these inputs therefore prevents literal proposals.
+The review rejects malformed
 quality wrappers before freezing state; extracting the correct prose meaning remains an LLM
 responsibility. Every finalized run includes `review.json` so that interpretation can be audited.
 
@@ -240,6 +243,17 @@ The real-data suite is opt-in and uses full datasets:
 uv run --directory examples/predictive-modeler/tests --locked \
   pytest -m integration -n auto -q
 ```
+
+With an Agentia source checkout available, verify the actual strict tool schemas and argument
+conversion as well. Replace the path below with that checkout's absolute path:
+
+```sh
+PYTHONPATH=/path/to/agentia uv run --directory examples/predictive-modeler/tests --locked \
+  --with typing-extensions pytest -m harness -n auto -q
+```
+
+These ten checks cover all six review/specification shapes and representative candidate settings.
+The default unit suite also rejects `Any` anywhere in registered tool input annotations.
 
 It verifies downloads/checksums, task resolution, actual subprocess fitting, independent scoring,
 final selection, and reloadable artifacts for each task. `tests/specifications.json` is the

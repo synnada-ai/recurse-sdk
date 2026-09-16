@@ -53,6 +53,11 @@ Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your
 These examples are not exhaustive; support depends on that Agentia version. Collections can
 also be nested, such as `list[dict[str, tuple[int, ...]]]`.
 
+In strict tool mode, `Any` denotes a value obtained from storage, including inside collections:
+`dict[str, Any]` requires storage references for its values. Use concrete scalar/container types
+or typed dictionaries for values the agent must author inline. `no_storage` suppresses the outer
+optional storage-reference wrapper; it does not turn nested `Any` into arbitrary JSON.
+
 The harness turns the docstring summary, body, and `Returns:` section into the tool description.
 Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
 as instructions the specialist can use: what the tool does, when to choose it, valid ranges or

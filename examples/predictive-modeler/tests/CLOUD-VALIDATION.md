@@ -171,3 +171,21 @@ All six artifacts were retrieved under `.baseline-results/cloud/sdk016-regressio
 confirms successful review and dataset inspection, no frozen contract, and zero trials. The saved
 receipt agrees with public output. No model was trained. No further remote attempts were launched.
 Observed account balance change: **$100.520942 → $100.245124**, a decrease of **$0.275818**.
+
+## Tool-authoring root cause reproduced locally
+
+Inspection of Agentia commit `10283b65fcd5948ea5d11344b1f76a8f05dd2416` identified an error
+in this example's signatures. Under strict schema generation, `dict[str, Any]` maps every value
+in the dictionary to a mandatory storage reference. `no_storage` only suppresses the parameter's
+outer optional reference wrapper. It does not override nested `Any` semantics. A minimal old
+resolver signature rejects all four literal fields in a forecast specification in this actual
+schema generator, matching the agent's reports. The earlier assumption that the manifest setting
+alone would permit arbitrary JSON was incorrect.
+
+The input types now use concrete scalar/list unions and typed dictionaries. Ten opt-in tests
+exercise Agentia's real strict schemas and JSON conversion for all six task specifications/reviews
+and representative configurations. They pass with no mandatory substitutions. The default unit
+suite also prevents `Any` from returning anywhere in registered tool input annotations.
+Local results: 146 modeler tests at 100% statement/branch coverage, 434 SDK tests at 100%,
+strict types, lint, and docstrings pass. These checks reproduce and address the authoring failure;
+cloud verification follows separately.

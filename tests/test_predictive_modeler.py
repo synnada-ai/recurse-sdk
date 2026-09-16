@@ -48,6 +48,7 @@ def test_modeler_bundle_contains_runtime_without_test_or_data_payloads() -> None
         "uv.lock",
         "pyproject.toml",
         "modeler/learning.py",
+        "modeler/proposals.py",
         "modeler/sources.json",
         "modeler/worker.py",
     } <= paths
