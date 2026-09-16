@@ -12,7 +12,7 @@
     "constraints": []
   },
   "budget": {
-    "max_trials": 8,
+    "max_trials": 3,
     "max_training_seconds": 600
   }
 }

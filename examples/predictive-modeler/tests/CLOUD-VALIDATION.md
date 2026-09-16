@@ -1,10 +1,10 @@
 # Autonomous-agent validation
 
-Latest status: five modeling tasks have cloud-trained bundles with reproduced scores; all six
-contradictory tasks reject before loading data. SDK 0.1.7 engine retries resolve the binary and
-multiclass artifact failures. Panel inspection encountered a source-host timeout; an offline
-source fix is being validated. See **SDK 0.1.7 engine verification** below. Earlier attempts are
-retained as history.
+Latest status: all six task types have cloud-trained bundles with reproduced validation/final
+scores, and all six contradictory tasks reject before loading data. Panel evidence uses the
+current three-trial request; its earlier eight-trial run timed out. See **SDK 0.1.7 engine
+verification** and **Panel source and workload verification** below. Earlier attempts remain
+as history, including failures and their different allowances.
 
 The user authorized this batch on September 15, 2026. Two runs were attempted; both ended in
 `infrastructure_failed` without agent output or artifacts. The remaining ten were not launched
@@ -349,3 +349,54 @@ not recur. The example now bundles the previously verified, unmodified 199,791-b
 archive with publisher attribution and license links. It retains the original checksum, all 366
 series/109,280 observations, and unchanged splits/metrics. Regression tests verify offline loading,
 archive inclusion/attribution, and rejection of tampered bytes. The focused panel retry follows.
+
+## Panel source and workload verification
+
+The bundled-source retry at `4d6f459`, run `36a852de-5c49-4222-9552-9b6403400378`, kept the
+original eight-trial/600-training-second request. It reached the platform's 15-minute limit with
+no artifacts or final output. That establishes a run-limit failure, not which internal step
+caused it. A representative local 100-tree panel fit took 18.631 seconds; this does not establish
+cloud timing. No acceptance is claimed for the original eight-trial request.
+
+A diagnostic changed **only max_trials from eight to three**, retaining the same task, dataset,
+600-second training allowance, CPU/memory ceilings, objective, splits and metrics. Run
+`489dd805-83e7-4b00-a183-3833cab0d14a` succeeded, evaluated all three fits, and returned ten
+downloadable artifacts. Its final response exactly matches the saved receipt.
+
+| Trial | Approach | Validation MASE |
+| --- | --- | --- |
+| 1 | Short-lag linear | 5.2482 |
+| 2 | 12-month seasonal naive | 1.546546 |
+| 3 | Regularized linear with recent and annual lags | 1.5534 |
+
+The tool selected trial 2 on validation and measured it once on the final holdout:
+**MASE 1.3435731649**. Reloading the downloaded bundle on all 366 series / 109,280 original
+observations reproduces validation and final scores to 1e-9 tolerance. The resolved contract
+preserves the 12-month horizon/frequency/seasonal scaling and equal-series/origin aggregation.
+Cumulative training time was 8.299 seconds. It stopped with `budget_exhausted`, without claiming
+convergence or that three trials establish the best possible forecast.
+
+The shipped panel input now uses this verified three-trial allowance; other demonstration inputs
+retain eight. This is an explicit workload adjustment, not evidence that the earlier eight-trial
+case now succeeds. Task, data and quality requirements are unchanged. The agent remains configurable
+through caller budgets, subject to the platform execution limit.
+
+### Final validation status
+
+All six task modalities now have accepted autonomous models with locally reproduced scores,
+across the documented runs and allowances. All six inconsistency gates were checked; both prior
+receipt-fidelity failures passed targeted repeats. Current modeler coverage is 150 tests at 100%
+statement/branch coverage; the real panel tool chain passes with the bundled source. No added
+dependencies or coverage exemptions. The source archive is unchanged, checksum-verified, attributed,
+and included in a deployment-content regression test. CI is green and the SDK 0.1.7 merge conflict
+is resolved.
+
+The engine-verification/improvement pass admitted five runs: three original retries, the bundled
+eight-trial panel attempt, and the three-trial diagnostic. All are terminal. Account balance changed
+from **$97.045187 to $95.589721**, an observed decrease of **$1.455466**; final available balance
+equals total, and no funds were added. These are account-wide deltas, not itemized charges.
+
+Stop reason: **representative functionality accepted for the documented example inputs**.
+The successful cases do not establish repeated reliability, global optimality, or arbitrary-data
+performance. Larger panel searches remain bounded by the observed runtime limit. Prior artifact
+storage and usage-authorization failures did not recur in this pass.

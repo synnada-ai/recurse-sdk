@@ -174,6 +174,11 @@ recurse run examples/predictive-modeler \
 Select another input file from the table to change the task. These commands use the remote
 Recurse runtime and consume credits. Dataset downloads require network access but no dataset login;
 the Tourism example uses its bundled source archive.
+The panel request allows three trials to leave time for evaluation and finalization across 366
+series. Its earlier eight-trial run reached the platform's 15-minute limit; the three-trial request
+produced a verified model. Other demonstration requests allow eight trials. Budgets are caller
+inputs, and larger searches can exceed the platform limit even before their training allowance
+is exhausted.
 Your own data must be available to that runtime through an HTTPS CSV/Parquet URI; a laptop's local
 path is not uploaded by this contract. Downloads and expanded ZIP members are limited to 32 MiB.
 
@@ -273,6 +278,9 @@ report local tool probes as evidence that the autonomous agent passed those chec
 For actual cloud outcomes, run IDs, reproduced model scores, and remaining backend blockers,
 see [autonomous validation evidence](tests/CLOUD-VALIDATION.md). Successful model receipts include
 only available, nonempty artifact paths; the agent must return the saved receipt unchanged.
+All six task types have accepted cloud bundles with locally reproduced validation/final-test
+scores; panel evidence uses the three-trial request above. These runs demonstrate functionality,
+not repeated reliability estimates or a guarantee of strong performance on arbitrary datasets.
 
 ## Limitations
 
