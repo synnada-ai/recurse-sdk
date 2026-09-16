@@ -32,7 +32,6 @@ def test_guide_covers_tool_authoring_and_links_to_design_guidance() -> None:
         "`tools.register`",
         "Google-style docstring",
         "Supply type parameters",
-        "pinned Agentia version",
         "passed between tools by reference",
         "Repeated references retain object identity",
         "`storable`",

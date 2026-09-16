@@ -42,16 +42,21 @@ Every public module-level function in the tool module must be registered under
 `tools.register`, fully type-annotated, and carry a Google-style docstring whose `Args:`
 section describes each parameter. Tools that return a value must describe it under
 `Returns:`; tools returning `None` must not have a `Returns:` section. Supply type parameters
-for generic types whenever possible, such as `list[Candidate]` rather than bare `list`, so the
-harness can reflect them in the tool schema. Use bare generics only when their element types
-are unconstrained or unknown.
+for generic types, such as `list[Candidate]` rather than bare `list`, so Recurse can describe
+and validate their contents. Bare collections are not unrestricted JSON containers: in strict
+mode, bare `list` elements require stored-object references, and bare `dict` does not accept an
+ordinary inline JSON object. Use `list[int]` for inline integers or `dict[str, str]` for inline
+string values. For mixed values, declare the allowed types explicitly, for example
+`dict[str, str | int | list[str] | None]`.
 
-Tool parameters and results use the annotation support of the engine's pinned Agentia version.
+Recurse uses Python annotations to define tool parameters and results.
 Supported examples include scalars (`bool`, `int`, `float`, `str`, `None`), your own classes,
 `list[int]`, `dict[str, float]`, `tuple[int, ...]`, `tuple[int, str]`, optional values such as
 `str | None`, unions such as `list[int] | str`, and `Literal["a", "b"]` (from `typing`).
-These examples are not exhaustive; support depends on that Agentia version. Collections can
-also be nested, such as `list[dict[str, tuple[int, ...]]]`.
+Collections can also be nested, such as `list[dict[str, tuple[int, ...]]]`. Use a `TypedDict`,
+dataclass, or Pydantic model with concrete field types for a structured inline object. If using
+Pydantic, include it in your application's dependencies. Plain custom classes instead require
+stored-object references; an inline dictionary is not a substitute for an instance.
 
 The harness turns the docstring summary, body, and `Returns:` section into the tool description.
 Each `Args:` entry describes a parameter, and type annotations supply the schema. Write these
@@ -111,14 +116,32 @@ while independent calls can execute concurrently. Results can also be stored as 
 in program memory and reused across iterations.
 
 Collections can contain application objects directly, such as `list[Candidate]`; ordinary
-collections do not need wrapper classes. Class instances are passed between tools by reference,
-including inside collections. Repeated references retain object identity, so a mutation through
-one reference is visible through the others.
+collections do not need wrapper classes. Stored class instances can be passed between tools by
+reference. Repeated references retain object identity, so a mutation through one reference is
+visible through the others. However, reference support inside an inline collection depends on
+its element type: `list[PlainClass]` accepts individual object references, whereas `list[Point]`
+for the dataclass above expects inline point objects. To pass existing points together, use a
+reference to the whole stored list rather than individual references inside an inline list.
 
 Pass shared state through typed parameters and return values. Mutable module globals hide
 dependencies from the harness and can lead to incorrect execution schedules. Files under
 `recurse.context().workspace` serve a different purpose: downloadable artifacts available after
 the run.
+
+#### Reading reference-related tool errors
+
+These fields appear in the specialist's tool calls, not in your Python function signatures or
+the inputs you send to a deployed MCP:
+
+- `save_as: "point"` saves a storable tool result for later calls. `save_as: null` does not save it.
+- `{"storage_key": "point"}` refers to the whole saved object.
+- `{"storage_jsonpath": "points[0]"}` selects an item or field within a saved object.
+
+`storage_key` is a literal name: `{"storage_key": "point.x"}` looks for an object named
+`point.x`, not the `x` field of `point`. Use `{"storage_jsonpath": "point.x"}` for that field.
+If an error says a stored-object reference was expected, check the receiving parameter's type:
+use concrete types for inline data, or pass a reference to a compatible saved object. Changing
+`no_storage` does not make an `Any` value accept inline data.
 
 ### Tool registration and settings
 
@@ -147,11 +170,18 @@ Use `tools.defaults` for shared settings and override individual registrations w
 - `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
   results; repeated calls or recurring patterns then do not alert the harness to a stuck loop.
 - `pure_args` lists parameters the tool guarantees not to mutate in place. It defaults to an
-  empty list; `null` declares all parameters pure. The harness uses it to plan execution, so an
-  incorrect declaration can cause races. Keep the conservative default when unsure.
+  empty list; `null` declares all parameters pure. Recurse uses it to decide whether to refresh
+  the stored-object previews shown to the specialist after a call. An incorrect declaration can
+  leave those previews stale. It does not control execution order or make concurrent mutations
+  safe. Keep the conservative default when unsure.
 
-`tools.built-in` defaults to `true` and controls built-in tools such as notes, TODO management,
+`tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
+
+Each application tool call has a 30-second timeout, separate from the 15-minute run limit.
+A tool timeout is reported to the specialist for recovery; it does not necessarily end the run
+immediately. Design individual calls to fit that budget, breaking longer work into smaller steps
+where practical. The manifest does not expose a per-tool timeout setting.
 
 ### Input and output contracts
 
