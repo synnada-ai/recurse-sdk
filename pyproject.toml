@@ -1,6 +1,6 @@
 [project]
 name = "recurse-sdk"
-version = "0.1.6"
+version = "0.1.7"
 description = "Author, package, and deploy Recurse applications."
 readme = "README.md"
 license = "Apache-2.0"
