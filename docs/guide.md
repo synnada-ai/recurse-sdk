@@ -138,7 +138,10 @@ Use `tools.defaults` for shared settings and override individual registrations w
 - `storable` allows a return value to be saved in program memory; a non-`None` return type enables
   it by default. Disable it only for results used solely as context text or with no composable
   Python object. This storage is separate from workspace artifacts.
-- `no_storage` lists parameters that must receive inline values instead of stored objects.
+- `no_storage` removes the optional stored-object reference alternative for listed parameters.
+  It does not relax type requirements: Recurse uses strict mode, so `Any`, including values
+  inside `dict[str, Any]` or `list[Any]`, still requires stored-object references. Use concrete
+  types for inline data, such as `dict[str, str]` for a dictionary of inline strings.
   Use it for identifiers or control flags where Python object passing is unnecessary.
   It defaults to an empty list.
 - `volatile` defaults to `false`. Set it to `true` when identical arguments can produce different
