@@ -13,6 +13,7 @@ _MIN_ROWS = 30
 _BINARY_CLASSES = 2
 _CLASSIFICATION = {"binary", "multiclass", "multilabel"}
 _HIGHER = {"precision", "recall", "f1", "accuracy"}
+_COMPLEXITY = {"model_bytes", "input_feature_count"}
 _LOWER = {"mae", "rmse", "mase", "absolute_bias"}
 
 
@@ -29,11 +30,13 @@ def _validate_metric(metric: dict[str, Any], spec: dict[str, Any]) -> None:
     """Validate the metric registry entry and its task-specific parameters."""
     name = metric["metric"]
     classification = spec["kind"] in _CLASSIFICATION
-    supported = _HIGHER if classification else _LOWER
+    supported = (_HIGHER if classification else _LOWER) | _COMPLEXITY
     if name not in supported or (name == "mase" and spec["kind"] != "forecast"):
         raise ModelerError(f"Metric {name!r} is not supported for {spec['kind']}.")
     parameters = metric.setdefault("parameters", {})
     allowed = {"average", "positive_label", "label"} if classification else set()
+    if name in _COMPLEXITY:
+        allowed = set()
     if name == "mase":
         allowed = {"seasonal_period"}
     if set(parameters) - allowed:
@@ -42,7 +45,7 @@ def _validate_metric(metric: dict[str, Any], spec: dict[str, Any]) -> None:
         raise ModelerError(
             "accuracy has no parameters; multilabel accuracy means exact label match."
         )
-    if classification and name != "accuracy":
+    if name in _HIGHER - {"accuracy"}:
         _classification_options(parameters, spec)
     if name == "mase":
         period = parameters.setdefault("seasonal_period", 1)
@@ -134,6 +137,7 @@ def resolve(
     if spec["split"] == "temporal" and not time:
         raise ModelerError("A temporal split requires a time column.")
     spec["quality"] = _resolve_quality(quality, spec)
+    spec["measurement_protocol"] = "predictive-modeler/v2"
     spec["aggregation"] = "uniform across series and forecast steps"
     return spec
 
@@ -167,6 +171,8 @@ def score(
     result: dict[str, float | None] = {}
     for metric in [spec["quality"]["objective"], *spec["quality"]["constraints"]]:
         name, options = metric["metric"], metric["parameters"]
+        if name in _COMPLEXITY:
+            continue
         if name in _HIGHER:
             value = _classification_score(name, options, spec, truth, prediction)
         else:

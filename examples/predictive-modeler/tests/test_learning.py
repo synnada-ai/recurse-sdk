@@ -1,5 +1,6 @@
 """Prediction pipelines, leakage prevention, frozen splits, and forecast horizons."""
 
+from pathlib import Path
 from typing import Any
 
 import joblib
@@ -247,3 +248,102 @@ def test_candidate_feature_selection_stays_within_frozen_eligible_columns(
     for subset in [[], ["y"], ["x", "x"], "text"]:
         with pytest.raises(ModelerError, match="feature_subset"):
             validate_configuration({"feature_subset": subset}, spec)
+
+
+@pytest.mark.parametrize("kind", ["binary", "multiclass", "multilabel", "regression", "forecast"])
+def test_complexity_covers_complete_saved_predictor(
+    frame: pd.DataFrame, tmp_path: Path, kind: str
+) -> None:
+    """Complexity works across families and counts raw inputs rather than transformed columns."""
+    if kind == "forecast":
+        frame = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
+        proposal = {
+            "kind": kind,
+            "targets": ["value"],
+            "time": "date",
+            "frequency": "D",
+            "horizon": 10,
+            "group": "series",
+        }
+    else:
+        proposal = {
+            "kind": kind,
+            "targets": ["a", "b"]
+            if kind == "multilabel"
+            else ["value"]
+            if kind == "regression"
+            else ["y"],
+            "features": ["x", "category"],
+        }
+    quality = {
+        "objective": {"metric": "model_bytes", "direction": "minimize"},
+        "constraints": [{"metric": "input_feature_count", "operator": "<=", "value": 3}],
+    }
+    spec = resolve(proposal, frame, quality)
+    config = validate_configuration({"family": "linear"}, spec)
+    train, validation, _ = partition(frame, spec)
+    model = fit(frame.iloc[train], spec, config)
+    path = tmp_path / "model.joblib"
+    joblib.dump(model, path, compress=0, protocol=5)
+    expected = {
+        "model_bytes:{}": float(path.stat().st_size),
+        "input_feature_count:{}": 3.0 if kind == "forecast" else 2.0,
+    }
+    assert measure(model, frame.iloc[train], frame.iloc[validation], path) == expected
+    assert measure(model, frame.iloc[train], frame.iloc[validation]) == expected
+    restored = joblib.load(path)
+    assert measure(restored, frame.iloc[train], frame.iloc[validation], path) == expected
+
+
+def test_feature_subset_and_single_forecast_input_counts(frame: pd.DataFrame) -> None:
+    """Selected raw columns count once; a single forecast requires history and time."""
+    quality = {"objective": {"metric": "input_feature_count", "direction": "minimize"}}
+    cases: list[tuple[dict[str, Any], dict[str, Any], float]] = [
+        (
+            {"kind": "binary", "targets": ["y"], "features": ["x", "category"]},
+            {"feature_subset": ["category"]},
+            1.0,
+        ),
+        (
+            {
+                "kind": "forecast",
+                "targets": ["value"],
+                "time": "date",
+                "frequency": "D",
+                "horizon": 10,
+            },
+            {"family": "seasonal"},
+            2.0,
+        ),
+    ]
+    for proposal, configuration, expected in cases:
+        spec = resolve(proposal, frame, quality)
+        train, validation, _ = partition(frame, spec)
+        model = fit(frame.iloc[train], spec, validate_configuration(configuration, spec))
+        assert measure(model, frame.iloc[train], frame.iloc[validation]) == {
+            "input_feature_count:{}": expected
+        }
+
+
+def test_complexity_objective_preserves_constraint_positive_class(frame: pd.DataFrame) -> None:
+    """A recall constraint determines binary threshold orientation when size is optimized."""
+    spec = resolve(
+        {"kind": "binary", "targets": ["y"], "features": ["category"]},
+        frame,
+        {
+            "objective": {"metric": "model_bytes", "direction": "minimize"},
+            "constraints": [
+                {
+                    "metric": "recall",
+                    "parameters": {"positive_label": "0"},
+                    "operator": ">=",
+                    "value": 1.0,
+                }
+            ],
+        },
+    )
+    model = fit(frame, spec, validate_configuration({"family": "baseline", "threshold": 0.1}, spec))
+    assert set(model.predict(frame)) == {"0"}
+    assert (
+        measure(model, frame, frame)['recall:{"average": "binary", "positive_label": "0"}'] == 1.0
+    )

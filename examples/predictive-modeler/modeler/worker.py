@@ -19,7 +19,7 @@ def run(root: Path, identifier: int) -> None:
     data = pd.read_parquet(root / "data.parquet")
     with threadpool_limits(limits=1):
         model = fit(data.iloc[job["train"]], job["specification"], job["configuration"])
-        joblib.dump(model, root / f"candidate-{identifier}.joblib")
+        joblib.dump(model, root / f"candidate-{identifier}.joblib", compress=0, protocol=5)
 
 
 if __name__ == "__main__":

@@ -54,6 +54,15 @@ aggregation is uniformly weighted across series and origins, with equal weight p
 within each origin. This is fixed, not an arbitrary metric parameter. Zero-division classification
 precision/recall/F1 are scored as zero; undefined MASE fails feasibility.
 
+All tasks support model_bytes and input_feature_count as minimizing objectives or constraints,
+with no metric parameters. model_bytes measures the complete uncompressed saved predictor;
+input_feature_count measures required raw input columns, not encoded features or lag count.
+Forecast inputs count target history, time, and optional series ID. Smaller byte size does not
+establish interpretability or faster prediction. These are model requirements, separate from
+search budgets. If prose asks for a useful smallest/simplest predictor without specifying what
+predictive quality is acceptable, ask for that requirement; do not invent a quality floor.
+An explicit request to minimize size alone is valid. Clarify undefined meanings of "complexity".
+
 Call resolve_problem once to freeze the contract. Preserve every prose and structured requirement.
 If quality is omitted, use the prose objective; otherwise default to F1 (classification) or MAE
 (regression/forecasting). Do not invent acceptance thresholds. Successful resolution does not

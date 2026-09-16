@@ -48,6 +48,8 @@ inputs:
               - rmse
               - mase
               - absolute_bias
+              - model_bytes
+              - input_feature_count
             parameters: &id002
               type: object
               additionalProperties: true

@@ -294,7 +294,10 @@ def evaluate_candidate(candidate_id: int) -> dict[str, Any]:
         data = pd.read_parquet(_root() / "data.parquet")
         model = joblib.load(_root() / f"candidate-{candidate_id}.joblib")
         measurements = learning.measure(
-            model, data.iloc[splits["train"]], data.iloc[splits["validation"]]
+            model,
+            data.iloc[splits["train"]],
+            data.iloc[splits["validation"]],
+            _root() / f"candidate-{candidate_id}.joblib",
         )
         trial.update(
             status="evaluated",
@@ -359,6 +362,15 @@ def _report(
         receipt["summary"],
         "## Evaluation",
         "```json\n" + json.dumps(evaluation, indent=2) + "\n```",
+        "## Measurement protocol (v2)",
+        "model_bytes is the exact uncompressed model.joblib file size (joblib, pickle protocol 5), "
+        "including preprocessing, configuration and every label/series estimator; excluding "
+        "prediction code, dependency packages, reports and caller-supplied forecast history. "
+        "input_feature_count counts distinct raw columns required by the saved prediction "
+        "interface: selected tabular features, or forecast target history, time and series ID. "
+        "It does not count encoded columns, lags, training rows or inferred feature importance. "
+        "Dependency versions are pinned in the model bundle. "
+        "Complexity metrics take no parameters.",
         "## Experiments",
     ]
     for item in history:
@@ -503,7 +515,7 @@ def _select(
     path = _root() / f"candidate-{winner['id']}.joblib"
     model = joblib.load(path)
     measurements = learning.measure(
-        model, data.iloc[splits["train"] + splits["validation"]], data.iloc[splits["test"]]
+        model, data.iloc[splits["train"] + splits["validation"]], data.iloc[splits["test"]], path
     )
     passed = contracts.feasible(contract, measurements)
     evaluation = {

@@ -53,6 +53,7 @@ Unsupported metric names/options are rejected, rather than interpreted ad hoc.
 | Multilabel classification | precision, recall, F1, accuracy | `average`, optional target-column `label` |
 | Regression | MAE, RMSE, absolute bias | None |
 | Forecasting | MAE, RMSE, absolute bias, MASE | MASE accepts `seasonal_period` |
+| All tasks | model_bytes, input_feature_count | None; minimizing objectives |
 
 Use lowercase names: `f1`, `mae`, `rmse`, `absolute_bias`, `mase`. Classification averaging supports
 `binary`, `micro`, `macro`, `weighted`, and multilabel `samples`, subject to task compatibility.
@@ -65,6 +66,43 @@ Forecast errors are averaged uniformly across series and forecast origins. Withi
 steps have equal weight. MASE scales each series/origin by the historical seasonal-naive MAE,
 using only history before that origin. An undefined scale makes the candidate infeasible.
 This version does not expose arbitrary aggregation weights or custom metric code.
+
+### Model complexity
+
+Use the same objective/constraint structure for complexity. For example, minimize serialized
+size subject to an MAE ceiling (100 is illustrative, in the target's units):
+
+```json
+{"objective": {"metric": "model_bytes", "direction": "minimize"},
+ "constraints": [{"metric": "mae", "operator": "<=", "value": 100}]}
+```
+
+Conversely, maximize F1 with a `model_bytes <= 5000000` constraint to enforce a decimal 5 MB
+limit. Both complexity metrics work as objectives or constraints and accept no parameters.
+There is no universal complexity score, latency guarantee, or interpretability guarantee.
+Runnable examples: [compact regression](inputs/compact-regression.json) minimizes concrete-model
+size with a demonstration MAE ceiling of 10 MPa; [feature-limited classification](inputs/feature-limited-multiclass.json)
+maximizes bean macro F1 with at most four required raw columns. These are explicit example
+requirements, not recommended acceptance thresholds for other datasets.
+
+Measurement protocol **v2** defines:
+
+- `model_bytes`: exact length of the uncompressed `model.joblib` file delivered in the bundle,
+  using joblib with pickle protocol 5. Includes the full fitted predictor, preprocessing,
+  configuration, and all label/series estimators. Excludes code, installed libraries, reports,
+  and caller-supplied forecast history. Dependency versions are recorded in the bundle; compare
+  sizes under the same environment. It is not ZIP size or peak memory usage.
+- `input_feature_count`: distinct raw columns required by the saved prediction interface.
+  Tabular models count selected feature columns (including any required but uninformative
+  columns); forecasts count target history, time, and an optional series ID. Encoded features,
+  lags and the number of historical rows do not contribute. It is not feature importance.
+
+The verifier measures the entire predictor once, not an average over labels or series.
+Validation selection and final acceptance enforce the same limits. Training/search budgets
+remain separate. Complexity-only optimization is allowed, but may favor a trivial predictor;
+when the prose expects useful predictions without defining acceptable quality, the agent asks
+for clarification rather than inventing a floor. Undefined requests such as "simple model"
+require clarification about the desired measure.
 
 ## Real datasets and runnable tasks
 

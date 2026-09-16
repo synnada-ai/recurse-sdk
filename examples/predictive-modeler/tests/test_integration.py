@@ -102,3 +102,60 @@ def test_real_dataset_tool_chain(name: str, rows: int, tools: Any, tmp_path: Pat
                     shutil.copy2(path, output / path.name)
     finally:
         deactivate()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("name", ["compact-regression", "feature-limited-multiclass"])
+def test_real_complexity_requirements(name: str, tools: Any, tmp_path: Path) -> None:
+    """Complexity examples reach an accepted, independently sized model on real data."""
+    request = json.loads((ROOT / "inputs" / f"{name}.json").read_text())
+    schema = yaml.safe_load((ROOT / "agent.yaml").read_text())
+    Draft202012Validator(schema["inputs"]).validate(request)
+    regression = name == "compact-regression"
+    specification = json.loads((ROOT / "tests/specifications.json").read_text())[
+        "regression" if regression else "multiclass"
+    ]
+    configs = (
+        [{"family": "baseline"}, {"family": "linear"}, {"family": "extra_trees", "trees": 50}]
+        if regression
+        else [
+            {"family": "baseline", "feature_subset": ["Area"]},
+            {
+                "family": "linear",
+                "feature_subset": ["Area", "Perimeter", "roundness", "ShapeFactor1"],
+            },
+            {
+                "family": "extra_trees",
+                "trees": 50,
+                "feature_subset": ["Area", "Perimeter", "roundness", "ShapeFactor1"],
+            },
+        ]
+    )
+    cache = ROOT.parents[1] / ".dataset-cache"
+    if cache.exists():
+        shutil.copytree(cache, tmp_path / ".modeler/downloads")
+    activate({key: value for key, value in request.items() if key != "task"}, tmp_path)
+    try:
+        tools.review_inputs(request["task"], request["quality"], [], [])
+        tools.inspect_dataset()
+        tools.resolve_problem(specification)
+        for config in configs:
+            trial = tools.train_candidate(
+                config, "Fixed comparison of size and predictive quality."
+            )
+            assert trial["status"] == "trained", trial["diagnostic"]
+            tools.evaluate_candidate(trial["id"])
+        receipt = tools.finish_run("budget_exhausted", "Local fixed-policy complexity check.")
+        assert receipt["status"] == "succeeded"
+        evaluation = json.loads((tmp_path / "evaluation.json").read_text())
+        if regression:
+            with zipfile.ZipFile(tmp_path / "model-bundle.zip") as archive:
+                assert (
+                    evaluation["final_test"]["model_bytes:{}"]
+                    == archive.getinfo("model.joblib").file_size
+                )
+            assert evaluation["final_test"]["mae:{}"] <= 10
+        else:
+            assert evaluation["final_test"]["input_feature_count:{}"] <= 4
+    finally:
+        deactivate()

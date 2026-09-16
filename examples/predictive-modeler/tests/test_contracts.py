@@ -257,3 +257,20 @@ def test_feasibility_requires_each_constraint(
         {"constraints": [{"metric": "mae", "operator": operator, "value": threshold}]},
     )
     assert feasible(spec, {"mae:{}": 0.7}) is passed
+
+
+@pytest.mark.parametrize("metric", ["model_bytes", "input_feature_count"])
+def test_complexity_rejects_classification_options(frame: pd.DataFrame, metric: str) -> None:
+    """Complexity is independent of label averaging and has no tunable measurement options."""
+    with pytest.raises(ModelerError, match="Unsupported parameters"):
+        resolve(
+            {"kind": "binary", "targets": ["y"], "features": ["x"]},
+            frame,
+            {
+                "objective": {
+                    "metric": metric,
+                    "direction": "minimize",
+                    "parameters": {"average": "macro"},
+                }
+            },
+        )

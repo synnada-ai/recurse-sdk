@@ -1,8 +1,11 @@
 """Leakage-aware fitting and deployable prediction for tabular and temporal tasks."""
 
 from dataclasses import dataclass
+from pathlib import Path
+from tempfile import TemporaryFile
 from typing import Any, cast
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -283,7 +286,14 @@ class PredictionModel:
         probabilities = self.estimator.predict_proba(features)
         if spec["kind"] == "binary":
             classes = self.estimator.classes_
-            positive = spec["quality"]["objective"]["parameters"].get("positive_label", classes[-1])
+            positive = next(
+                (
+                    metric["parameters"]["positive_label"]
+                    for metric in [spec["quality"]["objective"], *spec["quality"]["constraints"]]
+                    if "positive_label" in metric["parameters"]
+                ),
+                classes[-1],
+            )
             index = list(classes).index(positive)
             return np.where(
                 probabilities[:, index] >= config["threshold"], positive, classes[1 - index]
@@ -367,10 +377,14 @@ def fit(data: pd.DataFrame, spec: dict[str, Any], config: dict[str, Any]) -> Pre
 
 
 def measure(
-    model: PredictionModel, history: pd.DataFrame, evaluation: pd.DataFrame
+    model: PredictionModel,
+    history: pd.DataFrame,
+    evaluation: pd.DataFrame,
+    model_path: Path | None = None,
 ) -> dict[str, Any]:
     """Score fixed validation/test observations without supplying their targets to prediction."""
     spec = model.specification
+    complexity = _complexity(model, model_path)
     if spec["kind"] != "forecast":
         truth = (
             evaluation[spec["targets"]].to_numpy()
@@ -379,7 +393,7 @@ def measure(
         )
         if spec["kind"] in {"binary", "multiclass"}:
             truth = truth.astype(str)
-        return score(spec, truth, model.predict(evaluation))
+        return score(spec, truth, model.predict(evaluation)) | complexity
     measurements = []
     groups = (
         evaluation.groupby(spec["group"], sort=True) if spec["group"] else [("series", evaluation)]
@@ -405,4 +419,29 @@ def measure(
         if any(item[key] is None for item in measurements)
         else float(np.mean([item[key] for item in measurements]))
         for key in measurements[0]
+    } | complexity
+
+
+def _complexity(model: PredictionModel, model_path: Path | None) -> dict[str, float]:
+    """Measure the complete predictor once, outside forecast-origin aggregation."""
+    spec = model.specification
+    requested = {
+        item["metric"] for item in [spec["quality"]["objective"], *spec["quality"]["constraints"]]
     }
+    result = {}
+    if "model_bytes" in requested:
+        if model_path is None:
+            with TemporaryFile() as stream:
+                joblib.dump(model, stream, compress=0, protocol=5)
+                size = stream.tell()
+        else:
+            size = model_path.stat().st_size
+        result["model_bytes:{}"] = float(size)
+    if "input_feature_count" in requested:
+        columns = (
+            set(spec["targets"] + [spec["time"]]) | ({spec["group"]} if spec["group"] else set())
+            if spec["kind"] == "forecast"
+            else set(spec["features"])
+        )
+        result["input_feature_count:{}"] = float(len(columns))
+    return result

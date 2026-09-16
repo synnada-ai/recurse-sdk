@@ -494,3 +494,66 @@ def test_each_real_task_has_a_rejected_contradictory_request(
     assert receipt["status"] == "inconsistent_inputs"
     assert not (run / "resolved-contract.json").exists()
     assert tools.experiment_history() == []
+
+
+@pytest.mark.parametrize("limit", [1, 5000000])
+def test_complexity_constraints_verify_actual_bundle(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch, limit: int
+) -> None:
+    """Size limits gate selection and acceptance using the exact bytes delivered to the caller."""
+    tools.review_inputs(
+        "Maximize F1 under a model size limit.",
+        {"constraints": [{"metric": "model_bytes", "operator": "<=", "value": limit}]},
+        [],
+        [],
+    )
+    tools.inspect_dataset()
+    tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["category"]})
+    _inline(tools, monkeypatch)
+    for family in ["linear", "baseline"]:
+        trial = tools.train_candidate({"family": family}, "Compare measured fit and size.")
+        scored = tools.evaluate_candidate(trial["id"])
+        assert scored["feasible"] == (limit > 1)
+    receipt = tools.finish_run("budget_exhausted", "Compared both allocated candidates.")
+    if limit == 1:
+        assert receipt["status"] == "no_feasible_model"
+        assert "model" not in receipt["artifacts"]
+    else:
+        assert receipt["status"] == "succeeded"
+        evaluation = json.loads((run / "evaluation.json").read_text())
+        with zipfile.ZipFile(run / "model-bundle.zip") as archive:
+            size = archive.getinfo("model.joblib").file_size
+        assert evaluation["validation"]["model_bytes:{}"] == size
+        assert evaluation["final_test"]["model_bytes:{}"] == size
+        assert "pickle protocol 5" in (run / "report.md").read_text()
+
+
+def test_complexity_objective_selects_smallest_feasible_candidate(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A smaller later model wins while the predictive floor still applies."""
+    tools.review_inputs(
+        "Minimize model bytes with F1 at least .9.",
+        {
+            "objective": {"metric": "model_bytes", "direction": "minimize"},
+            "constraints": [{"metric": "f1", "operator": ">=", "value": 0.9}],
+        },
+        [],
+        [],
+    )
+    tools.inspect_dataset()
+    contract = tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["category"]})
+    assert contract["measurement_protocol"] == "predictive-modeler/v2"
+    _inline(tools, monkeypatch)
+    for config in [{"family": "extra_trees", "trees": 10}, {"family": "linear"}]:
+        trial = tools.train_candidate(config, "Compare deployment size subject to quality.")
+        tools.evaluate_candidate(trial["id"])
+    history = tools.experiment_history()
+    assert all(trial["feasible"] for trial in history)
+    assert history[1]["validation"]["model_bytes:{}"] < history[0]["validation"]["model_bytes:{}"]
+    assert (
+        tools.finish_run("budget_exhausted", "Smaller feasible model wins.")["status"]
+        == "succeeded"
+    )
+    evaluation = json.loads((run / "evaluation.json").read_text())
+    assert evaluation["selected_trial"] == 2
