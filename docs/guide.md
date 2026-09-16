@@ -248,6 +248,18 @@ import recurse
 artifacts, record = recurse.build_bundle("path/to/app")
 ```
 
+The returned record has this complete shape:
+
+```python
+{
+    "apiVersion": "recurse.application/v1alpha1",
+    "source": {
+        "sha256": "<lowercase SHA-256 of artifacts['source']>",
+        "size_bytes": 123,
+    },
+}
+```
+
 `build_bundle` validates the manifest, declared files, and registered tools without importing your
 tool code. It then runs `uv build --sdist`; your declared build backend selects the files shipped in
 `artifacts["source"]`. Configure that backend to include `agent.yaml`, the prompt, the tool module,
@@ -590,7 +602,7 @@ The agent runs measure-and-revise loops until a candidate reaches `target_f1` or
 import recurse
 
 artifacts, record = recurse.build_bundle("examples/tiny-tuner")
-print(record["source"]["sha256"], len(artifacts["source"]))
+print(record["apiVersion"], record["source"]["sha256"], len(artifacts["source"]))
 ```
 
 Run it directly with `recurse run examples/tiny-tuner --inputs inputs.json`, or deploy it with
