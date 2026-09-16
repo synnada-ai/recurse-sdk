@@ -265,6 +265,10 @@ These local runs establish tool behavior. Autonomous task interpretation, consis
 and experimental decision-making require separate end-to-end cloud-agent validation. Do not
 report local tool probes as evidence that the autonomous agent passed those checks.
 
+For actual cloud outcomes, run IDs, reproduced model scores, and remaining backend blockers,
+see [autonomous validation evidence](tests/CLOUD-VALIDATION.md). Successful model receipts include
+only available, nonempty artifact paths; the agent must return the saved receipt unchanged.
+
 ## Limitations
 
 This is a bounded CPU modeling example, not unrestricted AutoML. It supports binary/multiclass

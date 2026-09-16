@@ -1,7 +1,9 @@
 # Autonomous-agent validation
 
-Latest status: the retry batch completed; see **Retry after reported infrastructure fix** below.
-The following first-attempt record is retained as history.
+Latest status: three modeling tasks have cloud-trained bundles with reproduced scores; all six
+contradictory tasks reject before loading data. Three modeling cases remain blocked by backend
+artifact/usage failures. See **September 16 validation results** below. Earlier attempts are
+retained as history.
 
 The user authorized this batch on September 15, 2026. Two runs were attempted; both ended in
 `infrastructure_failed` without agent output or artifacts. The remaining ten were not launched
@@ -222,4 +224,85 @@ and inserted empty optional artifact paths. The saved receipts themselves were c
 The output schema now rejects empty artifact paths, and the prompt/completion description explicitly
 require preserving every receipt field. A regression test failed before this change; all 148
 modeler tests pass afterward at 100% statement/branch coverage, with strict types and lint passing.
-The two affected cases are rechecked separately; the remaining modeling runs are still in progress.
+The two affected cases are rechecked separately in the results below.
+
+## September 16 validation results
+
+The twelve-case batch used source `3d9ef40`, SDK 0.1.6, `gpt-5.6-luna`, one CPU and 2 GiB per
+isolated runtime. Criteria, splits and budgets were unchanged: up to eight fits and 600 cumulative
+training seconds, within the platform's 15-minute run limit. These are single-run observations,
+not repeated estimates of agent reliability or evidence of globally optimal models.
+
+### Modeling
+
+| Task | Run ID | Outcome |
+| --- | --- | --- |
+| Regression | `85c681b7-6ce3-493f-bb9b-2a5d3fd3c789` | Accepted extra-trees bundle; six evaluated trials |
+| Multilabel | `aca67d89-6cac-41d2-894e-80499c8a1b83` | Accepted linear text bundle; seven evaluated trials |
+| Single-series forecast | `0cc673e7-bc3e-43dd-9da7-96b599ced094` | Accepted weekly seasonal bundle; five evaluated trials |
+| Binary | `fe19e842-ffc1-4210-ad6e-02aa84d35daa` | Infrastructure failure storing/confirming output files |
+| Multiclass | `3fd1b90e-2e56-4634-a1f6-cd934d9f81fb` | Infrastructure failure storing/confirming output files |
+| Panel forecast | `0f583761-735e-4b7d-af19-c78157439010` | Infrastructure failure authorizing/recording model usage |
+
+Each of the three accepted bundles was downloaded and reloaded locally. On the checksummed source
+datasets and saved, disjoint splits, both validation and final-test scores reproduced to 1e-9
+tolerance. Trial histories confirm selection of the best feasible evaluated candidate.
+
+| Task | Validation | Final test | Cumulative training |
+| --- | --- | --- | --- |
+| Regression, MAE (MPa) | 3.094784 | 3.563182 | 15.104 s |
+| Multilabel, micro-F1 | 0.548226 | 0.552222 | 35.344 s |
+| Daily forecast, MAE (rentals) | 916.000000 | 2522.428571 | 8.495 s |
+
+Regression improved substantially over baseline and linear models, then compared tree depth/leaf
+settings. Multilabel compared threshold/regularization/text settings; threshold 0.15 regressed from
+the selected 0.2. Forecasting compared seasonal, linear and tree alternatives and preserved the
+weekly baseline. Its much higher final-test error limits claims of forecasting quality: completing
+the contract does not establish a strong forecast. No thresholds were weakened or added.
+
+For binary and multiclass, status lists seven and four artifacts respectively, but **every listed
+artifact grant returned `artifact was not found`** when checked individually. No model result can
+be established. Panel forecasting returned no artifacts. The public errors say tools may already
+have executed and that the usage error does not establish insufficient balance. These runs were
+not repeated; backend recovery is needed. Raw statuses, per-file errors and recovered artifacts
+are retained under the ignored `.baseline-results/cloud/worker-fixed-*` paths.
+
+### Consistency gate
+
+| Contradictory task | Run ID |
+| --- | --- |
+| Binary | `cc0b4fa3-1821-44f1-818a-3dec39fdd65d` |
+| Multiclass | `95ab1c93-7afa-4a7b-b020-306fadec3779` |
+| Multilabel | `c82d0498-14e7-4ae6-be9f-e34a56732b14` |
+| Regression | `cf3e2b40-5122-48dd-ae43-30f5e33ecfd1` |
+| Forecast | `ce255c97-239b-440a-bf2e-4cdb7160c9ef` |
+| Panel forecast | `23b3b5b4-deb8-4c5e-ba68-839b8374303d` |
+
+All six returned `inconsistent_inputs`. Downloaded states have only review/receipt metadata and
+zero trials, establishing rejection before dataset loading. Binary and panel final-response
+fidelity failed despite correct saved receipts, motivating source `1a8e02a` described above.
+
+The corrected binary repeat `6d173bfa-7107-422e-a105-d39a39fe0666` returned exactly its saved
+receipt, with no empty artifact paths. Corrected panel repeat
+`1ee7b39b-4f46-4480-858d-253b11ae4c40` also exactly matches its saved receipt. Both downloaded
+states confirm rejection before dataset loading or training. One panel preparation failed
+authentication before admission; the replacement was started only after fresh authenticated
+requests succeeded. No duplicate admitted run was created.
+
+### Checks, usage and stopping point
+
+The final full `check.sh` passes: 504 SDK, 21 RNA, 29 backpack and 148 modeler tests, each suite
+at 100% statement/branch coverage, plus lint, strict types and source/wheel builds. CI is green.
+The output fix does not change search, metrics, data access or training allowances. Existing
+resource bounds and scoped cleanup remain in place; no new dependencies or coverage exemptions.
+
+Account balance changed from **$100.055305 to $97.045187**, an observed decrease of **$3.010118**.
+The final available balance equals the total. These are account-wide deltas, not itemized run
+charges. No funds were added. Fourteen runs were admitted (the twelve-case suite and two targeted
+receipt repeats); all are terminal. No model-run retries were launched after the backend failures.
+
+Stop reason: **backend blocker** for binary, multiclass and panel autonomous validation.
+The current agent design is saved in PR #19. Local functionality across all six tasks is verified,
+but the three failed remote cases cannot be counted as accepted autonomous models. Recover their
+outputs or address the artifact/usage failures before resuming those cases. Three accepted runs
+and two receipt repeats are useful evidence, not a claim of universal reliability.
