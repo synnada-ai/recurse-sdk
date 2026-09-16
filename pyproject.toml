@@ -40,7 +40,7 @@ sources = ["src"]
 only-include = ["src/recurse.py", "src/_recurse_cli.py", "src/agent.schema.json"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "docs", "tools", "examples", "README.md", "LICENSE", "check.sh", ".pre-commit-config.yaml"]
+only-include = ["src", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
