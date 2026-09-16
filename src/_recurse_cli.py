@@ -2000,8 +2000,13 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
                 _print_run_view(view)
                 return _RUN_EXIT_STATUS[run_status]
             time.sleep(_POLL_SECONDS)
-    except RecurseError, ServiceError:
-        _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
+    except (RecurseError, ServiceError) as error:
+        if not (
+            run_id is None
+            and isinstance(error, ServiceError)
+            and error.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+        ):
+            _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
         raise
     except KeyboardInterrupt:
         print(
