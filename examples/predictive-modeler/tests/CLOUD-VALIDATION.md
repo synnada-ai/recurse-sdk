@@ -306,3 +306,10 @@ The current agent design is saved in PR #19. Local functionality across all six 
 but the three failed remote cases cannot be counted as accepted autonomous models. Recover their
 outputs or address the artifact/usage failures before resuming those cases. Three accepted runs
 and two receipt repeats are useful evidence, not a claim of universal reliability.
+
+## SDK 0.1.7 compatibility update
+
+The installed Recurse CLI and agent runtime were upgraded from 0.1.6 to 0.1.7 at the user's
+request, with the example lockfile refreshed. All 148 modeler tests pass against the published
+0.1.7 package at 100% statement/branch coverage. The cloud results above remain observations
+from SDK 0.1.6; this dependency upgrade does not establish resolution of the backend blockers.
