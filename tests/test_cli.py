@@ -2118,7 +2118,7 @@ def test_artifact_download_refuses_unusable_metadata_or_destination(
         destination.write_text("keep")
     monkeypatch.setattr(
         cli,
-        "_authenticated_request",
+        "_run_request",
         lambda *_args, **_kwargs: (
             {
                 "run_id": "run-id",
@@ -2145,26 +2145,25 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
     """A failed final rename is concise and leaves no partial bytes behind."""
     monkeypatch.setattr(cli, "_access_token", lambda: "token")
 
-    def authenticated_request(
+    def run_request(
         method: str, path: str, *, token: str, **_kwargs: Any
     ) -> tuple[dict[str, Any], str]:
-        """Return one complete run view, followed by its artifact grant."""
-        del method
-        if path == "/v1/runs/run-id":
-            return (
-                {
-                    "run_id": "run-id",
-                    "status": "succeeded",
-                    "result": {"answer": "done"},
-                    "error": None,
-                    "payload_expired": False,
-                    "artifacts": [{"output_id": "output-id", "path": "result.json"}],
-                },
-                token,
-            )
-        return {}, token
+        """Return one complete run view from the safe status request."""
+        del method, path
+        return (
+            {
+                "run_id": "run-id",
+                "status": "succeeded",
+                "result": {"answer": "done"},
+                "error": None,
+                "payload_expired": False,
+                "artifacts": [{"output_id": "output-id", "path": "result.json"}],
+            },
+            token,
+        )
 
-    monkeypatch.setattr(cli, "_authenticated_request", authenticated_request)
+    monkeypatch.setattr(cli, "_run_request", run_request)
+    monkeypatch.setattr(cli, "_authenticated_request", lambda *_args, **_kwargs: ({}, "token"))
     monkeypatch.setattr(cli, "_download_artifact", lambda _grant: b"result")
 
     def fail_replace(source: str, destination: Path) -> None:

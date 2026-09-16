@@ -229,6 +229,21 @@ def test_cli_artifacts_refreshes_one_rejected_bearer(
     assert attempted_tokens == ["Bearer access-old", "Bearer access-new"]
 
 
+def test_cli_artifacts_preserves_status_gateway_retry(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+) -> None:
+    """Authentication recovery must retain the existing safe status retry."""
+    del logged_in
+    status_path = f"/v1/runs/{service.run_id}"
+    service.transient_failures[status_path] = 1
+
+    assert cli.main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0
+    assert len([request for request in service.requests if request[1] == status_path]) == 2
+    assert service.device_grants == ["device-1"]
+
+
 @pytest.mark.parametrize("status", [401, 429, 503])
 def test_artifact_failure_is_bounded(
     service: FakeService, logged_in: dict[tuple[str, str], str], status: int

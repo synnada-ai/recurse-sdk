@@ -2090,7 +2090,7 @@ def _artifacts(run_id: str, output_directory: str) -> None:
     """Download every retained artifact after exact-byte verification."""
     token = _access_token()
     quoted_run_id = urllib.parse.quote(run_id, safe="")
-    payload, token = _authenticated_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
+    payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
     view = _validated_run_view(payload, run_id)
     if view["payload_expired"]:
         raise _CliError("run payloads have expired")
