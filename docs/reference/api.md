@@ -71,7 +71,9 @@ Args:
 
 Returns:
     A pair containing source-distribution bytes keyed by ``source`` and a
-    portable record with its SHA-256 and byte size.
+    portable record with ``apiVersion`` set to
+    ``recurse.application/v1alpha1`` and ``source`` containing the exact
+    SHA-256 and byte size.
 
 Raises:
     ManifestError: If the manifest, a declared file, or a registered tool

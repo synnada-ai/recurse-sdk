@@ -16,6 +16,7 @@ import pytest
 
 import _recurse_cli as cli
 from tests import test_cli
+from tests.conftest import write_app
 from tests.keyring_backend import process_environment
 from tests.test_cli import FakeService
 
@@ -104,6 +105,143 @@ def test_parallel_artifacts_reuse_token_and_retry_rejection_once(
     assert all(result["result"]["contents"][0]["blob"] for result in results)
     assert len(downloads) == 12
     assert service.device_grants == ["device-1", "device-1"]
+
+
+@pytest.mark.parametrize(
+    "rejected_path",
+    [
+        "/v1/agent-versions",
+        "/v1/agent-versions/version-1/complete",
+        "/v1/agent-versions/version-1",
+    ],
+)
+def test_preparation_refreshes_one_rejected_bearer(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rejected_path: str,
+) -> None:
+    """Preparation survives one API 401 without repeating its source upload."""
+    del logged_in
+    service.token_responses = ["access-old", "access-new"]
+    app = write_app(tmp_path / "app")
+    original = service.route
+    rejected = False
+
+    def route(method: str, path: str, body: Any, token: str | None) -> tuple[int, dict[str, Any]]:
+        """Reject the old bearer exactly once at the selected preparation step."""
+        nonlocal rejected
+        if path == rejected_path and token == "Bearer access-old" and not rejected:  # noqa: S105
+            rejected = True
+            return 401, {"detail": "expired"}
+        if token == "Bearer access-old":  # noqa: S105 - still-valid fixture bearer
+            service.token_responses.insert(0, "access-old")
+            try:
+                return original(method, path, body, token)
+            finally:
+                service.token_responses.pop(0)
+        return original(method, path, body, token)
+
+    monkeypatch.setattr(service, "route", route)
+    monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
+
+    assert cli.main(["deploy", str(app), "--as", "mcp"]) == 0
+    assert rejected is True
+    assert service.device_grants == ["device-1", "device-1"]
+    assert len([request for request in service.requests if request[1] == "/direct-upload"]) == 1
+    attempted_tokens = [
+        token for _method, path, _body, token in service.requests if path == rejected_path
+    ]
+    assert attempted_tokens[:2] == ["Bearer access-old", "Bearer access-new"]
+
+
+@pytest.mark.parametrize("case", [(401, 2, 2), (400, 1, 1)])
+def test_preparation_authentication_retry_is_bounded(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    case: tuple[int, int, int],
+) -> None:
+    """Only one definite 401 refreshes; another failure remains terminal."""
+    del logged_in
+    status, expected_requests, expected_grants = case
+    service.token_responses = ["access-old", "access-new"]
+    service.fail_detail["/v1/agent-versions"] = (status, "denied")
+
+    assert cli.main(["deploy", str(write_app(tmp_path / "app")), "--as", "mcp"]) == 1
+    attempts = [request for request in service.requests if request[1] == "/v1/agent-versions"]
+    assert len(attempts) == expected_requests
+    assert len(service.device_grants) == expected_grants
+
+
+@pytest.mark.parametrize("rejected_request", ["status", "grant"])
+def test_cli_artifacts_refreshes_one_rejected_bearer(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rejected_request: str,
+) -> None:
+    """Artifact retrieval refreshes one API 401 and downloads the bytes once."""
+    del logged_in
+    service.token_responses = ["access-old", "access-new"]
+    service.run_views = [service.run_views[-1]]
+    status_path = f"/v1/runs/{service.run_id}"
+    grant_path = f"{status_path}/artifacts/99999999-9999-4999-8999-999999999999"
+    rejected_path = status_path if rejected_request == "status" else grant_path
+    original_route = service.route
+    rejected = False
+
+    def route(method: str, path: str, body: Any, token: str | None) -> tuple[int, dict[str, Any]]:
+        """Reject the old bearer exactly once before returning the real response."""
+        nonlocal rejected
+        if path == rejected_path and token == "Bearer access-old" and not rejected:  # noqa: S105
+            rejected = True
+            return 401, {"detail": "expired"}
+        if token == "Bearer access-old":  # noqa: S105 - still-valid fixture bearer
+            service.token_responses.insert(0, "access-old")
+            try:
+                return original_route(method, path, body, token)
+            finally:
+                service.token_responses.pop(0)
+        return original_route(method, path, body, token)
+
+    monkeypatch.setattr(service, "route", route)
+    original_download = cli._download_artifact
+    downloads = 0
+
+    def download(grant: dict[str, Any]) -> bytes:
+        """Count the real verified download without replacing it."""
+        nonlocal downloads
+        downloads += 1
+        return original_download(grant)
+
+    monkeypatch.setattr(cli, "_download_artifact", download)
+
+    assert cli.main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0
+    assert rejected is True
+    assert service.device_grants == ["device-1", "device-1"]
+    assert downloads == 1
+    attempted_tokens = [
+        token for _method, path, _body, token in service.requests if path == rejected_path
+    ]
+    assert attempted_tokens == ["Bearer access-old", "Bearer access-new"]
+
+
+def test_cli_artifacts_preserves_status_gateway_retry(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+) -> None:
+    """Authentication recovery must retain the existing safe status retry."""
+    del logged_in
+    status_path = f"/v1/runs/{service.run_id}"
+    service.transient_failures[status_path] = 1
+
+    assert cli.main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0
+    assert len([request for request in service.requests if request[1] == status_path]) == 2
+    assert service.device_grants == ["device-1"]
 
 
 @pytest.mark.parametrize("status", [401, 429, 503])

@@ -726,7 +726,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.1.6",
+            "version": "0.1.7",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1007,7 +1007,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.1.6",
+            "User-Agent": "recurse-sdk/0.1.7",
         },
         method="GET",
     )
@@ -1439,7 +1439,7 @@ def _prepare(
     metadata = manifest["metadata"]
     if token is None:
         token = _access_token()
-    target = request(
+    target, token = _authenticated_request(
         "POST",
         "/v1/agent-versions",
         token=token,
@@ -1456,7 +1456,7 @@ def _prepare(
     print("Uploading source distribution...", flush=True)
     upload_artifact(source_target, artifacts["source"])
     print("Preparing runtime...", flush=True)
-    request(
+    _, token = _authenticated_request(
         "POST",
         f"/v1/agent-versions/{version_id}/complete",
         token=token,
@@ -1465,7 +1465,9 @@ def _prepare(
         },
     )
     for _attempt in range(_POLL_ATTEMPTS):
-        version = request("GET", f"/v1/agent-versions/{version_id}", token=token)
+        version, token = _authenticated_request(
+            "GET", f"/v1/agent-versions/{version_id}", token=token
+        )
         build_status = required_field(version, "status")
         if build_status == "ready":
             if isinstance(model := version.get("model"), str):
@@ -1822,6 +1824,23 @@ def _run_request(
     return _retry_request(method, path, token=token, json_body=json_body), token
 
 
+def _authenticated_request(
+    method: str,
+    path: str,
+    *,
+    token: str,
+    json_body: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str]:
+    """Refresh one rejected bearer without adding transport retries."""
+    try:
+        return request(method, path, token=token, json_body=json_body), token
+    except ServiceError as error:
+        if error.status_code != HTTPStatus.UNAUTHORIZED:
+            raise
+    token = _access_token(rejected_token=token)
+    return request(method, path, token=token, json_body=json_body), token
+
+
 _RUN_EXIT_STATUS = {
     "succeeded": 0,
     "failed": 1,
@@ -2000,8 +2019,13 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
                 _print_run_view(view)
                 return _RUN_EXIT_STATUS[run_status]
             time.sleep(_POLL_SECONDS)
-    except RecurseError, ServiceError:
-        _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
+    except (RecurseError, ServiceError) as error:
+        if not (
+            run_id is None
+            and isinstance(error, ServiceError)
+            and error.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+        ):
+            _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
         raise
     except KeyboardInterrupt:
         print(
@@ -2070,7 +2094,9 @@ def _artifact_path(output_directory: Path, path: object) -> Path:
 def _artifacts(run_id: str, output_directory: str) -> None:
     """Download every retained artifact after exact-byte verification."""
     token = _access_token()
-    view = _get_run(run_id, token)
+    quoted_run_id = urllib.parse.quote(run_id, safe="")
+    payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
+    view = _validated_run_view(payload, run_id)
     if view["payload_expired"]:
         raise _CliError("run payloads have expired")
     root = Path(output_directory)
@@ -2081,12 +2107,9 @@ def _artifacts(run_id: str, output_directory: str) -> None:
         path = _artifact_path(root, artifact.get("path"))
         if path.exists():
             raise _CliError(f"artifact destination already exists: {path}")
-        grant = request(
+        grant, token = _authenticated_request(
             "GET",
-            "/v1/runs/"
-            + urllib.parse.quote(run_id, safe="")
-            + "/artifacts/"
-            + urllib.parse.quote(output_id, safe=""),
+            f"/v1/runs/{quoted_run_id}/artifacts/" + urllib.parse.quote(output_id, safe=""),
             token=token,
         )
         body = _download_artifact(grant)

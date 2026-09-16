@@ -656,7 +656,8 @@ def test_deploy_builds_uploads_and_prints_only_public_results(
     assert registration["agent_name"] == "receipt-writer"
     assert registration["summary"] == "Writes one receipt file."
     application_record = registration["application_record"]
-    assert application_record["api_version"] == "recurse.application/v1alpha1"
+    assert set(application_record) == {"apiVersion", "source"}
+    assert application_record["apiVersion"] == "recurse.application/v1alpha1"
     source_upload = service.requests[2][2]
     assert isinstance(source_upload, bytes)
     assert source_upload.startswith(b"source-prefix:")
@@ -710,6 +711,13 @@ def test_run_prepares_and_waits_for_one_direct_run(
         == 0
     )
 
+    registration = next(
+        body for method, path, body, _ in service.requests if path == "/v1/agent-versions"
+    )
+    assert isinstance(registration, dict)
+    application_record = registration["application_record"]
+    assert set(application_record) == {"apiVersion", "source"}
+    assert application_record["apiVersion"] == "recurse.application/v1alpha1"
     admission = next(body for method, path, body, _ in service.requests if path == "/v1/runs")
     assert isinstance(admission, dict)
     assert admission == {
@@ -1461,6 +1469,25 @@ def test_lost_admission_response_retains_reference_without_retrying(
     assert "do not blindly retry" in output
 
 
+def test_rejected_run_admission_does_not_report_uncertain_remote_state(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A confirmed input rejection cannot have started a run or incurred charges."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    service.fail_detail["/v1/runs"] = (422, "inputs do not match the tool schema")
+
+    assert main(["run", "app"]) == 1
+
+    output = capsys.readouterr()
+    assert "request_failed: inputs do not match the tool schema" in output.err
+    assert "Remote state is unconfirmed" not in output.out
+    assert "Execution and charges may continue" not in output.out
+    assert "admission:" not in output.out
+
+
 def test_login_removed_during_run_observation_preserves_recovery(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
@@ -2118,11 +2145,18 @@ def test_artifact_download_refuses_unusable_metadata_or_destination(
         destination.write_text("keep")
     monkeypatch.setattr(
         cli,
-        "_get_run",
-        lambda _run_id, _token: {
-            "payload_expired": case == "expired",
-            "artifacts": [artifact],
-        },
+        "_run_request",
+        lambda *_args, **_kwargs: (
+            {
+                "run_id": "run-id",
+                "status": "succeeded",
+                "result": {"answer": "done"},
+                "error": None,
+                "payload_expired": case == "expired",
+                "artifacts": [artifact],
+            },
+            "token",
+        ),
     )
     with pytest.raises((cli.ServiceError, cli._CliError)):
         cli._artifacts("run-id", str(tmp_path))
@@ -2137,15 +2171,26 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
 ) -> None:
     """A failed final rename is concise and leaves no partial bytes behind."""
     monkeypatch.setattr(cli, "_access_token", lambda: "token")
-    monkeypatch.setattr(
-        cli,
-        "_get_run",
-        lambda _run_id, _token: {
-            "payload_expired": False,
-            "artifacts": [{"output_id": "output-id", "path": "result.json"}],
-        },
-    )
-    monkeypatch.setattr(cli, "request", lambda *args, **kwargs: {})
+
+    def run_request(
+        method: str, path: str, *, token: str, **_kwargs: Any
+    ) -> tuple[dict[str, Any], str]:
+        """Return one complete run view from the safe status request."""
+        del method, path
+        return (
+            {
+                "run_id": "run-id",
+                "status": "succeeded",
+                "result": {"answer": "done"},
+                "error": None,
+                "payload_expired": False,
+                "artifacts": [{"output_id": "output-id", "path": "result.json"}],
+            },
+            token,
+        )
+
+    monkeypatch.setattr(cli, "_run_request", run_request)
+    monkeypatch.setattr(cli, "_authenticated_request", lambda *_args, **_kwargs: ({}, "token"))
     monkeypatch.setattr(cli, "_download_artifact", lambda _grant: b"result")
 
     def fail_replace(source: str, destination: Path) -> None:
@@ -3333,7 +3378,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.1.6",
+                    "version": "0.1.7",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -3622,7 +3667,7 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     )
     assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.1.6"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.1.7"
 
 
 @pytest.mark.parametrize(
