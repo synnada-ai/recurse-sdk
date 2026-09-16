@@ -206,3 +206,20 @@ loading in the child interpreter. It fails with the same missing-joblib tracebac
 Workers now inherit the parent's effective import paths through `PYTHONPATH`; the test then trains
 and evaluates successfully. All 147 modeler unit tests pass with 100% statement/branch coverage.
 This subprocess fix still requires cloud verification.
+
+## Worker dependency fix verified, September 16
+
+At source `3d9ef40`, regression run `85c681b7-6ce3-493f-bb9b-2a5d3fd3c789` trained and
+evaluated six candidates successfully. Extra-trees trial 5 won with validation MAE
+3.0947839722 MPa and final-test MAE 3.5631818597 MPa. Reloading the downloaded model reproduced
+both scores on the checksummed Concrete dataset and saved splits. Total fitting time was
+15.104 seconds; the baseline validation MAE was 14.1465 MPa. This confirms the dependency fix.
+
+All six inconsistent-input cases returned `inconsistent_inputs`; their downloaded SQLite
+states contain only review/receipt metadata and zero trials, confirming rejection before dataset
+loading. Binary and panel-forecast public responses nevertheless paraphrased the saved receipts
+and inserted empty optional artifact paths. The saved receipts themselves were correct.
+The output schema now rejects empty artifact paths, and the prompt/completion description explicitly
+require preserving every receipt field. A regression test failed before this change; all 148
+modeler tests pass afterward at 100% statement/branch coverage, with strict types and lint passing.
+The two affected cases are rechecked separately; the remaining modeling runs are still in progress.

@@ -94,3 +94,6 @@ interpretation. If nothing feasible was found, explain unmet requirements withou
 
 Return exactly the finish_run receipt as your final JSON. Never manufacture metrics, artifact
 paths, successful status, or claims about approaches that were not evaluated.
+Treat this as copying a recorded result, not writing a new summary: preserve the receipt's summary,
+every conflict and question, and its exact artifact keys and paths. Omit unavailable artifact keys;
+never fill optional fields with empty strings. Check your final object against the returned receipt.

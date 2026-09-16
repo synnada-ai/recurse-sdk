@@ -14,7 +14,7 @@ import joblib
 import pandas as pd
 import pytest
 import yaml
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 from modeler import state, worker
 from modeler.contracts import ModelerError
 
@@ -22,6 +22,19 @@ from recurse import _activate as activate
 from recurse import _deactivate as deactivate
 
 ROOT = Path(__file__).parents[1]
+
+
+def test_final_response_rejects_empty_artifact_placeholders(run: Path, tools: Any) -> None:
+    """A rejected run must omit unavailable artifacts rather than invent empty paths."""
+    tools.review_inputs("Conflicting objectives.", {}, ["Choose precision or recall."], [])
+    receipt = tools.finish_run("inconsistent_inputs", "Resolve the objective conflict.")
+    manifest = yaml.safe_load((ROOT / "agent.yaml").read_text())
+    validator = Draft202012Validator(manifest["outputs"])
+    validator.validate(receipt)
+    for name in manifest["outputs"]["properties"]["artifacts"]["properties"]:
+        invalid = receipt | {"artifacts": receipt["artifacts"] | {name: ""}}
+        with pytest.raises(ValidationError):
+            validator.validate(invalid)
 
 
 def test_agent_inputs_never_require_opaque_any_values(tools: Any) -> None:

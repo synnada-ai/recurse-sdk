@@ -132,18 +132,25 @@ outputs:
       properties:
         model:
           type: string
+          minLength: 1
         report:
           type: string
+          minLength: 1
         review:
           type: string
+          minLength: 1
         trials:
           type: string
+          minLength: 1
         resolved_contract:
           type: string
+          minLength: 1
         evaluation:
           type: string
+          minLength: 1
         splits:
           type: string
+          minLength: 1
 tools:
   source: tools.py
   built_in: true

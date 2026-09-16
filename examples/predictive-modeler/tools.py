@@ -392,6 +392,8 @@ def finish_run(stop_reason: str, explanation: str) -> dict[str, Any]:
     Returns:
         Final status, stop reason, summary, conflicts/questions, and relative artifact paths.
         A failed final acceptance yields no_feasible_model and no accepted model bundle.
+        Copy this entire receipt unchanged into the final JSON, including all conflicts and
+        exactly the artifact keys returned. Do not paraphrase or add empty optional paths.
     """
     with state.transaction(_root()) as connection:
         previous = state.get(connection, "receipt")
