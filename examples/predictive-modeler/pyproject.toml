@@ -7,7 +7,7 @@ name = "predictive-modeler"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-  "recurse-sdk==0.1.4",
+  "recurse-sdk==0.1.6",
   "numpy==2.5.3",
   "pandas==3.0.5",
   "scikit-learn==1.9.1",

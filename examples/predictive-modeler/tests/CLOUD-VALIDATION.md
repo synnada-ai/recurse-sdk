@@ -154,3 +154,20 @@ regression case was run using SDK 0.1.4 and agent source commit `9f50307`:
 This attempt returned useful diagnostic artifacts instead of an opaque execution failure, but it
 produced no model. It does not establish that all backend failures are fixed. No further cases were
 launched. Observed balance change: **$100.758708 → $100.520942** (decrease **$0.237766**).
+
+## SDK 0.1.6 upgrade and retry
+
+At the user's request, the installed CLI and example dependency were upgraded to **0.1.6**, then
+valid regression was retried as `9a4a6356-db20-447f-97b4-6bd1f25a499d` using the same input,
+`gpt-5.6-luna`, one CPU, and 2 GiB memory. Local tests against the published SDK passed all 145
+modeler cases with 100% statement/branch coverage; 434 SDK tests, lint, formatting, and types passed.
+
+The service returned `succeeded`, but the authoritative agent receipt is **`tool_error`**. The
+agent again reported that `resolve_problem` requires general-storage references for specification
+fields and rejects inline substitutions; it also reported that notes were not valid storage keys.
+This remains an agent-reported diagnostic requiring backend trace confirmation.
+
+All six artifacts were retrieved under `.baseline-results/cloud/sdk016-regression/`. SQLite state
+confirms successful review and dataset inspection, no frozen contract, and zero trials. The saved
+receipt agrees with public output. No model was trained. No further remote attempts were launched.
+Observed account balance change: **$100.520942 → $100.245124**, a decrease of **$0.275818**.

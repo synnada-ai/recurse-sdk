@@ -356,7 +356,7 @@ requires-dist = [
     { name = "openpyxl", specifier = "==3.1.5" },
     { name = "pandas", specifier = "==3.0.5" },
     { name = "pyarrow", specifier = "==25.0.1" },
-    { name = "recurse-sdk", specifier = "==0.1.4" },
+    { name = "recurse-sdk", specifier = "==0.1.6" },
     { name = "scikit-learn", specifier = "==1.9.1" },
     { name = "xlrd", specifier = "==2.0.2" },
 ]
@@ -441,7 +441,7 @@ wheels = [
 
 [[package]]
 name = "recurse-sdk"
-version = "0.1.4"
+version = "0.1.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
@@ -449,9 +449,9 @@ dependencies = [
     { name = "keyring" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/3b/1bf7367f6ce491a6772fe94246da1c3d621f0f5210eaeba6fc7e987fceaa/recurse_sdk-0.1.4.tar.gz", hash = "sha256:9a42e3dbc0f884be4b3d9cb947eddafa002322adb97aa0368434e1d4e1e0efa6", size = 268434, upload-time = "2026-09-15T23:42:15.668Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/83/6ae5a2fa919d3aa9422ea08704f59e03fdaadf07321817c7a068e96e7f53/recurse_sdk-0.1.6.tar.gz", hash = "sha256:dbed9ab743cf1ae6da8dfcfb50ba6be9ef0780bb1737039318230f127cc2b17e", size = 38577, upload-time = "2026-09-16T04:29:12.418Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/7b/d42a2e1416cfdf8817a6fbe01e2d14f3a8881860b7b0988aa1b6e4638dd7/recurse_sdk-0.1.4-py3-none-any.whl", hash = "sha256:3c17921cdd10e44eb634170ac80861c775e038e7b3b18253525478c9d832228f", size = 40121, upload-time = "2026-09-15T23:42:14.408Z" },
+    { url = "https://files.pythonhosted.org/packages/16/a5/a9c72390307cd95405215b48e2509075623c1b29e498a3fe525874874652/recurse_sdk-0.1.6-py3-none-any.whl", hash = "sha256:b4a120a978238021e753cf8f79c57686c07916d79bae34c4bb11f72fb482d90f", size = 40214, upload-time = "2026-09-16T04:29:11.321Z" },
 ]
 
 [[package]]
