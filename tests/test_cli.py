@@ -1469,6 +1469,25 @@ def test_lost_admission_response_retains_reference_without_retrying(
     assert "do not blindly retry" in output
 
 
+def test_rejected_run_admission_does_not_report_uncertain_remote_state(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A confirmed input rejection cannot have started a run or incurred charges."""
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    service.fail_detail["/v1/runs"] = (422, "inputs do not match the tool schema")
+
+    assert main(["run", "app"]) == 1
+
+    output = capsys.readouterr()
+    assert "request_failed: inputs do not match the tool schema" in output.err
+    assert "Remote state is unconfirmed" not in output.out
+    assert "Execution and charges may continue" not in output.out
+    assert "admission:" not in output.out
+
+
 def test_login_removed_during_run_observation_preserves_recovery(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
