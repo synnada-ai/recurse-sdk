@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -12,6 +13,8 @@ import pytest
 from modeler import datasets
 from modeler.contracts import ModelerError
 
+from recurse import build_bundle
+
 
 def _archive(name: str, content: bytes) -> bytes:
     """Create one in-memory archive member for parser tests."""
@@ -19,6 +22,26 @@ def _archive(name: str, content: bytes) -> bytes:
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(name, content)
     return buffer.getvalue()
+
+
+def test_deployment_contains_attributed_offline_tourism_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deployed archive preserves the original dataset and loads all series without network."""
+    root = Path(__file__).parents[1]
+    artifacts, _ = build_bundle(root)
+    with tarfile.open(fileobj=io.BytesIO(artifacts["source"]), mode="r:gz") as archive:
+        names = archive.getnames()
+        for filename in ["tourism.zip", "README.md"]:
+            member = next(name for name in names if name.endswith(f"modeler/data/{filename}"))
+            stream = archive.extractfile(member)
+            assert stream is not None
+            with stream:
+                assert stream.read() == (root / "modeler/data" / filename).read_bytes()
+    monkeypatch.setattr(datasets, "_download", lambda url: pytest.fail("Must load offline"))
+    frame = datasets.load_dataset("example:tourism-monthly", tmp_path)
+    assert len(frame) == 109280
+    assert frame["series"].nunique() == 366
 
 
 def test_download_requires_https_and_bounds_size(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -55,6 +78,29 @@ def test_sources_verify_cached_and_downloaded_bytes(
     assert datasets._source("case", cache) == content
     assert datasets._source("case", cache) == content
     (cache / digest).write_bytes(b"changed")
+    with pytest.raises(ModelerError, match="checksum"):
+        datasets._source("case", cache)
+
+
+def test_bundled_source_works_offline_and_rejects_changed_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An attributed packaged source has the same integrity requirements as a download."""
+    content = b"original source archive"
+    digest = hashlib.sha256(content).hexdigest()
+    (tmp_path / "sources.json").write_text(
+        json.dumps({"case": {"sha256": digest, "url": "https://example.org/data"}})
+    )
+    bundled = tmp_path / "data" / "case.zip"
+    bundled.parent.mkdir()
+    bundled.write_bytes(content)
+    monkeypatch.setattr(datasets, "__file__", str(tmp_path / "datasets.py"))
+    monkeypatch.setattr(datasets, "_download", lambda url: pytest.fail("Must use bundled source"))
+    cache = tmp_path / "cache"
+    assert datasets._source("case", cache) == content
+    assert (cache / digest).read_bytes() == content
+    (cache / digest).unlink()
+    bundled.write_bytes(b"changed")
     with pytest.raises(ModelerError, match="checksum"):
         datasets._source("case", cache)
 

@@ -1,8 +1,9 @@
 # Autonomous-agent validation
 
-Latest status: three modeling tasks have cloud-trained bundles with reproduced scores; all six
-contradictory tasks reject before loading data. Three modeling cases remain blocked by backend
-artifact/usage failures. See **September 16 validation results** below. Earlier attempts are
+Latest status: five modeling tasks have cloud-trained bundles with reproduced scores; all six
+contradictory tasks reject before loading data. SDK 0.1.7 engine retries resolve the binary and
+multiclass artifact failures. Panel inspection encountered a source-host timeout; an offline
+source fix is being validated. See **SDK 0.1.7 engine verification** below. Earlier attempts are
 retained as history.
 
 The user authorized this batch on September 15, 2026. Two runs were attempted; both ended in
@@ -313,3 +314,38 @@ The installed Recurse CLI and agent runtime were upgraded from 0.1.6 to 0.1.7 at
 request, with the example lockfile refreshed. All 148 modeler tests pass against the published
 0.1.7 package at 100% statement/branch coverage. The cloud results above remain observations
 from SDK 0.1.6; this dependency upgrade does not establish resolution of the backend blockers.
+
+## SDK 0.1.7 engine verification
+
+After the user reported an engine fix, the three blocked cases were retried at source `319107e`,
+SDK 0.1.7, with unchanged inputs, criteria and budgets. One multiclass preparation returned HTTP
+502 before admission; one replacement was admitted. Starting account balance: $97.045187.
+
+| Task | Run ID | Outcome |
+| --- | --- | --- |
+| Binary | `aa86ee61-c068-4cd4-960b-2fc6ecccf285` | Accepted extra-trees bundle; seven evaluated trials |
+| Multiclass | `ba1e3f14-36f5-4bba-90b6-a08663226037` | Accepted linear bundle; six evaluated trials |
+| Panel forecast | `dba45a8d-8cc3-4cd0-8c49-0877f092c329` | Service succeeded; receipt `tool_error`, dataset inspection timed out twice |
+
+Both accepted bundles and all their artifacts downloaded successfully. Reloading on original
+checksummed data and saved splits reproduced validation and final scores. Resolved contracts retain
+the requested targets/features/quality: duration excluded for binary, yes as the positive label,
+recall >= 0.5 preserved, and all 16 features with macro-F1 for multiclass.
+
+| Task | Validation | Final test | Cumulative training |
+| --- | --- | --- | --- |
+| Binary precision / recall | 0.472250 / 0.504310 | 0.495902 / 0.521552 | 42.237 s |
+| Multiclass macro-F1 | 0.940715 | 0.932185 | 15.721 s |
+
+Binary compared baseline, linear and tree families, then thresholds and tree complexity, preserving
+the best feasible model when higher precision violated recall. Multiclass compared families and
+regularization strengths. These are evidence of working search and constraint handling, not global
+optimality or repeated reliability measurements.
+
+Panel's six diagnostic artifacts downloaded. It stopped before freezing a contract or training
+because `inspect_dataset` timed out twice after 30 seconds. An independent GET of the same Zenodo
+archive returned HTTP 504 locally after 30.6 seconds. The prior usage-authorization failure did
+not recur. The example now bundles the previously verified, unmodified 199,791-byte Tourism source
+archive with publisher attribution and license links. It retains the original checksum, all 366
+series/109,280 observations, and unchanged splits/metrics. Regression tests verify offline loading,
+archive inclusion/attribution, and rejection of tampered bytes. The focused panel retry follows.

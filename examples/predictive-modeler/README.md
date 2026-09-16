@@ -83,7 +83,11 @@ All six examples use real observations. Downloaded source bytes are pinned in
 The UCI pages, [Google Research dataset license](https://github.com/google-research/google-research),
 and [Monash dataset metadata](https://huggingface.co/datasets/Monash-University/monash_tsf)
 identify CC BY 4.0 licensing. Preserve attribution when redistributing data or converted tables.
-The application ships the source manifest and conversion code, not copies of the datasets.
+The application ships the source manifest and conversion code. It also includes the unmodified
+200 KB Tourism Monthly archive so that this example remains usable during Zenodo outages.
+Its bytes are verified against the same pinned checksum; all 366 series and 109,280 observations
+are retained. See [bundled-data attribution](modeler/data/README.md). Other examples download
+their source datasets at runtime.
 
 Conversions preserve observed values: XLS/XLSX become tables; concrete columns receive short
 names; GoEmotions labels become binary columns and retain official train/validation/test splits;
@@ -168,7 +172,8 @@ recurse run examples/predictive-modeler \
 ```
 
 Select another input file from the table to change the task. These commands use the remote
-Recurse runtime and consume credits. Public examples require network access but no dataset login.
+Recurse runtime and consume credits. Dataset downloads require network access but no dataset login;
+the Tourism example uses its bundled source archive.
 Your own data must be available to that runtime through an HTTPS CSV/Parquet URI; a laptop's local
 path is not uploaded by this contract. Downloads and expanded ZIP members are limited to 32 MiB.
 

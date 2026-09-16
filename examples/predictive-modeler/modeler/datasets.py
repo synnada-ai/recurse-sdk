@@ -31,11 +31,18 @@ def _download(url: str) -> bytes:
 
 
 def _source(name: str, cache: Path) -> bytes:
-    """Verify pinned source bytes whether cached or freshly downloaded."""
+    """Verify pinned source bytes from cache, attributed bundled data, or the original host."""
     sources = json.loads(Path(__file__).with_name("sources.json").read_text())
     source = sources[name]
     path = cache / source["sha256"]
-    data = path.read_bytes() if path.exists() else _download(source["url"])
+    bundled = Path(__file__).with_name("data") / f"{name}.zip"
+    data: bytes
+    if path.exists():
+        data = path.read_bytes()
+    elif bundled.exists():
+        data = bundled.read_bytes()
+    else:
+        data = _download(source["url"])
     if hashlib.sha256(data).hexdigest() != source["sha256"]:
         raise ModelerError(f"Dataset checksum mismatch for {name}; do not use changed data.")
     cache.mkdir(parents=True, exist_ok=True)
