@@ -53,9 +53,11 @@ module, and a uv lockfile. See the runnable examples and
 
 ```sh
 recurse login
-recurse run examples/predictive-modeler \
-  --inputs examples/predictive-modeler/inputs/binary.json --memory-mib 2048
-recurse deploy examples/predictive-modeler --as mcp --memory-mib 2048
+recurse secret set github-token
+recurse secret list
+recurse run examples/tiny-tuner --inputs inputs.json --secret GITHUB_TOKEN=github-token
+recurse deploy examples/tiny-tuner --as mcp --cpu 1 --memory-mib 1024 \
+  --secret GITHUB_TOKEN=github-token
 codex mcp add recurse -- recurse mcp serve <deployment-id>
 claude mcp add recurse -- recurse mcp serve <deployment-id>
 ```
