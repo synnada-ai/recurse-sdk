@@ -476,6 +476,26 @@ class PredictionModel:
         groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
         rows = []
         for name, frame in groups:
+            observed_dates = pd.DatetimeIndex(
+                pd.to_datetime(frame[spec["time"]], errors="coerce")
+            ).sort_values()
+            if (
+                observed_dates.empty
+                or observed_dates.hasnans
+                or not observed_dates.equals(
+                    pd.date_range(observed_dates[0], periods=len(frame), freq=spec["frequency"])
+                )
+            ):
+                raise ModelerError(
+                    f"Series {name!r} prediction history must have regular, unique, valid dates "
+                    f"at frequency {spec['frequency']!r}."
+                )
+            if not np.isfinite(
+                pd.to_numeric(frame[spec["targets"][0]], errors="coerce").to_numpy(dtype=float)
+            ).all():
+                raise ModelerError(
+                    f"Series {name!r} prediction history must contain finite numeric targets."
+                )
             ordered = frame.sort_values(spec["time"], key=pd.to_datetime)
             values = ordered[spec["targets"][0]].astype(float).tolist()
             dates = pd.date_range(

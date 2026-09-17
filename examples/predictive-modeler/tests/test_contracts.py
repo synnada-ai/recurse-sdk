@@ -144,6 +144,7 @@ def test_forecast_requires_usable_time_semantics(
     frame: pd.DataFrame, change: dict[str, Any], message: str
 ) -> None:
     """A forecasting task has an explicit horizon, frequency, and causal feature boundary."""
+    frame = frame.drop(columns="_split")
     with pytest.raises(ModelerError, match=message):
         resolve(
             {
@@ -162,6 +163,7 @@ def test_forecast_requires_usable_time_semantics(
 @pytest.mark.parametrize("period", [0, 1.5, True])
 def test_mase_requires_positive_integer_season(frame: pd.DataFrame, period: Any) -> None:
     """MASE's scale period is validated before evaluation."""
+    frame = frame.drop(columns="_split")
     with pytest.raises(ModelerError, match="seasonal_period"):
         resolve(
             {
@@ -221,6 +223,7 @@ def test_regression_metrics_have_explicit_units(
     frame: pd.DataFrame, metric: str, expected: float
 ) -> None:
     """Error metrics are calculated from predictions and training-only scales."""
+    frame = frame.drop(columns="_split")
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
         frame,
@@ -233,6 +236,7 @@ def test_regression_metrics_have_explicit_units(
 @pytest.mark.parametrize("history", [[1], [1, 1, 1]])
 def test_undefined_mase_is_not_feasible(frame: pd.DataFrame, history: list[int]) -> None:
     """Insufficient or constant scale history cannot manufacture a valid score."""
+    frame = frame.drop(columns="_split")
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
         frame,
@@ -279,6 +283,7 @@ def test_complexity_rejects_classification_options(frame: pd.DataFrame, metric: 
 @pytest.mark.parametrize("missing", ["one", "series", "all"])
 def test_forecast_rejects_missing_series_identifiers(frame: pd.DataFrame, missing: str) -> None:
     """Resolution cannot silently exclude rows whose forecasting series is unidentified."""
+    frame = frame.drop(columns="_split")
     data = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
     rows = (
         data.index[-1:]
@@ -326,3 +331,26 @@ def test_temporal_tabular_tasks_reject_unusable_timestamps(
             frame,
             {},
         )
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize("annotations", [False, True])
+def test_forecasting_never_discards_official_partitions(
+    frame: pd.DataFrame, explicit: bool, annotations: bool
+) -> None:
+    """Unsupported official forecast partitions are rejected rather than training on test rows."""
+    data = frame if annotations else frame.drop(columns="_split")
+    proposal: dict[str, Any] = {
+        "kind": "forecast",
+        "targets": ["value"],
+        "time": "date",
+        "frequency": "D",
+        "horizon": 10,
+    }
+    if explicit:
+        proposal["split"] = "official"
+    if explicit or annotations:
+        with pytest.raises(ModelerError, match="Forecasting does not support official"):
+            resolve(proposal, data, {})
+    else:
+        assert resolve(proposal, data, {})["split"] == "temporal"

@@ -90,7 +90,7 @@ uploaded by this input contract. Downloads are limited to 32 MiB.
 
 Tabular defaults reserve 20% for testing and use up to five CV folds: stratified for binary/multiclass,
 shuffled for regression/multilabel, and group-disjoint or chronological when required. Forecasts
-use up to three expanding-window validation origins and a final held-out horizon. Official splits
+use up to three expanding-window validation origins and a final held-out horizon. Official tabular splits
 are preserved; small datasets can reduce fold counts. Each fold refits preprocessing and models.
 
 Selection uses mean fold scores and actual saved-model complexity. Training and CV share the time
@@ -145,7 +145,8 @@ to build a similar example:
 ## Limitations
 
 This is a bounded CPU modeling example. It does not support arbitrary training code, custom metrics,
-multitarget regression, irregular time series, future forecast covariates, or prediction intervals.
+multitarget regression, irregular time series, forecast datasets with official split assignments,
+future forecast covariates, or prediction intervals.
 Semantic task interpretation remains an LLM judgment. Good validation results do not guarantee
 performance on new data; the caller must choose meaningful metrics and constraints.
 

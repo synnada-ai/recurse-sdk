@@ -41,7 +41,9 @@ or evidence that no feasible model exists. Do not invent a backend cause when no
 
 Forecasting supports one target, a regular time column, optional series identifier, horizon, and
 pandas frequency (D for daily, MS for month starts). It uses history and calendar features only;
-external future covariates are not implemented. Do not pretend to support them. Validation refits
+external future covariates are not implemented. Do not pretend to support them. Forecast datasets
+with official split assignments are unsupported: report unsupported_task instead of replacing
+them with rolling splits. Validation refits
 at each frozen rolling origin; final testing uses the last full horizon per series. No random
 splits or future observed targets in lags. Differing series calendars are evaluated at their own origins;
 models fit each series separately, without cross-series future information.

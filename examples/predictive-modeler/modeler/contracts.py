@@ -149,6 +149,11 @@ def resolve(
 
 def _forecast_options(spec: dict[str, Any], data: pd.DataFrame) -> None:
     """Require regular observed histories and a complete forecasting horizon."""
+    if spec.get("split") == "official" or "_split" in data:
+        raise ModelerError(
+            "Forecasting does not support official partitions; supplied assignments cannot be "
+            "discarded. Use a forecasting workflow that preserves those partitions."
+        )
     if not spec["time"] or not spec.get("frequency"):
         raise ModelerError("Forecasting requires time, frequency (pandas offset), and horizon.")
     horizon = spec.get("horizon")

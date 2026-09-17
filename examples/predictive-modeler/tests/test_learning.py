@@ -190,6 +190,7 @@ def test_forecasts_use_full_horizons_without_future_targets(
     frame: pd.DataFrame, family: str, panel: bool
 ) -> None:
     """Future observations affect measured error, never predictions at the same origin."""
+    frame = frame.drop(columns="_split")
     if panel:
         frame = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
     spec = resolve(
@@ -231,6 +232,7 @@ def test_forecasts_use_full_horizons_without_future_targets(
 
 def test_forecast_requires_sufficient_lag_history(frame: pd.DataFrame) -> None:
     """A lag window cannot exhaust the available training history."""
+    frame = frame.drop(columns="_split")
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
         frame,
@@ -246,6 +248,7 @@ def test_forecast_requires_sufficient_lag_history(frame: pd.DataFrame) -> None:
 
 def test_undefined_forecast_scale_propagates_across_series(frame: pd.DataFrame) -> None:
     """A constant series cannot disappear from the aggregate MASE constraint."""
+    frame = frame.drop(columns="_split")
     frame["value"] = 1.0
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
@@ -295,6 +298,7 @@ def test_complexity_covers_complete_saved_predictor(
 ) -> None:
     """Complexity works across families and counts raw inputs rather than transformed columns."""
     if kind == "forecast":
+        frame = frame.drop(columns="_split")
         frame = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
         proposal = {
             "kind": kind,
@@ -357,7 +361,11 @@ def test_feature_subset_and_single_forecast_input_counts(frame: pd.DataFrame) ->
         ),
     ]
     for proposal, configuration, expected in cases:
-        spec = resolve(proposal, frame, quality)
+        spec = resolve(
+            proposal,
+            frame.drop(columns="_split") if proposal["kind"] == "forecast" else frame,
+            quality,
+        )
         plan = partition(frame, spec)
         train, validation = plan["folds"][0]["train"], plan["folds"][0]["validation"]
         model = fit(frame.iloc[train], spec, validate_configuration(configuration, spec))
@@ -610,6 +618,7 @@ def test_forecast_origins_expand_before_an_untouched_short_final_horizon(
     frame: pd.DataFrame,
 ) -> None:
     """Short horizons are valid even though tabular final tests require ten rows."""
+    frame = frame.drop(columns="_split")
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 1},
         frame,
@@ -688,6 +697,7 @@ def test_complexity_only_cv_skips_fitting(
 
 def test_undefined_score_in_one_fold_remains_infeasible(frame: pd.DataFrame) -> None:
     """A constant early history cannot disappear when later MASE folds are defined."""
+    frame = frame.drop(columns="_split")
     frame.loc[:109, "value"] = 1
     spec = resolve(
         {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
@@ -722,6 +732,8 @@ def test_inapplicable_tuning_is_rejected_before_training(
     frame: pd.DataFrame, kind: str, family: str, option: str, value: Any
 ) -> None:
     """Ignored controls cannot consume trials or support false causal explanations."""
+    if kind == "forecast":
+        frame = frame.drop(columns="_split")
     proposal = {
         "kind": kind,
         "targets": ["value"] if kind in {"regression", "forecast"} else ["y"],
@@ -743,6 +755,7 @@ def test_saved_panel_predictor_rejects_missing_series_identifiers(
     frame: pd.DataFrame, tmp_path: Path, family: str, missing: str
 ) -> None:
     """Reloaded predictors reject unidentified input rows instead of returning partial forecasts."""
+    frame = frame.drop(columns="_split")
     data = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
     spec = resolve(
         {
@@ -804,3 +817,74 @@ def test_unscaled_ridge_converges_to_independent_svd_solution() -> None:
     np.testing.assert_allclose(
         model.predict(frame), design @ coefficients + intercept, rtol=1e-9, atol=1e-9
     )
+
+
+@pytest.mark.parametrize("panel", [False, True])
+@pytest.mark.parametrize(
+    "invalid",
+    ["gap", "duplicate", "off_grid", "missing_date", "invalid_date", "nan", "inf", "text"],
+)
+def test_saved_forecasts_reject_invalid_prediction_history(
+    tmp_path: Path, panel: bool, invalid: str
+) -> None:
+    """Reloaded models reject histories that would change lag meaning or forecast dates."""
+    frame = pd.DataFrame(
+        {"date": pd.date_range("2000-01-01", periods=60, freq="MS"), "value": np.arange(60.0)}
+    )
+    data = (
+        pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
+        if panel
+        else frame
+    )
+    spec = resolve(
+        {
+            "kind": "forecast",
+            "targets": ["value"],
+            "time": "date",
+            "frequency": "MS",
+            "horizon": 2,
+            "group": "series" if panel else None,
+        },
+        data,
+        {},
+    )
+    model = fit(
+        data, spec, validate_configuration({"family": "seasonal", "seasonal_period": 12}, spec)
+    )
+    path = tmp_path / "model.joblib"
+    joblib.dump(model, path)
+    restored = joblib.load(path)
+    pd.testing.assert_frame_equal(restored.predict(data), model.predict(data))
+    if invalid == "gap":
+        data = data.drop(index=58)
+    elif invalid == "duplicate":
+        data.loc[59, "date"] = data.loc[58, "date"]
+    elif invalid in {"off_grid", "missing_date", "invalid_date"}:
+        data["date"] = data["date"].astype(object)
+        data.loc[59, "date"] = {
+            "off_grid": pd.Timestamp("2004-12-15"),
+            "missing_date": None,
+            "invalid_date": "bad-date",
+        }[invalid]
+    else:
+        data["value"] = data["value"].astype(object)
+        invalid_values: dict[str, float | str] = {"nan": np.nan, "inf": np.inf, "text": "bad-value"}
+        data.loc[59, "value"] = invalid_values[invalid]
+    with pytest.raises(ModelerError, match="prediction history"):
+        restored.predict(data)
+
+
+def test_forecast_accepts_short_regular_history_but_rejects_empty_history(
+    frame: pd.DataFrame,
+) -> None:
+    """Deployment history needs only the predictor's lags, not a full training dataset."""
+    frame = frame.drop(columns="_split")
+    spec = resolve(
+        {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 2},
+        frame,
+        {},
+    )
+    model = fit(frame, spec, validate_configuration({"family": "baseline"}, spec))
+    assert model.predict(frame.tail(1))["prediction"].tolist() == [frame["value"].iloc[-1]] * 2
+    with pytest.raises(ModelerError, match="prediction history"):
+        model.predict(frame.iloc[:0])
