@@ -1,0 +1,926 @@
+{
+  "measurement_protocol": "predictive-modeler/v2",
+  "description": "Frozen eight-run autonomous development pilot; historical measurements are not recomputed with later verifiers. Wallet decrease is aggregate observed account activity, not itemized run billing.",
+  "starting_balance": 95.589721,
+  "ending_balance": 93.959909,
+  "observed_spend": 1.629812,
+  "records": [
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 0,
+      "design": "baseline",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "6d3e7b21-9791-45e6-bfbd-45c046b5fbf3",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "e8e9959f904259843b269035db3d06abd965a0c9b9205a8a634b0fa9ab7d931c",
+      "specification_hash": "6274fc8e7a608bf7bf046eb9660639d17fcd2f2d9e1742b1f248728456fbe6ee",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "ad18c5f6cd6d2a47c6d872519fd2e373e8c91f1184a75869b1323f3e557d42eb",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.9828560296123126,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5884.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5884.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 6.3387485570000095,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "a3bd69a3a2064fecc772b6ecf882aece9e10fd273a4cc8bb360552e0f781da3f",
+        "model": "be7a86e1aa05449ca63c1c82b3d4f384c478e8b111ddc40af6d0d558df896455",
+        "report": "e231cf6ebc57db4eebebf25021069a9523d7f3520d6667cf1aa0b383434e6877",
+        "resolved_contract": "264212818591dd8bdc2902b22fe5c04f386cefc53b5b6b61bfa4f7b119ad77f6",
+        "review": "0128aa6f80b89c203f7835d8d27ccb69c13e65b49d3d4bcc289bdbc5972efb0f",
+        "splits": "0a7d6ea1ad06c86132d16beb487397ae00f58f1344b6ce5677504153689ff4db",
+        "trials": "beb3c3aebb404f489f4dbcbc151f7c0bbf71c2e8d9d0535e1a204d370210cf98"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 213.1863763332367,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict penguin species (multiclass) from island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, and sex using a random split; maximize macro F1 subject to a complete fitted model size of at most 5,000,000 bytes and at most six raw input columns. Prediction is for the held-out random test observations under the frozen contract.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 5000000.0
+            },
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 6.0
+            }
+          ],
+          "objective": {
+            "direction": "maximize",
+            "metric": "f1",
+            "parameters": {
+              "average": "macro"
+            }
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "scale": true,
+        "regularization": 0.3,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 95.413723
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 0,
+      "design": "complexity-aware",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "bb73aeb9-e090-4025-86b8-4bf897d354f3",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "e8e9959f904259843b269035db3d06abd965a0c9b9205a8a634b0fa9ab7d931c",
+      "specification_hash": "6274fc8e7a608bf7bf046eb9660639d17fcd2f2d9e1742b1f248728456fbe6ee",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "e31de5f44c1fb6f04844527c23837046ca7c37cb2d88c2c20d234662af7a06a9",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.9828560296123126,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5868.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5868.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 6.813080368000001,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "799de3bf4db6281fbfaba797a608b5ee8781ba8cc98bf59a21b23b46fedd6e1d",
+        "model": "f10d0db2b8f867870d407bb12430b3523d57c442d46cc2a8ac2e4c869c6306cb",
+        "report": "fcdd21c5ad55019adc0bf4bd65baab597bce37535de5e7bf4ba7cd2bf98eb86e",
+        "resolved_contract": "264212818591dd8bdc2902b22fe5c04f386cefc53b5b6b61bfa4f7b119ad77f6",
+        "review": "c2a8887903981046779bb112a28d56592a19764d73422227c190aa7a80ca7862",
+        "splits": "0a7d6ea1ad06c86132d16beb487397ae00f58f1344b6ce5677504153689ff4db",
+        "trials": "cd619776e444aea57beaf23f63134c85fd4ea8b8b0de1a888e4691ce1804d22e"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 223.42344570159912,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the multiclass target species from the six specified columns (island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, sex) using a random split; maximize macro F1, with the full fitted model no larger than 5,000,000 bytes and no more than six raw input columns.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 5000000.0
+            },
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 6.0
+            }
+          ],
+          "objective": {
+            "direction": "maximize",
+            "metric": "f1",
+            "parameters": {
+              "average": "macro"
+            }
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 0.1,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 95.187397
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 0,
+      "design": "baseline",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "4625db21-665c-47ac-86b7-aaba9cbfc2cc",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "a35ceaf1ce67e9711b9660cb604c7394ad6c6b4a10ef7f2210ee5c22131693a5",
+      "specification_hash": "e5374974e7dd2b6f6f9143bc8326266f568fd8a15ff020a4aa9dcd99c5e50d43",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "ad18c5f6cd6d2a47c6d872519fd2e373e8c91f1184a75869b1323f3e557d42eb",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.4672828753586065,
+          "model_bytes:{}": 3927.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 3.050098369412146,
+          "model_bytes:{}": 3927.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 5.246643788,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "4f860f30a12f5d403fc44b6c2905391947cbba2a24db6da06ca501606845976a",
+        "model": "71f6bba85c35d4306cf7ce514eb3023b7949e281c83b24b150c43c6e30f92be9",
+        "report": "4f0c1bd06d17e4926e1d0082b8925ee252fd59d19ada062b59386a4fe4ad6532",
+        "resolved_contract": "16c29450094ab7f0c550278ebfe1c991520cefc6b9801fb9c325fa340f12ede0",
+        "review": "97cbead79ee071cd53649ee2f87e6819d0450437d3932dbdedcd5bf5c859e48e",
+        "splits": "02a59532fc60959623c0e9978cba1aeefc9fc709a3a1274c889d4fb4e50bd000",
+        "trials": "1b8a77054c82c0f4fa43ad84ac500301449ad1768d83f93bec4573ae20f31083"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 207.08448767662048,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the regression target mpg using only cylinders, displacement, horsepower, weight, acceleration, model_year, and origin. Use a random split for evaluation. Optimize for the smallest complete fitted model in bytes subject to validation MAE <= 5 mpg; predictions are made from the listed columns.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "mae",
+              "operator": "<=",
+              "value": 5.0
+            }
+          ],
+          "objective": {
+            "direction": "minimize",
+            "metric": "model_bytes"
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "weight",
+          "horsepower",
+          "model_year"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 94.938163
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 0,
+      "design": "complexity-aware",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "166c24dc-77cb-4e77-af66-7cafbd9fc3f5",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "a35ceaf1ce67e9711b9660cb604c7394ad6c6b4a10ef7f2210ee5c22131693a5",
+      "specification_hash": "e5374974e7dd2b6f6f9143bc8326266f568fd8a15ff020a4aa9dcd99c5e50d43",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "e31de5f44c1fb6f04844527c23837046ca7c37cb2d88c2c20d234662af7a06a9",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.33009980556563,
+          "model_bytes:{}": 5111.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "mae:{}": 2.9435980587495303,
+          "model_bytes:{}": 5111.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 6.828070091999997,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "22f0dbee9c5862a698ead2a73eb1443526b497642e4258985bdce5ca594106bd",
+        "model": "3f7a921e407fdfe1821ed65375d8b563a88892056b25ad965e8ad5f32f0cdcd6",
+        "report": "7db90ea2f62dac7c8f5ee5d981ad68cdcb705f1f9c0ef811163cd7cb7bb77460",
+        "resolved_contract": "16c29450094ab7f0c550278ebfe1c991520cefc6b9801fb9c325fa340f12ede0",
+        "review": "40867ee19630651081ce501581a1dff2f520b4ead42f65d53f5915757759a5b3",
+        "splits": "02a59532fc60959623c0e9978cba1aeefc9fc709a3a1274c889d4fb4e50bd000",
+        "trials": "468a48d08366e09384a53389ae89de26038a4edefae20fb2f9f6bf01dce3bc66"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 191.56720638275146,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the continuous target mpg using only cylinders, displacement, horsepower, weight, acceleration, model_year, and origin. Use a random train/validation/test split. Optimize for the smallest complete fitted model in bytes, subject to validation MAE at most 5 mpg.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "mae",
+              "operator": "<=",
+              "value": 5.0
+            }
+          ],
+          "objective": {
+            "direction": "minimize",
+            "metric": "model_bytes"
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "cylinders",
+          "displacement",
+          "horsepower",
+          "weight",
+          "acceleration",
+          "model_year",
+          "origin"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 94.757346
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 1,
+      "design": "complexity-aware",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "895991ac-bcca-42ec-aafd-673e2683a82b",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "e8e9959f904259843b269035db3d06abd965a0c9b9205a8a634b0fa9ab7d931c",
+      "specification_hash": "6274fc8e7a608bf7bf046eb9660639d17fcd2f2d9e1742b1f248728456fbe6ee",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "e31de5f44c1fb6f04844527c23837046ca7c37cb2d88c2c20d234662af7a06a9",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.9828560296123126,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5884.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5884.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 6.862214404000014,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "a3bd69a3a2064fecc772b6ecf882aece9e10fd273a4cc8bb360552e0f781da3f",
+        "model": "bc28654959c2077fc5345bfa587245b701658fc2e313285ebe1fe36f4c8dc2ef",
+        "report": "f94567f488465761c270177c5564f71ab8a8f60981c0114bccd55809ed2e1e54",
+        "resolved_contract": "264212818591dd8bdc2902b22fe5c04f386cefc53b5b6b61bfa4f7b119ad77f6",
+        "review": "65ed3d73af05f732974a3aa5b20cbcd5326db1729be3d8ad8024a5807d11cbe0",
+        "splits": "0a7d6ea1ad06c86132d16beb487397ae00f58f1344b6ce5677504153689ff4db",
+        "trials": "b0c7e3826d4fde79c37efd82dd65dddd2a1f5bfef43c025d1f205b25dfa544f4"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 193.76221537590027,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the multiclass species label from island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, and sex using a random split; maximize macro F1, while requiring the complete fitted model to be no larger than 5,000,000 bytes and using no more than six raw input columns. Predictions are made for the held-out random validation/test observations under the frozen split.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 5000000.0
+            },
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 6.0
+            }
+          ],
+          "objective": {
+            "direction": "maximize",
+            "metric": "f1",
+            "parameters": {
+              "average": "macro"
+            }
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": "balanced",
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 94.523423
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 1,
+      "design": "baseline",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "227d0995-d8bc-4765-9afa-97e56199ddad",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "e8e9959f904259843b269035db3d06abd965a0c9b9205a8a634b0fa9ab7d931c",
+      "specification_hash": "6274fc8e7a608bf7bf046eb9660639d17fcd2f2d9e1742b1f248728456fbe6ee",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "ad18c5f6cd6d2a47c6d872519fd2e373e8c91f1184a75869b1323f3e557d42eb",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5868.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5868.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 5.431497791000005,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "cfe6eb0b87d883af826978dca3d337375334a60f57341d8aed3ebfd6563b3400",
+        "model": "dd706a1ca912f82559032480e7234d2d88f0a13748c1917bcaf6a965341a54c0",
+        "report": "51b9dee8b854a73bb3d1d8ba762ab3df52aa025b2b13397b34b628a5d6a5cf38",
+        "resolved_contract": "264212818591dd8bdc2902b22fe5c04f386cefc53b5b6b61bfa4f7b119ad77f6",
+        "review": "a4c9e6f966320bc78e181ced14e4d77d3a0772616de28e3874fb0f07637f044b",
+        "splits": "0a7d6ea1ad06c86132d16beb487397ae00f58f1344b6ce5677504153689ff4db",
+        "trials": "d756a46006174b2605d976763063cb2e8628578135762e057ec2ce6818cca838"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 191.37483263015747,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the penguins dataset's species (multiclass) using only island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, and sex, with a random split; optimize macro-averaged F1 and require the complete fitted model to be at most 5,000,000 bytes and at most six raw input columns. Prediction is for held-out random-split observations.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 5000000.0
+            },
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 6.0
+            }
+          ],
+          "objective": {
+            "direction": "maximize",
+            "metric": "f1",
+            "parameters": {
+              "average": "macro"
+            }
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 94.342608
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 1,
+      "design": "complexity-aware",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "e9abe2c4-479b-4725-a5cc-edbc7a1ab76a",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "a35ceaf1ce67e9711b9660cb604c7394ad6c6b4a10ef7f2210ee5c22131693a5",
+      "specification_hash": "e5374974e7dd2b6f6f9143bc8326266f568fd8a15ff020a4aa9dcd99c5e50d43",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "e31de5f44c1fb6f04844527c23837046ca7c37cb2d88c2c20d234662af7a06a9",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.4672828753586016,
+          "model_bytes:{}": 3927.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 3.0500983694121437,
+          "model_bytes:{}": 3927.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 6.661925958999994,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "e84bb37c9dc016a706174a0368f09a5564293ffa07bb9e216f418360b57acce0",
+        "model": "54511c5fb76782760d54068d428d0a685bc22065cd51979285ac6ad026833ac6",
+        "report": "d84223aa7ec749b06bc9f585ba709aa84a9a7c22c20d9ab88b6c49f3a19656fc",
+        "resolved_contract": "16c29450094ab7f0c550278ebfe1c991520cefc6b9801fb9c325fa340f12ede0",
+        "review": "93b7bbdd02608df34c58caf65e0e0f3b83e86229850d4076223c6a61282394d9",
+        "splits": "02a59532fc60959623c0e9978cba1aeefc9fc709a3a1274c889d4fb4e50bd000",
+        "trials": "436ae02420aaa872da8c6e16a9c0442ee0698541de1baf1ff30d3d4b43d12809"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 187.61079692840576,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the mpg regression target from cylinders, displacement, horsepower, weight, acceleration, model_year, and origin, using a random split. Optimize for the smallest complete fitted model size in bytes while requiring validation MAE <= 5 mpg.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "mae",
+              "operator": "<=",
+              "value": 5.0
+            }
+          ],
+          "objective": {
+            "direction": "minimize",
+            "metric": "model_bytes"
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "weight",
+          "model_year",
+          "horsepower"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 94.139988
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 1,
+      "design": "baseline",
+      "mode": "autonomous-cloud-agent",
+      "run_id": "5823c084-7eb0-4064-ab83-10fd817dfd32",
+      "service_status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "status": "succeeded",
+      "diagnostic": null,
+      "retrieval_errors": [],
+      "request_hash": "a35ceaf1ce67e9711b9660cb604c7394ad6c6b4a10ef7f2210ee5c22131693a5",
+      "specification_hash": "e5374974e7dd2b6f6f9143bc8326266f568fd8a15ff020a4aa9dcd99c5e50d43",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "protocol": "predictive-modeler/v2",
+      "source_hash": "ad18c5f6cd6d2a47c6d872519fd2e373e8c91f1184a75869b1323f3e557d42eb",
+      "verifier_hash": "76de77500638d8961949a721c27ec3bafeaa9dd38b366395ec83afc97814938c",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.471256312853133,
+          "model_bytes:{}": 3638.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 3.0568868552794313,
+          "model_bytes:{}": 3638.0
+        }
+      },
+      "trial_count": 3,
+      "training_seconds": 14.266966793000002,
+      "monetary_cost": null,
+      "artifacts": {
+        "evaluation": "f16404259a4d063750535d645d688a349901977c75e4a045044cc8a2d4b6f06b",
+        "model": "2a330bf996a721a3ee0214ff6e585345d927425db267180a7428d7c1f175f00d",
+        "report": "8d223a6e4d4a573e660a0eb413216cbc58538628c41904eea374d5533cc76869",
+        "resolved_contract": "16c29450094ab7f0c550278ebfe1c991520cefc6b9801fb9c325fa340f12ede0",
+        "review": "92bb73f1e671fa5d798d10a22d11d1d2143de6b4a9d27058f1d696a564bb8a3b",
+        "splits": "02a59532fc60959623c0e9978cba1aeefc9fc709a3a1274c889d4fb4e50bd000",
+        "trials": "b90cba1aa8a9ba3ccd0e96b94c2d1d7cebac2f61827e41493f9e24f4a0e111d9"
+      },
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "cli_log_write_span_seconds": 209.71770763397217,
+      "receipt_matches_public_output": true,
+      "review": {
+        "conflicts": [],
+        "questions": [],
+        "status": "aligned",
+        "summary": "Predict the mpg regression target from cylinders, displacement, horsepower, weight, acceleration, model_year, and origin using a random split. Optimize for the smallest complete fitted model size in bytes while requiring validation MAE <= 5 mpg; prediction is for held-out random-split observations.",
+        "task_quality": {
+          "constraints": [
+            {
+              "metric": "mae",
+              "operator": "<=",
+              "value": 5.0
+            }
+          ],
+          "objective": {
+            "direction": "minimize",
+            "metric": "model_bytes"
+          }
+        }
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "cylinders",
+          "displacement",
+          "horsepower",
+          "weight",
+          "model_year"
+        ],
+        "scale": false,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "balance_after": 93.959909
+    }
+  ]
+}

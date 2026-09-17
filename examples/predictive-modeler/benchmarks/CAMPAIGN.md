@@ -39,7 +39,7 @@ This creates two applications, two public request files, and a private `plan.jso
 specifications and content hashes. It performs no cloud calls. Both prepared applications are
 packaging-tested: evaluator files are absent. Do not copy `plan.json` into either application.
 
-## Approved cloud pilot
+## Completed initial cloud pilot
 
 - Two public CSV tasks: Penguins macro-F1 with size/input constraints; MPG minimum model bytes
   with MAE at most 5 mpg. Requirements are frozen in `cases.json` before launch.
@@ -50,7 +50,8 @@ packaging-tested: evaluator files are absent. Do not copy `plan.json` into eithe
   Record the actual resolved model/version for each run; refuse comparisons if these differ.
 - Execute serially, alternating design order between repeats. This avoids overlapping costs
   and makes failures easier to diagnose; independent runs could be parallelized in a larger batch.
-- User-approved spending allowance: **$5**, no top-ups. Check balance before admission and after
+- Initial user-approved spending allowance: **$5**, subsequently expanded to **$50 total**
+  for the design campaign, including this pilot, with no top-ups. Check balance before admission and after
   each terminal run; stop starting work before the remaining allowance cannot reasonably cover
   another run. Balance deltas can include other account activity and are not itemized invoices.
 - Stop early on repeated infrastructure failure, retrieve all available evidence, and do not
@@ -62,6 +63,41 @@ identity, elapsed time, and available cost evidence. Download artifacts promptly
 public output exactly to `receipt.json`. Independently assess trusted accepted bundles using
 `assessment.assess(case, downloaded_directory, original_dataframe)` under the same dependencies.
 The local CLI does not automatically orchestrate this paid batch.
+
+## Initial pilot outcome and current comparison
+
+All eight v2 autonomous runs completed, their public outputs exactly matched the receipts,
+and independent model/artifact audits passed. All four paired comparisons were comparable.
+The [immutable records](cloud-pilot-results.json) retain run IDs, hashes, measurements and costs.
+
+| Task | Repeat | Baseline objective | Appendix objective |
+| --- | --- | ---: | ---: |
+| Penguins: maximize validation macro F1 | 1 | 1.0 | 1.0 |
+| Penguins | 2 | 1.0 | 1.0 |
+| MPG: minimize model bytes | 1 | 3927 | 5111 |
+| MPG | 2 | 3638 | 3927 |
+
+All MPG final MAEs passed the unchanged limit of 5. Every run used three trials. The appendix
+lost both size comparisons and saved no trials, so it is not selected. Observed wallet decrease
+was $1.629812. These two development datasets do not establish general convergence.
+
+The next frozen v3 comparison replaces mandatory family diversity with objective-directed
+experiments and permits stopping when a feasible validation objective reaches its mathematical
+bound. Duplicate configuration lists are removed. Both designs share the parsed-chronology fix
+and clarified baseline/tie tool descriptions. There are no new runtime tools or dependencies.
+
+The batch has 32 attempts: two designs, two repeats, and eight real datasets. It repeats
+Penguins and MPG and adds diagnostic breast-cancer classification, multiclass glass,
+house-price regression, music-emotion multilabel classification, airline-passenger forecasting,
+and a five-series stock-price panel. Four independent cloud jobs run at once, each using
+`gpt-5.6-luna`, one CPU, 2 GiB and three trials. New cases allow 120 training seconds; the two
+pilot tasks retain 60 seconds. Within every paired comparison the resources are identical.
+The total campaign allowance is $50, including the initial pilot, with no top-ups.
+
+Six additional source families are reserved for final evaluation after selecting a frozen design.
+The [validation requests](validation-cases.json) are frozen before their cloud outcomes.
+The final collection preflight checks only source bytes, schemas, contract validity and split validity; no
+models have been fitted. Keep those outcomes separate from development and validation choices.
 
 ## Decision rules
 
@@ -84,7 +120,7 @@ re-running both baseline and contender; retain older outcomes separately.
 ## Expansion before a generalization claim
 
 [Dataset candidates](DATASET-CANDIDATES.md) records sourced proposals and conversion risks for
-all six modalities. These are not populated or evaluated holdout collections.
+all six modalities. These source proposals informed the frozen validation requests and reserved final collection.
 
 1. Freeze at least two additional real datasets per modality as development cases, varying
    imbalance, categorical/text inputs, missingness, series length/seasonality and panel structure.
@@ -94,7 +130,8 @@ all six modalities. These are not populated or evaluated holdout collections.
    missed contradictions. Paraphrases do not increase the independent dataset count.
 3. Reserve separate validation datasets for scheduled checkpoints and a sealed final collection
    covering all six modalities. Dataset selection and task ground truth precede agent outcomes.
-   None of these held-out collections is populated or claimed complete by the current pilot.
+   The final collection remains unfitted during design comparison; metadata preflight is not
+   performance evaluation.
 4. Compare specific hypotheses (profiling, experiment allocation, constraint diagnosis) with
    equal resources and repeated paired runs. Inspect failures and resolve contradictory evidence
    before changing designs. A repaired example alone is not generalization evidence.
