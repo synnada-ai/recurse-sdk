@@ -28,3 +28,4 @@ python_version = "3.14"
 strict = true
 warn_unreachable = true
 ignore_missing_imports = true
+untyped_calls_exclude = ["torch"]

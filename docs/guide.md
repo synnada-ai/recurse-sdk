@@ -582,21 +582,23 @@ add `--no-open` to print the hosted URL. `redeem` applies a Recurse-issued credi
 
 ## Tiny Tuner walkthrough
 
-`examples/tiny-tuner` is a complete application that tunes a tiny classifier over a
-deterministic synthetic dataset:
+`examples/tiny-tuner` searches for the smallest neural network by trainable parameter count
+meeting a target MNIST mean cross-validation accuracy. Defaults are 0.95 accuracy, three folds
+over the 60,000 training examples, and a 300-second cooperative wall-clock search allowance.
 
-1. `extract_features` expands the dataset with a chosen polynomial degree, optional
-   interaction feature, and optional standardization. The classes are only separable
-   when the interaction feature is present, so feature choice genuinely matters.
-2. `train_model` fits a logistic classifier with seeded initialization and the
-   momentum declared by the `optimizer_momentum` run input.
-3. `validate_model` measures each candidate's F1 on the validation split and appends
-   it to the accumulated history.
-4. `save_best_model` writes the best validated model to `best-model.json` in the run
-   workspace.
+1. `design_network` proposes an MLP, CNN, depthwise-separable CNN, or small patch-attention
+   recipe, with supported normalization, activation, pooling and training choices.
+2. `evaluate_network` trains fresh models for the fixed folds, measures held-out accuracy,
+   counts parameters, and records trials and fold checkpoints. Incomplete trials cannot qualify.
+3. `finish_search` selects the smallest qualifying measured network, saves its last-fold
+   checkpoint and metadata, and returns an authoritative receipt. If none qualifies, it
+   reports that explicitly and retains the most accurate completed diagnostic when available.
 
-The agent runs measure-and-revise loops until a candidate reaches `target_f1` or
-`max_trials` is exhausted, then saves the winner. Build it yourself:
+Reaching the accuracy target does not end the search: the agent continues trying smaller
+networks until time/trials run out or it judges diminishing returns. The official test split is
+not used for selection, and the saved weights are not a full-data refit. See the
+[example README](../examples/tiny-tuner/README.md) for block definitions, artifact semantics,
+CV selection bias, and deadline limitations. Build it yourself:
 
 ```python
 import recurse

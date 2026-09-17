@@ -2,8 +2,8 @@ apiVersion: recurse.run/v1alpha1
 kind: Agent
 metadata:
   name: tiny-tuner
-  title: Tiny Model Tuner
-  summary: Tunes a tiny classifier across feature and training configurations.
+  title: Tiny MNIST Network Search
+  summary: Finds smaller neural networks meeting a target MNIST cross-validation accuracy.
 runtime:
   python: "3.14"
   lockfile: uv.lock
@@ -12,52 +12,85 @@ agent:
 inputs:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object
-  required: [target_f1, max_trials]
   properties:
-    target_f1:
+    target_accuracy:
       type: number
       minimum: 0
       maximum: 1
-      description: Validation F1 score that ends the search once reached.
+      default: 0.95
+      description: Required arithmetic mean of fixed stratified fold accuracies.
+    max_seconds:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 600
+      default: 300
+      description: Shared wall-clock allowance starting with the first evaluation.
     max_trials:
       type: integer
       minimum: 1
-      description: Maximum number of distinct trials to run.
-    optimizer_momentum:
-      type: number
+      maximum: 100
+      default: 30
+      description: Additional cap on attempted recipes, including failures and timeouts.
+    max_epochs:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      description: Maximum training epochs per fold of a candidate.
+    cv_folds:
+      type: integer
+      minimum: 2
+      maximum: 5
+      default: 3
+      description: Fixed stratified folds within MNIST's official training split.
+    samples:
+      type: integer
+      minimum: 100
+      maximum: 60000
+      multipleOf: 10
+      default: 60000
+      description: Training examples used for CV; smaller values are balanced subset experiments.
+    seed:
+      type: integer
       minimum: 0
-      maximum: 1
-      default: 0.8
-      description: Momentum applied by the training optimizer.
+      maximum: 2147483647
+      default: 7
+      description: Fixed split and initialization seed shared by every candidate.
     task:
       type: string
       default: |
-        Search the multidimensional configuration space for a model with validation F1 >=
-        {{ input.target_f1 }}. Run no more than {{ input.max_trials }} distinct trials. Compare
-        every candidate with the accumulated validated models, revise your theory after each
-        validation, and save the best model when you finish.
+        Find the smallest network by trainable parameter count with mean MNIST CV accuracy
+        >= {{ input.target_accuracy }}. Search for up to {{ input.max_seconds }} seconds,
+        at most {{ input.max_trials }} recipes, and at most {{ input.max_epochs }} epochs per fold.
+        Every recipe uses the same {{ input.cv_folds }} folds, {{ input.samples }} examples,
+        and seed {{ input.seed }}. Keep shrinking after reaching the target.
   additionalProperties: false
 outputs:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object
-  required: [best_f1, target_reached]
+  required: [target_reached, cv_accuracy, parameter_count, trials_attempted, stop_reason]
   properties:
-    best_f1:
-      type: number
-      minimum: 0
-      maximum: 1
-      description: Highest validation F1 measured during the run.
     target_reached:
       type: boolean
-      description: Whether the best validation F1 met the requested target.
+    cv_accuracy:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+    parameter_count:
+      type: [integer, "null"]
+      minimum: 1
+    trials_attempted:
+      type: integer
+      minimum: 1
+    stop_reason:
+      enum: [wall_clock, trial_budget, diminishing_returns]
   additionalProperties: false
 tools:
   source: tools.py
   built_in: true
   register:
-    extract_features: ~
-    train_model:
+    design_network: ~
+    evaluate_network:
       volatile: true
-    validate_model: ~
-    save_best_model:
+    finish_search:
       storable: false
