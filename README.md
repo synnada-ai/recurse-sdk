@@ -46,6 +46,7 @@ module, and a uv lockfile. See the runnable examples and
 [authoring and deployment guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md):
 
 - [examples/tiny-tuner](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/tiny-tuner) — tune a classifier against held-out validation F1.
+- [examples/predictive-modeler](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/predictive-modeler) — train classification, regression, and forecasting pipelines against task-specific quality constraints.
 - [examples/rna-fold-lab](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/rna-fold-lab) — design RNA sequences against an independent forward-fold oracle.
 - [examples/backpack-3d](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/backpack-3d) — write, render, visually critique, and revise a 3D
   backpack using Astra and complete Python modeling programs.

@@ -1,0 +1,18 @@
+{
+  "dataset": "example:dry-bean",
+  "task": "Predict Class (one of seven bean varieties) from all 16 measured features. Maximize macro F1.",
+  "quality": {
+    "objective": {
+      "metric": "f1",
+      "direction": "maximize",
+      "parameters": {
+        "average": "macro"
+      }
+    },
+    "constraints": []
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}

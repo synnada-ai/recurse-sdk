@@ -1,0 +1,175 @@
+apiVersion: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: predictive-modeler
+  title: Predictive Modeler
+  summary: Searches predictive pipelines for a dataset and task, subject to measured
+    quality constraints.
+runtime:
+  python: '3.14'
+  lockfile: uv.lock
+agent:
+  prompt: prompt.md
+inputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required:
+  - dataset
+  - task
+  additionalProperties: false
+  properties:
+    dataset:
+      type: string
+      minLength: 1
+      description: 'HTTPS CSV/Parquet URI or documented example: handle.'
+    task:
+      type: string
+      minLength: 1
+      description: Prediction goal, targets, available features, and temporal/grouping
+        semantics. Checked against quality before training.
+    quality:
+      type: object
+      additionalProperties: false
+      properties:
+        objective:
+          type: object
+          required:
+          - metric
+          - direction
+          properties:
+            metric: &id001
+              type: string
+              enum:
+              - precision
+              - recall
+              - f1
+              - accuracy
+              - mae
+              - rmse
+              - mase
+              - absolute_bias
+              - model_bytes
+              - input_feature_count
+            parameters: &id002
+              type: object
+              additionalProperties: true
+            direction:
+              enum:
+              - minimize
+              - maximize
+          additionalProperties: false
+        constraints:
+          type: array
+          items:
+            type: object
+            required:
+            - metric
+            - operator
+            - value
+            properties:
+              metric: *id001
+              parameters: *id002
+              operator:
+                enum:
+                - '>='
+                - <=
+              value:
+                type: number
+            additionalProperties: false
+    budget:
+      type: object
+      additionalProperties: false
+      properties:
+        max_trials:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        max_training_seconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          default: 600
+outputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required:
+  - status
+  - stop_reason
+  - summary
+  - questions
+  - conflicts
+  - artifacts
+  properties:
+    status:
+      enum:
+      - succeeded
+      - no_feasible_model
+      - needs_clarification
+      - inconsistent_inputs
+      - unsupported_task
+      - tool_error
+    stop_reason:
+      enum:
+      - budget_exhausted
+      - diminishing_returns
+      - needs_clarification
+      - inconsistent_inputs
+      - unsupported_task
+      - tool_error
+    summary:
+      type: string
+    questions:
+      type: array
+      items:
+        type: string
+    conflicts:
+      type: array
+      items:
+        type: string
+    artifacts:
+      type: object
+      additionalProperties: false
+      properties:
+        model:
+          type: string
+          minLength: 1
+        report:
+          type: string
+          minLength: 1
+        review:
+          type: string
+          minLength: 1
+        trials:
+          type: string
+          minLength: 1
+        resolved_contract:
+          type: string
+          minLength: 1
+        evaluation:
+          type: string
+          minLength: 1
+        splits:
+          type: string
+          minLength: 1
+tools:
+  source: tools.py
+  built_in: true
+  register:
+    get_request: null
+    review_inputs:
+      no_storage:
+      - task_quality
+      - conflicts
+      - questions
+    inspect_dataset: null
+    resolve_problem:
+      no_storage:
+      - specification
+    train_candidate:
+      no_storage:
+      - configuration
+    evaluate_candidate: null
+    experiment_history: null
+    finish_run: null

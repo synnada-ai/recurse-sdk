@@ -1,5 +1,6 @@
 """Protect the hosted SDK quality gate."""
 
+import tomllib
 from pathlib import Path
 
 import yaml
@@ -33,3 +34,11 @@ def test_ci_runs_the_locked_sdk_quality_and_build_gates() -> None:
     assert hooks[0]["hooks"][0]["entry"] == "./check.sh"
     assert hooks[0]["hooks"][0]["pass_filenames"] is False
     assert hooks[0]["hooks"][0]["always_run"] is True
+
+
+def test_tiny_tuner_remains_in_coverage_and_type_checks() -> None:
+    """Adding a separately checked example must not drop Tiny Tuner's quality gates."""
+    configuration = tomllib.loads((REPOSITORY / "pyproject.toml").read_text())
+    assert "examples/tiny-tuner" in configuration["tool"]["coverage"]["run"]["source"]
+    assert "examples" in configuration["tool"]["mypy"]["files"]
+    assert "^examples/tiny-tuner/" not in configuration["tool"]["mypy"]["exclude"]

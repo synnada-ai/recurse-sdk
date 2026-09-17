@@ -1,0 +1,130 @@
+{
+  "binary": {
+    "kind": "binary",
+    "targets": [
+      "y"
+    ],
+    "features": [
+      "age",
+      "job",
+      "marital",
+      "education",
+      "default",
+      "housing",
+      "loan",
+      "contact",
+      "month",
+      "day_of_week",
+      "campaign",
+      "pdays",
+      "previous",
+      "poutcome",
+      "emp.var.rate",
+      "cons.price.idx",
+      "cons.conf.idx",
+      "euribor3m",
+      "nr.employed"
+    ]
+  },
+  "multiclass": {
+    "kind": "multiclass",
+    "targets": [
+      "Class"
+    ],
+    "features": [
+      "Area",
+      "Perimeter",
+      "MajorAxisLength",
+      "MinorAxisLength",
+      "AspectRation",
+      "Eccentricity",
+      "ConvexArea",
+      "EquivDiameter",
+      "Extent",
+      "Solidity",
+      "roundness",
+      "Compactness",
+      "ShapeFactor1",
+      "ShapeFactor2",
+      "ShapeFactor3",
+      "ShapeFactor4"
+    ]
+  },
+  "multilabel": {
+    "kind": "multilabel",
+    "targets": [
+      "admiration",
+      "amusement",
+      "anger",
+      "annoyance",
+      "approval",
+      "caring",
+      "confusion",
+      "curiosity",
+      "desire",
+      "disappointment",
+      "disapproval",
+      "disgust",
+      "embarrassment",
+      "excitement",
+      "fear",
+      "gratitude",
+      "grief",
+      "joy",
+      "love",
+      "nervousness",
+      "optimism",
+      "pride",
+      "realization",
+      "relief",
+      "remorse",
+      "sadness",
+      "surprise",
+      "neutral"
+    ],
+    "features": [
+      "text"
+    ],
+    "text_features": [
+      "text"
+    ],
+    "split": "official"
+  },
+  "regression": {
+    "kind": "regression",
+    "targets": [
+      "strength"
+    ],
+    "features": [
+      "cement",
+      "slag",
+      "fly_ash",
+      "water",
+      "superplasticizer",
+      "coarse_aggregate",
+      "fine_aggregate",
+      "age"
+    ]
+  },
+  "forecast": {
+    "kind": "forecast",
+    "targets": [
+      "cnt"
+    ],
+    "features": [],
+    "time": "dteday",
+    "horizon": 14,
+    "frequency": "D"
+  },
+  "panel-forecast": {
+    "kind": "forecast",
+    "targets": [
+      "value"
+    ],
+    "features": [],
+    "group": "series",
+    "time": "date",
+    "horizon": 12,
+    "frequency": "MS"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "bank": {
+    "url": "https://archive.ics.uci.edu/static/public/222/bank+marketing.zip",
+    "sha256": "e0bf5f5de5b846e2f18e9d90606637267d46dfa260e0f17bb12e605db5efbeb4",
+    "bytes": 1023843
+  },
+  "beans": {
+    "url": "https://archive.ics.uci.edu/static/public/602/dry+bean+dataset.zip",
+    "sha256": "0a64eff5be87f48c3dbbfc0a12a56c5d5b5167ef8e61cd45d69b3e7c7130c06f",
+    "bytes": 4738776
+  },
+  "concrete": {
+    "url": "https://archive.ics.uci.edu/static/public/165/concrete+compressive+strength.zip",
+    "sha256": "dad85d14de8aee4e07479daa774e6b569a313715b71a3b92c95a07cf91c2c9a7",
+    "bytes": 34444
+  },
+  "bikes": {
+    "url": "https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip",
+    "sha256": "b70182d0d0508e9abbb79306ce5c0cec34869000f8220175ac83d11dbe845401",
+    "bytes": 279992
+  },
+  "tourism": {
+    "url": "https://zenodo.org/records/4656096/files/tourism_monthly_dataset.zip",
+    "sha256": "6e434ad8a0ef6acb55ebee0e1d1ffe22707ea4e62c05e091326267f3a5b4a93c",
+    "bytes": 199791
+  },
+  "emotions-train": {
+    "url": "https://raw.githubusercontent.com/google-research/google-research/2adf640a14f11025ae5a9d0ec493b78530d276d3/goemotions/data/train.tsv",
+    "sha256": "1c254a142be5c00e80d819b9ae1bbd36d94b2eeb8f4b1271846508d57e57d9c5",
+    "bytes": 3519053
+  },
+  "emotions-dev": {
+    "url": "https://raw.githubusercontent.com/google-research/google-research/2adf640a14f11025ae5a9d0ec493b78530d276d3/goemotions/data/dev.tsv",
+    "sha256": "575489c079c9de1097062a01738f998590d6b7ead66dd1c9fd1d2ba01fd8bc62",
+    "bytes": 439059
+  },
+  "emotions-test": {
+    "url": "https://raw.githubusercontent.com/google-research/google-research/2adf640a14f11025ae5a9d0ec493b78530d276d3/goemotions/data/test.tsv",
+    "sha256": "0587b2dd8b27b97352adbfc3fb083d46005c8946657fdc2b1ca8b1cc7f1f8be4",
+    "bytes": 436706
+  },
+  "emotions-labels": {
+    "url": "https://raw.githubusercontent.com/google-research/google-research/2adf640a14f11025ae5a9d0ec493b78530d276d3/goemotions/data/emotions.txt",
+    "sha256": "45c3ef86782d2a4d7fedcd6d8c111aa0d0e94720689bd164fac94fefb4495a89",
+    "bytes": 248
+  }
+}

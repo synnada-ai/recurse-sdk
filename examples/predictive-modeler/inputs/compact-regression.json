@@ -1,0 +1,21 @@
+{
+  "dataset": "example:concrete",
+  "task": "Predict concrete strength in MPa from the eight mixture and age features. Minimize the serialized model size in bytes, subject to MAE at most 10 MPa. Use all eight eligible inputs or subsets of them.",
+  "quality": {
+    "objective": {
+      "metric": "model_bytes",
+      "direction": "minimize"
+    },
+    "constraints": [
+      {
+        "metric": "mae",
+        "operator": "<=",
+        "value": 10
+      }
+    ]
+  },
+  "budget": {
+    "max_trials": 3,
+    "max_training_seconds": 120
+  }
+}
