@@ -254,6 +254,44 @@ def _folds(labels: Tensor, count: int, samples: int, seed: int) -> tuple[Tensor,
     return tuple(torch.cat(fold) for fold in folds)
 
 
+def _splits(labels: Tensor, settings: dict[str, Any]) -> tuple[tuple[Tensor, Tensor], ...]:
+    """Resolve repeatable train/validation partitions without changing the selected sample."""
+    method = settings["cv_method"]
+    count = settings["cv_folds"]
+    seed = settings["cv_seed"]
+    initial = _folds(labels, count, settings["samples"], seed)
+    selected = torch.cat(initial)
+    splits: list[tuple[Tensor, Tensor]] = []
+    for repeat in range(settings["cv_repeats"]):
+        generator = torch.Generator().manual_seed(seed + repeat)
+        if method == "stratified_holdout":
+            training_parts, validation_parts = [], []
+            for label in range(_CLASSES):
+                indices = selected[labels[selected] == label]
+                indices = indices[torch.randperm(len(indices), generator=generator)]
+                take = max(1, round(len(indices) * settings["validation_fraction"]))
+                validation_parts.append(indices[:take])
+                training_parts.append(indices[take:])
+            splits.append((torch.cat(training_parts), torch.cat(validation_parts)))
+            continue
+        if method == "kfold":
+            shuffled = selected[torch.randperm(len(selected), generator=generator)]
+            folds = tuple(shuffled.tensor_split(count))
+        elif repeat == 0:
+            folds = initial
+        else:
+            folds = tuple(
+                selected[fold]
+                for fold in _folds(labels[selected], count, _MNIST_TRAIN_SIZE, seed + repeat)
+            )
+        for index, validation in enumerate(folds):
+            training_indices = torch.cat(
+                [fold for other, fold in enumerate(folds) if other != index]
+            )
+            splits.append((training_indices, validation))
+    return tuple(splits)
+
+
 def _pixels(images: Tensor, indices: Tensor) -> Tensor:
     """Apply fixed scaling per minibatch without statistics from held-out examples."""
     return images[indices].unsqueeze(1).float().div_(255)
@@ -377,11 +415,10 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
         try:
             images, labels = _data()
             _remaining(deadline)
-            folds = _folds(labels, settings["cv_folds"], settings["samples"], settings["seed"])
+            splits = _splits(labels, dict(settings))
             scores = []
             parameter_count = 0
-            for index, validation in enumerate(folds):
-                training = torch.cat([fold for other, fold in enumerate(folds) if other != index])
+            for index, (training, validation) in enumerate(splits):
                 model = _train(
                     candidate, images, labels, training, settings["seed"] + index, deadline
                 )
@@ -398,7 +435,7 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
                 cv_std=math.sqrt(sum((score - mean) ** 2 for score in scores) / len(scores)),
                 target_reached=mean >= settings["target_accuracy"],
                 checkpoint=checkpoint,
-                checkpoint_fold=len(folds) - 1,
+                checkpoint_fold=len(splits) - 1,
                 training_examples=len(training),
             )
         except TimeoutError:
@@ -460,6 +497,7 @@ def finish_search(
                 {
                     **best,
                     "protocol": dict(context.inputs),
+                    "protocol_version": 2,
                     "torch_version": torch.__version__,
                     "note": (
                         "CV measures the recipe. Saved weights are from the last fold, "

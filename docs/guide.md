@@ -583,8 +583,9 @@ add `--no-open` to print the hosted URL. `redeem` applies a Recurse-issued credi
 ## Tiny Tuner walkthrough
 
 `examples/tiny-tuner` searches for the smallest neural network by trainable parameter count
-meeting a target MNIST mean cross-validation accuracy. Defaults are 0.95 accuracy, three folds
+meeting a target MNIST mean cross-validation accuracy. Defaults are 0.99 accuracy, three folds
 over the 60,000 training examples, and a 300-second cooperative wall-clock search allowance.
+CV method, fold count, repetitions, holdout fraction and split seed are configurable inputs.
 
 1. `design_network` proposes an MLP, CNN, depthwise-separable CNN, or small patch-attention
    recipe, with supported normalization, activation, pooling and training choices.

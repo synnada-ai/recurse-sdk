@@ -21,7 +21,9 @@ Independent designs may be prepared together; evaluation serializes to preserve 
 limits. Adapt epochs and architecture costs to the remaining time. There is no requirement to
 try every block family.
 
-The verifier trains a fresh model for every fixed stratified fold. It reports arithmetic mean
+The verifier trains a fresh model for every split of the caller-selected CV method.
+K-fold holds out each example once per repetition; stratified holdout can reuse validation
+examples across repetitions. The selected sample stays fixed across repetitions. It reports arithmetic mean
 accuracy and population standard deviation across folds. All candidates share the split,
 subset, initialization seeds, and preprocessing; you cannot change these during search.
 Never use official MNIST test data to choose recipes. CV is reused for adaptive selection, so

@@ -1,7 +1,7 @@
 # Tiny Tuner
 
 Tiny Tuner searches for the **smallest neural network by trainable parameter count** that
-reaches a target mean cross-validation accuracy on MNIST. Defaults are **0.95 accuracy**,
+reaches a target mean cross-validation accuracy on MNIST. Defaults are **0.99 accuracy**,
 **300 seconds**, and three stratified folds over all 60,000 official training examples.
 It keeps shrinking after it reaches the accuracy target and preserves the smallest qualifying
 recipe it actually measured. It reports the smallest **found**, not a proven global minimum.
@@ -73,7 +73,7 @@ recurse run examples/tiny-tuner
 Or create `inputs.json` with overrides:
 
 ```json
-{"target_accuracy": 0.95, "max_seconds": 300, "max_trials": 30, "cv_folds": 3, "samples": 60000, "seed": 7}
+{"target_accuracy": 0.99, "max_seconds": 300, "max_trials": 30, "cv_folds": 3, "samples": 60000, "seed": 7}
 ```
 
 ```sh
@@ -84,7 +84,27 @@ recurse deploy examples/tiny-tuner --as mcp --cpu 1 --memory-mib 2048
 The first evaluation downloads MNIST using torchvision's checked dataset cache in the temporary
 directory. Network access is required for an uncached run. PyTorch and torchvision are isolated
 example dependencies; Linux uses CPU wheels. Five minutes is a search allowance, not a promise
-that any particular architecture will reach 95% on a given machine.
+that any particular architecture will reach 99% on a given machine.
+
+## Configuring cross-validation
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `cv_method` | `stratified_kfold` | `stratified_kfold`, shuffled ordinary `kfold`, or `stratified_holdout` |
+| `cv_folds` | `3` | Folds per repetition for either K-fold method |
+| `cv_repeats` | `1` | Repetitions using successive split seeds, keeping the same selected examples |
+| `validation_fraction` | `0.2` | Per-class validation fraction for holdout; ignored for K-fold |
+| `cv_seed` | `7` | Sample selection and split seed; independent of model training seed |
+| `seed` | `7` | Model initialization and minibatch seed |
+| `samples` | `60000` | Fixed cohort of examples used by the protocol |
+
+Each K-fold repetition holds out every selected observation exactly once. Holdout repetitions
+may overlap validation observations; they do not cover each observation exactly once. The
+metric remains the arithmetic mean of all split accuracies. Batch-normalization statistics
+are always fit on training observations only. Protocol version 2 records these settings in
+model metadata; its default partitions reproduce the original baseline. Compare agent designs
+only with identical resolved evaluation settings, and keep experiments under alternative CV
+methods separate from the primary ranking. No method uses the official MNIST test split.
 
 ## Result and artifacts
 

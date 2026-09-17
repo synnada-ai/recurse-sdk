@@ -17,7 +17,7 @@ inputs:
       type: number
       minimum: 0
       maximum: 1
-      default: 0.95
+      default: 0.99
       description: Required arithmetic mean of fixed stratified fold accuracies.
     max_seconds:
       type: number
@@ -43,6 +43,29 @@ inputs:
       maximum: 5
       default: 3
       description: Fixed stratified folds within MNIST's official training split.
+    cv_method:
+      type: string
+      enum: [stratified_kfold, kfold, stratified_holdout]
+      default: stratified_kfold
+      description: Evaluation method, fixed for the entire run.
+    cv_repeats:
+      type: integer
+      minimum: 1
+      maximum: 5
+      default: 1
+      description: Independent deterministic split repetitions on the same selected examples.
+    validation_fraction:
+      type: number
+      minimum: 0.05
+      maximum: 0.5
+      default: 0.2
+      description: Per-class validation fraction for stratified_holdout; ignored for K-fold.
+    cv_seed:
+      type: integer
+      minimum: 0
+      maximum: 2147483647
+      default: 7
+      description: Seed for selecting examples and splitting folds, separate from training seed.
     samples:
       type: integer
       minimum: 100
@@ -55,15 +78,17 @@ inputs:
       minimum: 0
       maximum: 2147483647
       default: 7
-      description: Fixed split and initialization seed shared by every candidate.
+      description: Model initialization and minibatch seed shared by every candidate.
     task:
       type: string
       default: |
         Find the smallest network by trainable parameter count with mean MNIST CV accuracy
         >= {{ input.target_accuracy }}. Search for up to {{ input.max_seconds }} seconds,
         at most {{ input.max_trials }} recipes, and at most {{ input.max_epochs }} epochs per fold.
-        Every recipe uses the same {{ input.cv_folds }} folds, {{ input.samples }} examples,
-        and seed {{ input.seed }}. Keep shrinking after reaching the target.
+        Every recipe uses {{ input.cv_method }} with {{ input.cv_folds }} folds or holdout
+        fraction {{ input.validation_fraction }}, repeated {{ input.cv_repeats }} times on
+        {{ input.samples }} examples. Split seed is {{ input.cv_seed }}; training seed is
+        {{ input.seed }}. Keep shrinking after reaching the target.
   additionalProperties: false
 outputs:
   $schema: https://json-schema.org/draft/2020-12/schema

@@ -27,7 +27,7 @@ def run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Activate defaults with balanced synthetic image fixtures and an isolated workspace."""
     manifest = yaml.safe_load(_MANIFEST.read_text())
     settings = {key: value["default"] for key, value in manifest["inputs"]["properties"].items()}
-    settings.update(samples=100, cv_folds=2, max_trials=3, max_epochs=2)
+    settings.update(samples=100, cv_folds=2, max_trials=3, max_epochs=2, target_accuracy=0.95)
     activate(settings, tmp_path)
     generator = torch.Generator().manual_seed(12)
     images = torch.randint(0, 256, (100, 28, 28), generator=generator, dtype=torch.uint8)
@@ -314,12 +314,12 @@ def test_download_uses_training_split_and_cache_outside_artifacts(
 
 
 def test_manifest_defaults_match_requested_search_contract() -> None:
-    """The runnable manifest defaults to 95% CV accuracy and a five-minute allowance."""
+    """The runnable manifest defaults to 99% CV accuracy and a five-minute allowance."""
     manifest = yaml.safe_load(_MANIFEST.read_text())
     inputs = manifest["inputs"]
     defaults = {key: value["default"] for key, value in inputs["properties"].items()}
     Draft202012Validator(inputs).validate(defaults)
-    assert defaults["target_accuracy"] == 0.95
+    assert defaults["target_accuracy"] == 0.99
     assert defaults["max_seconds"] == 300
     assert defaults["samples"] == 60000
     assert set(manifest["tools"]["register"]) == {
@@ -327,3 +327,52 @@ def test_manifest_defaults_match_requested_search_contract() -> None:
         "evaluate_network",
         "finish_search",
     }
+
+
+@pytest.mark.parametrize("method", ["stratified_kfold", "kfold", "stratified_holdout"])
+def test_cv_methods_repeat_on_identical_samples_without_train_validation_overlap(
+    method: str,
+) -> None:
+    """Every method preserves the selected cohort and yields disjoint, reproducible splits."""
+    labels = torch.arange(10).repeat_interleave(20)
+    settings = {
+        "cv_method": method,
+        "cv_folds": 3,
+        "cv_repeats": 2,
+        "cv_seed": 7,
+        "samples": 100,
+        "validation_fraction": 0.2,
+    }
+    splits = tools._splits(labels, settings)
+    replay = tools._splits(labels, settings)
+    assert len(splits) == (2 if method == "stratified_holdout" else 6)
+    cohort = set(torch.cat(splits[0]).tolist())
+    for (training, validation), (again_train, again_validation) in zip(splits, replay, strict=True):
+        assert set(training.tolist()).isdisjoint(validation.tolist())
+        assert set(torch.cat((training, validation)).tolist()) == cohort
+        assert torch.equal(training, again_train) and torch.equal(validation, again_validation)
+        assert len(cohort) == 100
+        if method == "stratified_holdout":
+            assert torch.bincount(labels[validation]).tolist() == [2] * 10
+    if method != "stratified_holdout":
+        assert len(torch.cat([validation for _, validation in splits[:3]]).unique()) == 100
+    assert not torch.equal(splits[0][1], splits[len(splits) // 2][1])
+
+
+def test_default_cv_preserves_baseline_folds() -> None:
+    """Parameterization does not silently change the baseline evaluation partitions."""
+    labels = torch.arange(10).repeat_interleave(20)
+    settings = {
+        "cv_method": "stratified_kfold",
+        "cv_folds": 3,
+        "cv_repeats": 1,
+        "cv_seed": 7,
+        "samples": 100,
+        "validation_fraction": 0.2,
+    }
+    assert all(
+        torch.equal(old, new)
+        for old, (_, new) in zip(
+            tools._folds(labels, 3, 100, 7), tools._splits(labels, settings), strict=True
+        )
+    )
