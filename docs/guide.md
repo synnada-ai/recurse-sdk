@@ -238,7 +238,8 @@ Tools can read the same value through `recurse.context().inputs["max_trials"]`.
 For tool design, separating actions from independent validation is recommended so measurements
 can guide the agent's next choice. A completion tool can check acceptance conditions, save the
 result, and return measured facts. See the [agent design guidance](https://recurse.run/SKILL.md#agent-design-and-learning-from-evidence)
-for the broader workflow; the [Predictive Modeler walkthrough](#predictive-modeler-walkthrough) shows an SDK application.
+for the broader workflow. The [Tiny Tuner walkthrough](#tiny-tuner-walkthrough) shows a compact
+SDK application; [Predictive Modeler](#predictive-modeler-walkthrough) covers multiple prediction tasks.
 
 ## Building application artifacts
 
@@ -580,6 +581,34 @@ accepts `$5.00` through `$500.00` with at most two decimal places and opens one-
 Checkout; `$5`, `$10`, and `$20` are ordinary examples, not separate plans. On a headless machine,
 add `--no-open` to print the hosted URL. `redeem` applies a Recurse-issued credit code once.
 
+## Tiny Tuner walkthrough
+
+`examples/tiny-tuner` is a complete application that tunes a tiny classifier over a
+deterministic synthetic dataset:
+
+1. `extract_features` expands the dataset with a chosen polynomial degree, optional
+   interaction feature, and optional standardization. The classes are only separable
+   when the interaction feature is present, so feature choice genuinely matters.
+2. `train_model` fits a logistic classifier with seeded initialization and the
+   momentum declared by the `optimizer_momentum` run input.
+3. `validate_model` measures each candidate's F1 on the validation split and appends
+   it to the accumulated history.
+4. `save_best_model` writes the best validated model to `best-model.json` in the run
+   workspace.
+
+The agent runs measure-and-revise loops until a candidate reaches `target_f1` or
+`max_trials` is exhausted, then saves the winner. Build it yourself:
+
+```python
+import recurse
+
+artifacts, record = recurse.build_bundle("examples/tiny-tuner")
+print(record["apiVersion"], record["source"]["sha256"], len(artifacts["source"]))
+```
+
+Run it directly with `recurse run examples/tiny-tuner --inputs inputs.json`, or deploy it with
+`recurse deploy examples/tiny-tuner --as mcp`.
+
 ## Predictive Modeler walkthrough
 
 `examples/predictive-modeler` searches scikit-learn pipelines for a dataset and prediction task.
@@ -592,7 +621,8 @@ regression, and single/panel forecasting.
 2. `inspect_dataset` profiles the table. `resolve_problem` freezes targets, available features,
    task-specific metrics, and disjoint evaluation splits.
 3. `train_candidate` fits bounded candidates in deadline-controlled subprocesses.
-4. `evaluate_candidate` measures fixed validation data; `experiment_history` records every attempt.
+4. `evaluate_candidate` refits and scores fresh models on frozen cross-validation folds;
+   `experiment_history` records every attempt.
 5. `finish_run` chooses the best feasible measured candidate, tests that winner once, and writes
    a reloadable pipeline, report, contract, splits, and trial history. Failed final acceptance
    returns `no_feasible_model`, never a replacement chosen on test performance.

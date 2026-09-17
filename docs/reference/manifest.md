@@ -47,7 +47,7 @@ Stable application identifier. Also used as the deployed tool name.
 Example:
 
 ```yaml
-name: predictive-modeler
+name: tiny-tuner
 ```
 
 ### `metadata.title`
@@ -59,7 +59,7 @@ Human-readable application title.
 Example:
 
 ```yaml
-title: Predictive Modeler
+title: Tiny Model Tuner
 ```
 
 ### `metadata.summary`
@@ -71,7 +71,7 @@ One-sentence description of what the application does. Also used as the deployed
 Example:
 
 ```yaml
-summary: Searches predictive pipelines subject to measured quality constraints.
+summary: Tunes a tiny classifier across feature and training configurations.
 ```
 
 ## `runtime`

@@ -36,19 +36,19 @@
           "description": "Stable application identifier. Also used as the deployed tool name.",
           "type": "string",
           "minLength": 1,
-          "examples": ["predictive-modeler"]
+          "examples": ["tiny-tuner"]
         },
         "title": {
           "description": "Human-readable application title.",
           "type": "string",
           "minLength": 1,
-          "examples": ["Predictive Modeler"]
+          "examples": ["Tiny Model Tuner"]
         },
         "summary": {
           "description": "One-sentence description of what the application does. Also used as the deployed tool description.",
           "type": "string",
           "minLength": 1,
-          "examples": ["Searches predictive pipelines subject to measured quality constraints."]
+          "examples": ["Tunes a tiny classifier across feature and training configurations."]
         }
       }
     },
