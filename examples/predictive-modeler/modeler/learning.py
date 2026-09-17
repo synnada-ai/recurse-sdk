@@ -468,6 +468,11 @@ class PredictionModel:
     def _forecast(self, data: pd.DataFrame) -> pd.DataFrame:
         """Predict recursively without reading actual future targets."""
         spec, config = self.specification, self.configuration
+        if spec["group"] and data[spec["group"]].isna().any():
+            raise ModelerError(
+                f"Series identifier column {spec['group']!r} contains missing values; "
+                "supply an identifier for every row."
+            )
         groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
         rows = []
         for name, frame in groups:

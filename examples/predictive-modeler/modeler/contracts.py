@@ -154,6 +154,11 @@ def _forecast_options(spec: dict[str, Any], data: pd.DataFrame) -> None:
             "Forecast v1 uses history and calendar features; omit external features."
         )
     spec["split"] = "temporal"
+    if spec["group"] and data[spec["group"]].isna().any():
+        raise ModelerError(
+            f"Series identifier column {spec['group']!r} contains missing values; "
+            "supply an identifier for every row."
+        )
     groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
     for name, frame in groups:
         dates = pd.DatetimeIndex(pd.to_datetime(frame[spec["time"]])).sort_values()

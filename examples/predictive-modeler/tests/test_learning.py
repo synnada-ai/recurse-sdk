@@ -735,3 +735,39 @@ def test_inapplicable_tuning_is_rejected_before_training(
         validate_configuration({"family": family, option: value}, spec)
     canonical = validate_configuration({"family": family}, spec)
     assert validate_configuration(canonical, spec) == canonical
+
+
+@pytest.mark.parametrize("family", ["baseline", "linear"])
+@pytest.mark.parametrize("missing", ["one", "series", "all"])
+def test_saved_panel_predictor_rejects_missing_series_identifiers(
+    frame: pd.DataFrame, tmp_path: Path, family: str, missing: str
+) -> None:
+    """Reloaded predictors reject unidentified input rows instead of returning partial forecasts."""
+    data = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
+    spec = resolve(
+        {
+            "kind": "forecast",
+            "targets": ["value"],
+            "time": "date",
+            "group": "series",
+            "frequency": "D",
+            "horizon": 10,
+        },
+        data,
+        {},
+    )
+    model = fit(data, spec, validate_configuration({"family": family}, spec))
+    path = tmp_path / "model.joblib"
+    joblib.dump(model, path)
+    restored = joblib.load(path)
+    pd.testing.assert_frame_equal(restored.predict(data), model.predict(data))
+    rows = (
+        data.index[-1:]
+        if missing == "one"
+        else data.index[150:]
+        if missing == "series"
+        else data.index
+    )
+    data.loc[rows, "series"] = None
+    with pytest.raises(ModelerError, match=r"series.*missing"):
+        restored.predict(data)

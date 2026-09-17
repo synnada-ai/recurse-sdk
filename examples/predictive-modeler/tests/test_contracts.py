@@ -274,3 +274,30 @@ def test_complexity_rejects_classification_options(frame: pd.DataFrame, metric: 
                 }
             },
         )
+
+
+@pytest.mark.parametrize("missing", ["one", "series", "all"])
+def test_forecast_rejects_missing_series_identifiers(frame: pd.DataFrame, missing: str) -> None:
+    """Resolution cannot silently exclude rows whose forecasting series is unidentified."""
+    data = pd.concat([frame.assign(series="a"), frame.assign(series="b")], ignore_index=True)
+    rows = (
+        data.index[-1:]
+        if missing == "one"
+        else data.index[150:]
+        if missing == "series"
+        else data.index
+    )
+    data.loc[rows, "series"] = None
+    with pytest.raises(ModelerError, match=r"series.*missing"):
+        resolve(
+            {
+                "kind": "forecast",
+                "targets": ["value"],
+                "time": "date",
+                "group": "series",
+                "frequency": "D",
+                "horizon": 10,
+            },
+            data,
+            {},
+        )

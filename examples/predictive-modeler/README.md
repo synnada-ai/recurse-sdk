@@ -198,7 +198,8 @@ Supplied official train/validation/test assignments are preserved as one explici
 
 Forecasts reserve the last full horizon of each series for the final test and use up to three
 expanding-window validation origins, reducing to two for shorter histories. Every origin refits
-the model using only earlier observations. Each origin predicts a complete horizon without
+the model using only earlier observations. Panel series identifiers must be present on every row,
+including prediction histories. Each origin predicts a complete horizon without
 future actual targets entering its lag features. All series use the same number of origins.
 
 Every fold fits preprocessing and estimators from scratch. Selection uses the equal mean of
