@@ -300,7 +300,8 @@ PYTHONPATH=/path/to/agentia uv run --directory examples/predictive-modeler/tests
   --with typing-extensions pytest -m harness -n auto -q
 ```
 
-These ten checks cover all six review/specification shapes and representative candidate settings.
+These twelve checks cover all six review/specification shapes, complexity requirements, and
+representative candidate settings.
 The default unit suite also rejects `Any` anywhere in registered tool input annotations.
 
 It verifies downloads/checksums, task resolution, actual subprocess fitting, independent scoring,
@@ -319,6 +320,16 @@ only available, nonempty artifact paths; the agent must return the saved receipt
 All six task types have accepted cloud bundles with locally reproduced validation/final-test
 scores; panel evidence uses the three-trial request above. These runs demonstrate functionality,
 not repeated reliability estimates or a guarantee of strong performance on arbitrary datasets.
+
+## Comparing agent designs
+
+The [benchmark harness](benchmarks/README.md) separates developer-owned expected interpretations
+from public agent inputs. It provides versioned dataset/request/budget/source fingerprints,
+fixed-search baselines, independent trusted-bundle score reproduction, and failure-preserving
+paired comparisons. The initial development suite adds two pinned public CSV datasets to the
+six existing examples. These cases do not constitute an untouched holdout or generalization proof.
+See the [next comparison campaign](benchmarks/CAMPAIGN.md) for the frozen prompt hypothesis,
+run schedule, and staged expansion across unseen task families.
 
 ## Limitations
 

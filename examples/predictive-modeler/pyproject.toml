@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["tests"]
+exclude = ["/tests/**", "/benchmarks/**"]
 include = ["agent.yaml", "prompt.md", "tools.py", "modeler", "inputs", "README.md", "uv.lock"]
 
 [tool.hatch.build.targets.wheel]

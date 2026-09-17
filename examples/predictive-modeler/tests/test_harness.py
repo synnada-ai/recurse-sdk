@@ -67,3 +67,19 @@ def test_candidate_choices_can_be_supplied_inline(
         "train_candidate",
         {"configuration": configuration, "hypothesis": "Compare a plausible predictive approach."},
     )
+
+
+@pytest.mark.parametrize("name", ["compact-regression", "feature-limited-multiclass"])
+def test_complexity_requirements_can_be_reviewed_inline(tools: Any, name: str) -> None:
+    """Complexity objectives and constraints retain literal-compatible nested tool inputs."""
+    request = json.loads((ROOT / "inputs" / f"{name}.json").read_text())
+    _check(
+        tools,
+        "review_inputs",
+        {
+            "task_summary": request["task"],
+            "task_quality": request["quality"],
+            "conflicts": [],
+            "questions": [],
+        },
+    )

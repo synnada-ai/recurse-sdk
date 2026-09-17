@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "measurement_protocol": "predictive-modeler/v2",
+  "cases": [
+    {
+      "id": "binary",
+      "dataset_family": "example:bank-marketing",
+      "partition": "development",
+      "request": {
+        "dataset": "example:bank-marketing",
+        "task": "Predict whether a customer will subscribe to a term deposit (y=yes), before the call. Exclude duration. Maximize precision; require recall of at least 0.5. Use a reproducible stratified split to demonstrate classification, not future-campaign performance.",
+        "quality": {
+          "objective": {
+            "metric": "precision",
+            "direction": "maximize",
+            "parameters": {
+              "positive_label": "yes"
+            }
+          },
+          "constraints": [
+            {
+              "metric": "recall",
+              "parameters": {
+                "positive_label": "yes"
+              },
+              "operator": ">=",
+              "value": 0.5
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "binary",
+        "targets": [
+          "y"
+        ],
+        "features": [
+          "age",
+          "job",
+          "marital",
+          "education",
+          "default",
+          "housing",
+          "loan",
+          "contact",
+          "month",
+          "day_of_week",
+          "campaign",
+          "pdays",
+          "previous",
+          "poutcome",
+          "emp.var.rate",
+          "cons.price.idx",
+          "cons.conf.idx",
+          "euribor3m",
+          "nr.employed"
+        ]
+      }
+    },
+    {
+      "id": "multiclass",
+      "dataset_family": "example:dry-bean",
+      "partition": "development",
+      "request": {
+        "dataset": "example:dry-bean",
+        "task": "Predict Class (one of seven bean varieties) from all 16 measured features. Maximize macro F1.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "average": "macro"
+            }
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "multiclass",
+        "targets": [
+          "Class"
+        ],
+        "features": [
+          "Area",
+          "Perimeter",
+          "MajorAxisLength",
+          "MinorAxisLength",
+          "AspectRation",
+          "Eccentricity",
+          "ConvexArea",
+          "EquivDiameter",
+          "Extent",
+          "Solidity",
+          "roundness",
+          "Compactness",
+          "ShapeFactor1",
+          "ShapeFactor2",
+          "ShapeFactor3",
+          "ShapeFactor4"
+        ]
+      }
+    },
+    {
+      "id": "multilabel",
+      "dataset_family": "example:goemotions",
+      "partition": "development",
+      "request": {
+        "dataset": "example:goemotions",
+        "task": "Predict all applicable emotion labels, including neutral, from text. comment_id is an identifier, not a feature. Use the provided _split assignments. Maximize micro F1 across all 28 labels.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "average": "micro"
+            }
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "multilabel",
+        "targets": [
+          "admiration",
+          "amusement",
+          "anger",
+          "annoyance",
+          "approval",
+          "caring",
+          "confusion",
+          "curiosity",
+          "desire",
+          "disappointment",
+          "disapproval",
+          "disgust",
+          "embarrassment",
+          "excitement",
+          "fear",
+          "gratitude",
+          "grief",
+          "joy",
+          "love",
+          "nervousness",
+          "optimism",
+          "pride",
+          "realization",
+          "relief",
+          "remorse",
+          "sadness",
+          "surprise",
+          "neutral"
+        ],
+        "features": [
+          "text"
+        ],
+        "text_features": [
+          "text"
+        ],
+        "split": "official"
+      }
+    },
+    {
+      "id": "regression",
+      "dataset_family": "example:concrete",
+      "partition": "development",
+      "request": {
+        "dataset": "example:concrete",
+        "task": "Predict strength in MPa from the eight mixture and age features. Minimize MAE.",
+        "quality": {
+          "objective": {
+            "metric": "mae",
+            "direction": "minimize"
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "regression",
+        "targets": [
+          "strength"
+        ],
+        "features": [
+          "cement",
+          "slag",
+          "fly_ash",
+          "water",
+          "superplasticizer",
+          "coarse_aggregate",
+          "fine_aggregate",
+          "age"
+        ]
+      }
+    },
+    {
+      "id": "forecast",
+      "dataset_family": "example:bike-sharing",
+      "partition": "development",
+      "request": {
+        "dataset": "example:bike-sharing",
+        "task": "Forecast cnt for the next 14 days using dteday as the daily time column. Use only historical demand and calendar features; future observed weather and casual/registered counts are unavailable. Minimize MAE.",
+        "quality": {
+          "objective": {
+            "metric": "mae",
+            "direction": "minimize"
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "forecast",
+        "targets": [
+          "cnt"
+        ],
+        "features": [],
+        "time": "dteday",
+        "horizon": 14,
+        "frequency": "D"
+      }
+    },
+    {
+      "id": "panel-forecast",
+      "dataset_family": "example:tourism-monthly",
+      "partition": "development",
+      "request": {
+        "dataset": "example:tourism-monthly",
+        "task": "Forecast value for the next 12 months for every series, using date as the monthly time column. Use only observed history and calendar features. Minimize MASE scaled by a 12-month seasonal naive baseline, averaging equally over series and forecast origins.",
+        "quality": {
+          "objective": {
+            "metric": "mase",
+            "direction": "minimize",
+            "parameters": {
+              "seasonal_period": 12
+            }
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 600
+        }
+      },
+      "specification": {
+        "kind": "forecast",
+        "targets": [
+          "value"
+        ],
+        "features": [],
+        "group": "series",
+        "time": "date",
+        "horizon": 12,
+        "frequency": "MS"
+      }
+    },
+    {
+      "id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "source_sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/penguins.csv",
+        "task": "Predict species using only island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, sex. This is multiclass. Use a random split. Maximize macro F1. The entire fitted model must be at most 5000000 bytes. Require at most six raw input columns.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "average": "macro"
+            }
+          },
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 5000000
+            },
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 6
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 60
+        }
+      },
+      "specification": {
+        "kind": "multiclass",
+        "targets": [
+          "species"
+        ],
+        "features": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "split": "random"
+      }
+    },
+    {
+      "id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "source_sha256": "c14b8b855ea7ee86cb9736bf8caaf281c4685ca08826f3eb2acaccaaf40f0d5a",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/mwaskom/seaborn-data/71e2436a092d714350de0fc409ca8a8714e7e78f/mpg.csv",
+        "task": "Predict mpg using only cylinders, displacement, horsepower, weight, acceleration, model_year, origin. This is regression. Use a random split. Minimize the complete fitted model size in bytes, subject to MAE at most 5 mpg.",
+        "quality": {
+          "objective": {
+            "metric": "model_bytes",
+            "direction": "minimize"
+          },
+          "constraints": [
+            {
+              "metric": "mae",
+              "operator": "<=",
+              "value": 5
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 60
+        }
+      },
+      "specification": {
+        "kind": "regression",
+        "targets": [
+          "mpg"
+        ],
+        "features": [
+          "cylinders",
+          "displacement",
+          "horsepower",
+          "weight",
+          "acceleration",
+          "model_year",
+          "origin"
+        ],
+        "split": "random"
+      }
+    }
+  ]
+}

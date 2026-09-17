@@ -19,4 +19,4 @@ MYPYPATH=../../../src uv run --directory examples/backpack-3d/tests --locked \
 uv run --directory examples/predictive-modeler/tests --locked \
   pytest --cov --cov-branch --cov-report=term-missing -q
 MYPYPATH=../../../src uv run --directory examples/predictive-modeler/tests --locked \
-  mypy --config-file pyproject.toml ../modeler ../tools.py .
+  mypy --config-file pyproject.toml ../modeler ../tools.py ../benchmarks .
