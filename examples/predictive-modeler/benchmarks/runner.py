@@ -23,7 +23,7 @@ from .assessment import assess
 
 __all__ = ["audit", "compare", "fingerprint", "load_cases", "main", "run"]
 ROOT = Path(__file__).parents[1]
-PROTOCOL = "predictive-modeler/v3"
+PROTOCOL = "predictive-modeler/v4"
 _MAX_PROBES = 3
 
 
@@ -200,9 +200,9 @@ def run(case: dict[str, Any], workspace: Path, design: str, repeat: int = 0) -> 
                 configuration, "Predeclared fixed-search baseline probe."
             )
             result["trial_count"] += 1
-            result["training_seconds"] += trial["seconds"]
             if trial["status"] == "trained":
-                actions.evaluate_candidate(trial["id"])
+                trial = actions.evaluate_candidate(trial["id"])
+            result["training_seconds"] += trial["seconds"]
         receipt = actions.finish_run(
             "budget_exhausted",
             "All predeclared fixed-search probes attempted; no autonomous reasoning.",

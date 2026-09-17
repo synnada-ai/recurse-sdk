@@ -7,8 +7,9 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from modeler import learning
 from modeler.contracts import ModelerError, resolve
-from modeler.learning import fit, measure, partition, validate_configuration
+from modeler.learning import cross_validate, fit, measure, partition, validate_configuration
 from sklearn.ensemble import ExtraTreesClassifier
 
 
@@ -27,14 +28,31 @@ def test_splits_are_disjoint_and_reproducible(frame: pd.DataFrame, split: str) -
         frame,
         {},
     )
-    parts = partition(frame, spec)
-    assert sorted(np.concatenate(parts).tolist()) == list(range(len(frame)))
-    for first, second in zip(parts, partition(frame, spec), strict=True):
-        np.testing.assert_array_equal(first, second)
-    if split == "group":
-        assert not set(frame.iloc[parts[0]]["group"]) & set(frame.iloc[parts[1]]["group"])
-    if split == "temporal":
-        assert frame.iloc[parts[0]]["date"].max() < frame.iloc[parts[1]]["date"].min()
+    plan = partition(frame, spec)
+    assert plan == partition(frame, spec)
+    assert set(plan["fit"]).isdisjoint(plan["test"])
+    assert sorted(set(plan["fit"] + plan["test"] + plan["folds"][0]["validation"])) == list(
+        range(len(frame))
+    )
+    for fold in plan["folds"]:
+        assert set(fold["train"]).isdisjoint(fold["validation"])
+        assert set(fold["train"] + fold["validation"]).isdisjoint(plan["test"])
+        if split == "group":
+            assert not set(frame.iloc[fold["train"]]["group"]) & set(
+                frame.iloc[fold["validation"]]["group"]
+            )
+            assert not set(frame.iloc[plan["fit"]]["group"]) & set(
+                frame.iloc[plan["test"]]["group"]
+            )
+        if split == "temporal":
+            assert (
+                frame.iloc[fold["train"]]["date"].max()
+                < frame.iloc[fold["validation"]]["date"].min()
+            )
+            assert (
+                frame.iloc[fold["validation"]]["date"].max()
+                < frame.iloc[plan["test"]]["date"].min()
+            )
 
 
 @pytest.mark.parametrize("case", ["missing", "invalid", "small"])
@@ -103,7 +121,14 @@ def test_pipelines_train_and_reload(
         frame,
         {},
     )
-    config = validate_configuration({"family": family, "strategy": strategy, "trees": 3}, spec)
+    config = validate_configuration(
+        {
+            "family": family,
+            "strategy": strategy,
+            **({"trees": 3} if family == "extra_trees" else {}),
+        },
+        spec,
+    )
     model = fit(frame.iloc[:90], spec, config)
     result = measure(model, frame.iloc[:90], frame.iloc[90:120])
     assert all(value is not None for value in result.values())
@@ -179,8 +204,20 @@ def test_forecasts_use_full_horizons_without_future_targets(
         frame,
         {},
     )
-    train, validation, test = partition(frame, spec)
-    config = validate_configuration({"family": family, "trees": 3, "lags": [1, 7]}, spec)
+    plan = partition(frame, spec)
+    train, validation, test = (
+        plan["folds"][0]["train"],
+        plan["folds"][0]["validation"],
+        plan["test"],
+    )
+    config = validate_configuration(
+        {
+            "family": family,
+            **({"trees": 3} if family == "extra_trees" else {}),
+            **({"lags": [1, 7]} if family in {"linear", "extra_trees"} else {}),
+        },
+        spec,
+    )
     model = fit(frame.iloc[train], spec, config)
     before = model.predict(frame.iloc[train])
     assert len(before) == (20 if panel else 10)
@@ -188,7 +225,7 @@ def test_forecasts_use_full_horizons_without_future_targets(
     assert measured["mae:{}"] >= 0
     frame.loc[test, "value"] = -100000
     pd.testing.assert_frame_equal(before, model.predict(frame.iloc[train]))
-    final = measure(model, frame.iloc[np.concatenate([train, validation])], frame.iloc[test])
+    final = measure(model, frame.iloc[plan["fit"]], frame.iloc[test])
     assert final["mae:{}"] > 1000
 
 
@@ -215,7 +252,8 @@ def test_undefined_forecast_scale_propagates_across_series(frame: pd.DataFrame) 
         frame,
         {"objective": {"metric": "mase", "direction": "minimize"}},
     )
-    train, validation, _ = partition(frame, spec)
+    plan = partition(frame, spec)
+    train, validation = plan["folds"][0]["train"], plan["folds"][0]["validation"]
     model = fit(frame.iloc[train], spec, validate_configuration({"family": "baseline"}, spec))
     assert measure(model, frame.iloc[train], frame.iloc[validation]) == {
         'mase:{"seasonal_period": 1}': None
@@ -282,7 +320,8 @@ def test_complexity_covers_complete_saved_predictor(
     }
     spec = resolve(proposal, frame, quality)
     config = validate_configuration({"family": "linear"}, spec)
-    train, validation, _ = partition(frame, spec)
+    plan = partition(frame, spec)
+    train, validation = plan["folds"][0]["train"], plan["folds"][0]["validation"]
     model = fit(frame.iloc[train], spec, config)
     path = tmp_path / "model.joblib"
     joblib.dump(model, path, compress=0, protocol=5)
@@ -319,7 +358,8 @@ def test_feature_subset_and_single_forecast_input_counts(frame: pd.DataFrame) ->
     ]
     for proposal, configuration, expected in cases:
         spec = resolve(proposal, frame, quality)
-        train, validation, _ = partition(frame, spec)
+        plan = partition(frame, spec)
+        train, validation = plan["folds"][0]["train"], plan["folds"][0]["validation"]
         model = fit(frame.iloc[train], spec, validate_configuration(configuration, spec))
         assert measure(model, frame.iloc[train], frame.iloc[validation]) == {
             "input_feature_count:{}": expected
@@ -381,34 +421,46 @@ def test_forecast_chronology_is_independent_of_date_format_and_row_order(
         }
     }
     spec = resolve(proposal, frame, quality)
-    train, validation, test = partition(frame, spec)
+    plan = partition(frame, spec)
     config = validate_configuration(
-        {"family": family, "trees": 3, "lags": [1, 12], "seasonal_period": 12}, spec
+        {
+            "family": family,
+            **({"trees": 3} if family == "extra_trees" else {}),
+            **({"lags": [1, 12]} if family in {"linear", "extra_trees"} else {}),
+            **({"seasonal_period": 12} if family == "seasonal" else {}),
+        },
+        spec,
     )
-    expected_model = fit(frame.iloc[train], spec, config)
-    expected_predictions = expected_model.predict(frame.iloc[train])
-    expected_scores = measure(expected_model, frame.iloc[train], frame.iloc[validation])
-    expected_final = measure(
-        expected_model, frame.iloc[np.concatenate([train, validation])], frame.iloc[test]
-    )
+    expected_model = fit(frame.iloc[plan["fit"]], spec, config)
+    expected_predictions = expected_model.predict(frame.iloc[plan["fit"]])
+    expected_scores = cross_validate(frame, spec, config, plan)
+    expected_final = measure(expected_model, frame.iloc[plan["fit"]], frame.iloc[plan["test"]])
     formatted = frame.assign(date=frame["date"].dt.strftime(date_format))
     shuffled = formatted.sample(frac=1, random_state=23).reset_index(drop=True)
     actual_spec = resolve(proposal, shuffled, quality)
-    actual_parts = partition(shuffled, actual_spec)
-    for expected_rows, actual_rows in zip((train, validation, test), actual_parts, strict=True):
-        expected = frame.iloc[expected_rows].reset_index(drop=True)
-        actual = shuffled.iloc[actual_rows].reset_index(drop=True)
-        actual["date"] = pd.to_datetime(actual["date"])
-        pd.testing.assert_frame_equal(expected, actual)
-    actual_train, actual_validation, actual_test = actual_parts
-    history = shuffled.iloc[actual_train].sample(frac=1, random_state=11)
-    evaluation = shuffled.iloc[actual_validation].sample(frac=1, random_state=12)
+    actual_plan = partition(shuffled, actual_spec)
+    expected_rows = [
+        plan["fit"],
+        plan["test"],
+        *[fold[key] for fold in plan["folds"] for key in ["train", "validation"]],
+    ]
+    actual_rows = [
+        actual_plan["fit"],
+        actual_plan["test"],
+        *[fold[key] for fold in actual_plan["folds"] for key in ["train", "validation"]],
+    ]
+    for reference, actual in zip(expected_rows, actual_rows, strict=True):
+        expected = frame.iloc[reference].reset_index(drop=True)
+        observed = shuffled.iloc[actual].reset_index(drop=True)
+        observed["date"] = pd.to_datetime(observed["date"])
+        pd.testing.assert_frame_equal(expected, observed)
+    history = shuffled.iloc[actual_plan["fit"]].sample(frac=1, random_state=11)
     model = fit(history, actual_spec, config)
     pd.testing.assert_frame_equal(expected_predictions, model.predict(history))
-    assert measure(model, history, evaluation) == pytest.approx(expected_scores)
-    assert measure(
-        model, pd.concat([history, evaluation]), shuffled.iloc[actual_test]
-    ) == pytest.approx(expected_final)
+    assert cross_validate(shuffled, actual_spec, config, actual_plan) == expected_scores
+    assert measure(model, history, shuffled.iloc[actual_plan["test"]]) == pytest.approx(
+        expected_final
+    )
 
 
 @pytest.mark.parametrize(
@@ -476,3 +528,210 @@ def test_balanced_trees_preserve_class_labels_and_inverse_frequency_weights(
         expected.predict_proba(model.estimator["features"].transform(frame)),
     )
     assert model.configuration["class_weight"] == "balanced"
+
+
+def test_stratified_folds_reduce_to_available_class_count(frame: pd.DataFrame) -> None:
+    """Rare classes remain represented in each fit while reducing the default fold count."""
+    frame["y"] = ["rare"] * 5 + ["common"] * 145
+    spec = resolve(
+        {"kind": "binary", "targets": ["y"], "features": ["x"], "split": "random"}, frame, {}
+    )
+    plan = partition(frame, spec)
+    assert plan["method"] == "stratified_kfold"
+    assert len(plan["folds"]) == 4
+    assert len(plan["fit"]) == 120
+    assert len(plan["test"]) == 30
+    for fold in plan["folds"]:
+        assert set(frame.iloc[fold["train"]]["y"]) == {"rare", "common"}
+        assert set(frame.iloc[fold["validation"]]["y"]) == {"rare", "common"}
+
+
+@pytest.mark.parametrize(
+    "case", ["rare_class", "one_group", "few_timestamps", "small_fold", "short_forecast"]
+)
+def test_cross_validation_rejects_insufficient_data(frame: pd.DataFrame, case: str) -> None:
+    """Unusable resampling plans produce actionable errors before any fitting."""
+    proposal: dict[str, Any] = {
+        "kind": "regression",
+        "targets": ["value"],
+        "features": ["x"],
+        "split": "random",
+    }
+    if case == "rare_class":
+        frame["y"] = ["rare"] + ["common"] * 149
+        proposal.update(kind="binary", targets=["y"])
+    elif case == "one_group":
+        frame["group"] = 1
+        proposal.update(split="group", group="group")
+    elif case == "few_timestamps":
+        frame["date"] = pd.Timestamp("2020-01-01")
+        proposal.update(split="temporal", time="date")
+    elif case == "small_fold":
+        frame = frame.head(30)
+        frame["date"] = pd.date_range("2020-01-01", periods=30)
+        proposal.update(split="temporal", time="date")
+    spec = resolve(proposal, frame, {})
+    if case == "short_forecast":
+        spec.update(kind="forecast", horizon=40, time="date", split="temporal")
+    with pytest.raises(ModelerError, match=r"cross-validation|Cross-validation"):
+        partition(frame, spec)
+
+
+def test_temporal_folds_preserve_equal_time_groups_and_reduce_when_needed(
+    frame: pd.DataFrame,
+) -> None:
+    """Calendar boundaries never divide a timestamp, and small histories use fewer folds."""
+    for data, count in [(frame.head(60).copy(), 4), (frame.copy(), 5)]:
+        if len(data) == 150:
+            data["date"] = np.repeat(pd.date_range("2020-01-01", periods=50), 3)
+        spec = resolve(
+            {
+                "kind": "regression",
+                "targets": ["value"],
+                "features": ["x"],
+                "split": "temporal",
+                "time": "date",
+            },
+            data,
+            {},
+        )
+        plan = partition(data, spec)
+        assert len(plan["folds"]) == count
+        for fold in plan["folds"]:
+            assert (
+                data.iloc[fold["train"]]["date"].max() < data.iloc[fold["validation"]]["date"].min()
+            )
+            assert (
+                data.iloc[fold["validation"]]["date"].max() < data.iloc[plan["test"]]["date"].min()
+            )
+
+
+def test_forecast_origins_expand_before_an_untouched_short_final_horizon(
+    frame: pd.DataFrame,
+) -> None:
+    """Short horizons are valid even though tabular final tests require ten rows."""
+    spec = resolve(
+        {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 1},
+        frame,
+        {},
+    )
+    plan = partition(frame, spec)
+    assert plan["method"] == "rolling_origin"
+    assert plan["fit"] == list(range(149))
+    assert plan["test"] == [149]
+    assert plan["folds"] == [
+        {"train": list(range(end)), "validation": [end]} for end in [146, 147, 148]
+    ]
+    model = fit(frame.iloc[plan["fit"]], spec, validate_configuration({"family": "baseline"}, spec))
+    assert (
+        model.predict(frame.iloc[[148]])["prediction"].tolist()
+        == frame.iloc[[148]]["value"].tolist()
+    )
+
+
+def test_cross_validation_refits_preprocessing_and_never_uses_final_test(
+    frame: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every fold learns its own imputation statistics; held-out changes cannot alter scores."""
+    spec = resolve(
+        {"kind": "regression", "targets": ["value"], "features": ["x"], "split": "random"},
+        frame,
+        {"constraints": [{"metric": "model_bytes", "operator": "<=", "value": 100000}]},
+    )
+    plan = partition(frame, spec)
+    config = validate_configuration({}, spec)
+    trained = []
+
+    def observed_fit(
+        data: pd.DataFrame, specification: dict[str, Any], configuration: dict[str, Any]
+    ) -> Any:
+        """Observe statistics learned independently by each fold."""
+        model = fit(data, specification, configuration)
+        trained.append(
+            model.estimator["features"]
+            .named_transformers_["numeric"]["impute"]
+            .statistics_.tolist()
+        )
+        return model
+
+    monkeypatch.setattr(learning, "fit", observed_fit)
+    result = cross_validate(frame, spec, config, plan)
+    assert trained == [[frame.iloc[fold["train"]]["x"].median()] for fold in plan["folds"]]
+    assert list(result["scores"]) == ["mae:{}"]
+    assert result["scores"]["mae:{}"] == np.mean(
+        [fold["scores"]["mae:{}"] for fold in result["folds"]]
+    )
+    assert [(item["train_rows"], item["validation_rows"]) for item in result["folds"]] == [
+        (96, 24)
+    ] * 5
+    changed = frame.copy()
+    changed.loc[plan["test"], ["x", "value"]] = 1e9
+    assert cross_validate(changed, spec, config, plan) == result
+
+
+def test_complexity_only_cv_skips_fitting(
+    frame: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Artifact complexity is evaluated on the deployment model rather than averaged fold models."""
+    spec = resolve(
+        {"kind": "regression", "targets": ["value"], "features": ["x"], "split": "random"},
+        frame,
+        {"objective": {"metric": "model_bytes", "direction": "minimize"}},
+    )
+    monkeypatch.setattr(
+        learning, "fit", lambda *args: pytest.fail("No predictive metrics require fold fitting.")
+    )
+    assert cross_validate(
+        frame, spec, validate_configuration({}, spec), partition(frame, spec)
+    ) == {"scores": {}, "folds": []}
+
+
+def test_undefined_score_in_one_fold_remains_infeasible(frame: pd.DataFrame) -> None:
+    """A constant early history cannot disappear when later MASE folds are defined."""
+    frame.loc[:109, "value"] = 1
+    spec = resolve(
+        {"kind": "forecast", "targets": ["value"], "time": "date", "frequency": "D", "horizon": 10},
+        frame,
+        {"objective": {"metric": "mase", "direction": "minimize"}},
+    )
+    result = cross_validate(
+        frame, spec, validate_configuration({"family": "baseline"}, spec), partition(frame, spec)
+    )
+    assert result["scores"] == {'mase:{"seasonal_period": 1}': None}
+    assert result["folds"][0]["scores"] == result["scores"]
+    assert result["folds"][1]["scores"]['mase:{"seasonal_period": 1}'] is not None
+
+
+@pytest.mark.parametrize(
+    ("kind", "family", "option", "value"),
+    [
+        ("forecast", "seasonal", "lags", [1]),
+        ("forecast", "baseline", "seasonal_period", 12),
+        ("forecast", "linear", "scale", False),
+        ("forecast", "linear", "seasonal_period", 12),
+        ("regression", "baseline", "regularization", 2),
+        ("regression", "linear", "trees", 3),
+        ("regression", "extra_trees", "class_weight", "balanced"),
+        ("regression", "linear", "lags", [1]),
+        ("multiclass", "linear", "threshold", 0.2),
+        ("binary", "linear", "strategy", "chain"),
+        ("binary", "linear", "ngram_max", 2),
+    ],
+)
+def test_inapplicable_tuning_is_rejected_before_training(
+    frame: pd.DataFrame, kind: str, family: str, option: str, value: Any
+) -> None:
+    """Ignored controls cannot consume trials or support false causal explanations."""
+    proposal = {
+        "kind": kind,
+        "targets": ["value"] if kind in {"regression", "forecast"} else ["y"],
+        "features": [] if kind == "forecast" else ["x"],
+        "time": "date",
+        "frequency": "D",
+        "horizon": 10,
+    }
+    spec = resolve(proposal, frame, {})
+    with pytest.raises(ModelerError, match="do not apply"):
+        validate_configuration({"family": family, option: value}, spec)
+    canonical = validate_configuration({"family": family}, spec)
+    assert validate_configuration(canonical, spec) == canonical

@@ -157,7 +157,8 @@ def resolve_problem(specification: dict[str, ProposalValue]) -> dict[str, Any]:
     Args:
         specification: kind (binary/multiclass/multilabel/regression/forecast), targets (list),
             features (list), optional text_features (list), group/time (column names), split
-            (random/group/temporal/official), seed (integer); forecasting also needs frequency
+            (random/group/temporal/official), seed (integer, default 42; override only on request).
+            Forecasting also needs frequency
             (pandas offset, e.g. D or MS) and horizon (positive integer). Forecast features must
             be empty: this version supports observed history and calendar features only.
 
@@ -178,11 +179,16 @@ def resolve_problem(specification: dict[str, ProposalValue]) -> dict[str, Any]:
                 quality["constraints"].append(item)
         data = pd.read_parquet(_root() / "data.parquet")
         contract = contracts.resolve(specification, data, quality)
-        parts = learning.partition(data, contract)
-        splits = dict(
-            zip(["train", "validation", "test"], [part.tolist() for part in parts], strict=True)
-        )
-        contract["split_sizes"] = {name: len(rows) for name, rows in splits.items()}
+        splits = learning.partition(data, contract)
+        contract["split_sizes"] = {
+            "fit": len(splits["fit"]),
+            "test": len(splits["test"]),
+            "folds": [
+                {"train": len(fold["train"]), "validation": len(fold["validation"])}
+                for fold in splits["folds"]
+            ],
+        }
+        contract["validation_method"] = splits["method"]
         contract["dataset"] = {"handle": get_request()["dataset"], "sha256": dataset["sha256"]}
         state.put(connection, "contract", contract)
         state.put(connection, "splits", splits)
@@ -191,8 +197,8 @@ def resolve_problem(specification: dict[str, ProposalValue]) -> dict[str, Any]:
     return contract
 
 
-def _execute(identifier: int, remaining: float) -> tuple[str, str, float]:
-    """Run one isolated fit with a hard deadline and one native compute thread."""
+def _execute(identifier: int, remaining: float, phase: str = "fit") -> tuple[str, str, float]:
+    """Run one isolated fitting phase with a hard deadline and one native compute thread."""
     started = time.monotonic()
     environment = os.environ | {
         # Preserve dependency paths injected by the harness into the parent interpreter.
@@ -203,7 +209,7 @@ def _execute(identifier: int, remaining: float) -> tuple[str, str, float]:
     }
     try:
         result = subprocess.run(  # noqa: S603 - fixed module, integer ID, authority-owned paths
-            [sys.executable, "-m", "modeler.worker", str(_root()), str(identifier)],
+            [sys.executable, "-m", "modeler.worker", str(_root()), str(identifier), phase],
             cwd=Path(__file__).parent,
             env=environment,
             capture_output=True,
@@ -230,6 +236,8 @@ def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) ->
             regularization, trees, max_depth, min_samples_leaf, class_weight (null/balanced),
             threshold, multilabel strategy (independent/chain), forecast lags, seasonal_period,
             text max_features and ngram_max, and feature_subset (eligible tabular columns).
+            Regularization applies to linear models; tree controls to extra_trees; lags to learned
+            forecasts; seasonal_period to seasonal forecasts. Inapplicable nondefault options fail.
             Omitted values use documented defaults. The baseline family uses class priors,
             the training-target mean (regression), or the last observed value (forecasting);
             it does not learn feature effects.
@@ -255,7 +263,7 @@ def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) ->
             )
         identifier = len(history) + 1
         job = {
-            "train": state.get(connection, "splits")["train"],
+            "plan": state.get(connection, "splits"),
             "specification": contract,
             "configuration": config,
         }
@@ -274,7 +282,7 @@ def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) ->
 
 
 def evaluate_candidate(candidate_id: int) -> dict[str, Any]:
-    """Independently measure a trained candidate on the frozen validation observations.
+    """Refit and score fresh models on frozen cross-validation folds within the training budget.
 
     Args:
         candidate_id: Integer ID returned by train_candidate.
@@ -293,20 +301,26 @@ def evaluate_candidate(candidate_id: int) -> dict[str, Any]:
             return trial
         if trial["status"] != "trained":
             raise contracts.ModelerError("Only successfully trained candidates can be evaluated.")
-        splits = state.get(connection, "splits")
-        data = pd.read_parquet(_root() / "data.parquet")
-        model = joblib.load(_root() / f"candidate-{candidate_id}.joblib")
-        measurements = learning.measure(
-            model,
-            data.iloc[splits["train"]],
-            data.iloc[splits["validation"]],
-            _root() / f"candidate-{candidate_id}.joblib",
-        )
-        trial.update(
-            status="evaluated",
-            validation=measurements,
-            feasible=contracts.feasible(contract, measurements),
-        )
+        budget = {"max_training_seconds": 600} | get_request().get("budget", {})
+        remaining = budget["max_training_seconds"] - sum(item["seconds"] for item in history)
+        if remaining <= 0:
+            trial.update(
+                status="timeout", diagnostic="No training budget remains for cross-validation."
+            )
+        else:
+            status, diagnostic, seconds = _execute(candidate_id, remaining, "validate")
+            trial["seconds"] += seconds
+            trial.update(status=status, diagnostic=diagnostic)
+            if status == "trained":
+                result = json.loads((_root() / f"validation-{candidate_id}.json").read_text())
+                path = _root() / f"candidate-{candidate_id}.joblib"
+                measurements = result["scores"] | learning.complexity(joblib.load(path), path)
+                trial.update(
+                    status="evaluated",
+                    cross_validation=result,
+                    validation=measurements,
+                    feasible=contracts.feasible(contract, measurements),
+                )
         connection.execute(
             "UPDATE trials SET value = ? WHERE id = ?", (json.dumps(trial), candidate_id)
         )
@@ -365,7 +379,7 @@ def _report(
         receipt["summary"],
         "## Evaluation",
         "```json\n" + json.dumps(evaluation, indent=2) + "\n```",
-        "## Measurement protocol (v3)",
+        "## Measurement protocol (v4)",
         "model_bytes is the exact uncompressed model.joblib file size (joblib, pickle protocol 5), "
         "including preprocessing, configuration and every label/series estimator; excluding "
         "prediction code, dependency packages, reports and caller-supplied forecast history. "
@@ -373,7 +387,8 @@ def _report(
         "interface: selected tabular features, or forecast target history, time and series ID. "
         "It does not count encoded columns, lags, training rows or inferred feature importance. "
         "Dependency versions are pinned in the model bundle. "
-        "Complexity metrics take no parameters.",
+        "Complexity metrics take no parameters. Predictive constraints apply to mean fold scores; "
+        "complexity constraints apply to the actual saved deployment model.",
         "## Experiments",
     ]
     for item in history:
@@ -385,8 +400,10 @@ def _report(
     sections += [
         "## Limitations",
         "The winner is the best feasible evaluated candidate, not a global optimum. "
-        "The saved pipeline retains its training-only fit; no untested refit is substituted. "
-        "Validation guided selection; final-test measurements are reported once. "
+        "The saved pipeline is fitted on development rows "
+        "(official training rows when supplied). "
+        "Fresh fold fits guide selection by mean predictive scores; "
+        "final-test measurements are reported once. "
         "Thresholds apply to positive-class probability (binary) or each label (multilabel). "
         "Forecast metrics average equally across series and forecast origins. "
         "Partitions, fitting, predictions and historical error scales "
@@ -521,11 +538,13 @@ def _select(
     path = _root() / f"candidate-{winner['id']}.joblib"
     model = joblib.load(path)
     measurements = learning.measure(
-        model, data.iloc[splits["train"] + splits["validation"]], data.iloc[splits["test"]], path
+        model, data.iloc[splits["fit"]], data.iloc[splits["test"]], path
     )
     passed = contracts.feasible(contract, measurements)
     evaluation = {
         "selected_trial": winner["id"],
+        "validation_method": splits["method"],
+        "validation_folds": len(winner["cross_validation"]["folds"]),
         "validation": winner["validation"],
         "final_test": measurements,
         "final_test_passed": passed,

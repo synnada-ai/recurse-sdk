@@ -83,8 +83,8 @@ Families are baseline, linear, extra_trees; forecasting additionally offers seas
 Text supports TF-IDF inside the training pipeline. Multilabel models can use independent outputs
 or classifier chains. Tree and feature sizes are bounded. Trials run one at a time with one native
 compute thread so the cumulative training budget is enforceable; the agent may plan independent
-hypotheses together. The budget includes subprocess startup and fitting, not LLM or evaluation
-wall time. Leave room within the platform run limit for scoring, report writing, and finalization.
+hypotheses together. The budget includes subprocess startup, deployment fitting, and cross-validation fitting/scoring;
+LLM reasoning and final-test scoring use the separate platform wall-time limit. Leave room within the platform run limit for scoring, report writing, and finalization.
 
 Quality is optimized only among candidates meeting every constraint. Preserve the best feasible
 candidate when later trials regress. Passing constraints does not itself end optimization.
@@ -97,8 +97,10 @@ because this input contract specifies an objective and constraints, not a separa
 Call finish_run with budget_exhausted or diminishing_returns and your evidence-backed rationale.
 The tool selects the best feasible evaluated candidate and measures it once on the final test.
 A final-test constraint failure produces no_feasible_model; never restart tuning from test results.
-The bundle retains the exact selected training fit, preprocessing, thresholds, and prediction code.
-It is not refitted on test or validation data. The report distinguishes measured evidence from your
+Selection uses mean cross-validation predictive scores and actual deployment-model complexity.
+Each fold refits preprocessing and estimators; its fitting and scoring consume the training budget.
+The bundle retains the selected development-data fit (official training rows when supplied),
+preprocessing, thresholds, and prediction code. The final test never guides tuning or refitting. The report distinguishes measured evidence from your
 interpretation. If nothing feasible was found, explain unmet requirements without weakening them.
 
 Return exactly the finish_run receipt as your final JSON. Never manufacture metrics, artifact

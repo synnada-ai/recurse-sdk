@@ -5,9 +5,9 @@
 The original six cloud examples are development fixtures. Their successful v1 runs establish
 representative functionality, not repeated reliability or generalization. Complexity adds
 measurement protocol `predictive-modeler/v2`. The prepared initial pilot remains frozen at v2.
-Current code uses `predictive-modeler/v3`, correcting parsed-date ordering throughout forecasting
-and historical MASE scales. Historical v2 records remain unchanged. Compare contenders only under
-the same protocol; rerun both designs at v3 before comparing subsequent outcomes.
+Current code uses `predictive-modeler/v4`: task-appropriate cross-validation with fresh fold fits,
+a separate final test, and deployment-artifact complexity. It retains v3 parsed-date ordering.
+Historical v2/v3 evidence remains unchanged and is not pooled with v4 comparisons.
 
 The new Penguins and MPG cases are also **development** data once inspected here. The fixed-search
 pilot checks the evaluator and provides a cheap reference, not a test of an autonomous agent.
@@ -81,12 +81,12 @@ All MPG final MAEs passed the unchanged limit of 5. Every run used three trials.
 lost both size comparisons and saved no trials, so it is not selected. Observed wallet decrease
 was $1.629812. These two development datasets do not establish general convergence.
 
-The next frozen v3 comparison replaces mandatory family diversity with objective-directed
+The subsequent frozen v3 comparison replaced mandatory family diversity with objective-directed
 experiments and permits stopping when a feasible validation objective reaches its mathematical
 bound. Duplicate configuration lists are removed. Both designs share the parsed-chronology fix
 and clarified baseline/tie tool descriptions. There are no new runtime tools or dependencies.
 
-The batch has 32 attempts: two designs, two repeats, and eight real datasets. It repeats
+The batch planned 32 attempts: two designs, two repeats, and eight real datasets. It repeats
 Penguins and MPG and adds diagnostic breast-cancer classification, multiclass glass,
 house-price regression, music-emotion multilabel classification, airline-passenger forecasting,
 and a five-series stock-price panel. Four independent cloud jobs run at once, each using
@@ -143,3 +143,18 @@ all six modalities. These source proposals informed the frozen validation reques
    a concrete blocker. Report uncertainty and weak task families instead of claiming global
    optimality. Review runtime complexity, resource cleanup and idiomatic implementation before
    adopting any change.
+
+## Cross-validation milestone
+
+The v3 comparison stopped admitting work when default CV was requested. All 16 launched runs
+completed and their artifacts were collected: 13 passed independent verification, one honestly
+reported no feasible model, and two forecast runs selected seed 0 instead of the frozen seed 42.
+The second repeat was never launched. Observed total wallet decrease including the initial pilot
+was $5.368644; $44.631356 of the campaign allowance remains. No backend execution failures
+without diagnostics occurred in these 16 runs.
+
+V4 reserves a final test and refits every validation fold. Fold fitting/scoring consumes the same
+training budget as deployment fitting. Official partitions remain intact. Independent assessment
+replays CV and verifies the saved deployment model. Future prompt comparisons must restart with
+both designs on this protocol and explicitly preserve the requested seed. The six reserved final
+dataset families remain untrained; no generalization or design-convergence claim is made yet.

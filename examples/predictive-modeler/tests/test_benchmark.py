@@ -106,6 +106,10 @@ def test_fixed_search_preserves_outcomes(
     ]
     if scenario == "time_exhausted":
         actions.train_candidate.side_effect = [{"status": "trained", "id": 1, "seconds": 60}]
+    actions.evaluate_candidate.side_effect = [
+        {"status": "evaluated", "id": 1, "seconds": 60 if scenario == "time_exhausted" else 4},
+        {"status": "evaluated", "id": 3, "seconds": 6},
+    ]
     actions.finish_run.return_value = {"status": "succeeded", "artifacts": {"model": "model"}}
     monkeypatch.setattr(runner, "_tools", lambda: actions)
     monkeypatch.setattr(
@@ -130,6 +134,7 @@ def test_fixed_search_preserves_outcomes(
     if scenario in {"success", "no_pin", "time_exhausted"}:
         assert result["status"] == "succeeded"
         assert result["diagnostic"] is None
+        assert result["training_seconds"] == (60 if scenario == "time_exhausted" else 12)
         assert result["evaluation"] == {"final_test": {"mae:{}": 2}}
         assert actions.evaluate_candidate.call_count == (1 if scenario == "time_exhausted" else 2)
     else:

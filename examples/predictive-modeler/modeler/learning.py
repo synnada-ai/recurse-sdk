@@ -14,7 +14,14 @@ from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression, Ridge
-from sklearn.model_selection import GroupShuffleSplit, train_test_split
+from sklearn.model_selection import (
+    GroupKFold,
+    GroupShuffleSplit,
+    KFold,
+    StratifiedKFold,
+    TimeSeriesSplit,
+    train_test_split,
+)
 from sklearn.multioutput import ClassifierChain, MultiOutputClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -22,72 +29,181 @@ from sklearn.utils.class_weight import compute_sample_weight
 
 from .contracts import ModelerError, score
 
-__all__ = ["PredictionModel", "fit", "measure", "partition", "validate_configuration"]
+__all__ = [
+    "PredictionModel",
+    "complexity",
+    "cross_validate",
+    "fit",
+    "measure",
+    "partition",
+    "validate_configuration",
+]
 _MIN_TRAIN = 10
+_MIN_FOLDS = 2
+_MAX_FOLDS = 5
+_MAX_ORIGINS = 3
 _MAX_LAGS = 30
 _MAX_LAG = 365
 
 
-def partition(
-    data: pd.DataFrame, spec: dict[str, Any]
-) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any], np.ndarray[Any, Any]]:
-    """Freeze disjoint training, validation, and test rows before model exploration."""
+def partition(data: pd.DataFrame, spec: dict[str, Any]) -> dict[str, Any]:
+    """Freeze cross-validation folds and an untouched final test before exploration."""
+    data = data.reset_index(drop=True)
     indices = np.arange(len(data))
     split = spec["split"]
-    if split == "official":
-        if "_split" not in data or not data["_split"].isin(["train", "validation", "test"]).all():
-            raise ModelerError("Official splits require _split values train, validation, test.")
-        parts = tuple(indices[data["_split"].eq(name)] for name in ["train", "validation", "test"])
-    elif spec["kind"] == "forecast":
-        parts = _forecast_partition(data, spec)
-    elif split == "temporal":
-        dates = pd.to_datetime(data[spec["time"]])
-        unique = sorted(dates.unique())
-        train_end, val_end = unique[int(len(unique) * 0.6)], unique[int(len(unique) * 0.8)]
-        parts = (
-            indices[dates < train_end],
-            indices[(dates >= train_end) & (dates < val_end)],
-            indices[dates >= val_end],
+    folds = []
+    try:
+        if split == "official":
+            if (
+                "_split" not in data
+                or not data["_split"].isin(["train", "validation", "test"]).all()
+            ):
+                raise ModelerError("Official splits require _split values train, validation, test.")
+            development, validation, test = [
+                indices[data["_split"].eq(name)] for name in ["train", "validation", "test"]
+            ]
+            folds = [{"train": development.tolist(), "validation": validation.tolist()}]
+            method = "official"
+        elif spec["kind"] == "forecast":
+            return _forecast_partition(data, spec)
+        elif split == "temporal":
+            dates = pd.to_datetime(data[spec["time"]])
+            unique = np.sort(dates.unique())
+            boundary = int(len(unique) * 0.8)
+            development = indices[dates.isin(unique[:boundary])]
+            test = indices[dates.isin(unique[boundary:])]
+            folds = _temporal_folds(indices, dates, unique[:boundary])
+            method = "time_series_split"
+        elif split == "group":
+            groups = data[spec["group"]]
+            outer = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=spec["seed"])
+            development, test = next(outer.split(indices, groups=groups))
+            count = min(_MAX_FOLDS, groups.iloc[development].nunique())
+            inner = GroupKFold(n_splits=count)
+            folds = [
+                {
+                    "train": development[train].tolist(),
+                    "validation": development[validation].tolist(),
+                }
+                for train, validation in inner.split(development, groups=groups.iloc[development])
+            ]
+            method = "group_kfold"
+        else:
+            labels = (
+                data[spec["targets"][0]].astype(str)
+                if spec["kind"] in {"binary", "multiclass"}
+                else None
+            )
+            development, test = train_test_split(
+                indices, test_size=0.2, random_state=spec["seed"], stratify=labels
+            )
+            if labels is not None:
+                count = min(_MAX_FOLDS, int(labels.iloc[development].value_counts().min()))
+                inner = StratifiedKFold(n_splits=count, shuffle=True, random_state=spec["seed"])
+                splits = inner.split(development, labels.iloc[development])
+                method = "stratified_kfold"
+            else:
+                splits = KFold(n_splits=_MAX_FOLDS, shuffle=True, random_state=spec["seed"]).split(
+                    development
+                )
+                method = "kfold"
+            folds = [
+                {
+                    "train": development[train].tolist(),
+                    "validation": development[validation].tolist(),
+                }
+                for train, validation in splits
+            ]
+    except ValueError as error:
+        raise ModelerError(
+            f"Cannot construct {split} cross-validation: {error}. "
+            "Supply more observations/groups per class."
+        ) from error
+    if (
+        len(test) < _MIN_TRAIN
+        or not folds
+        or any(len(fold["train"]) < _MIN_TRAIN or not fold["validation"] for fold in folds)
+    ):
+        raise ModelerError(
+            "Cross-validation requires at least ten training rows per fold, "
+            "a nonempty validation fold, and ten final-test rows; supply more data."
         )
-    elif split == "group":
-        groups = data[spec["group"]]
-        splitter = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=spec["seed"])
-        development, test = next(splitter.split(indices, groups=groups))
-        splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=spec["seed"])
-        train, validation = next(splitter.split(development, groups=groups.iloc[development]))
-        parts = (development[train], development[validation], test)
-    else:
-        labels = data[spec["targets"][0]] if spec["kind"] in {"binary", "multiclass"} else None
-        development, test = train_test_split(
-            indices, test_size=0.2, random_state=spec["seed"], stratify=labels
-        )
-        train, validation = train_test_split(
-            development,
-            test_size=0.25,
-            random_state=spec["seed"],
-            stratify=None if labels is None else labels.iloc[development],
-        )
-        parts = (train, validation, test)
-    if min(len(part) for part in parts) < _MIN_TRAIN:
-        raise ModelerError("Each split needs at least ten observations; supply more data.")
-    if spec["kind"] in {"binary", "multiclass"}:
-        trained_classes = set(data.iloc[parts[0]][spec["targets"][0]].astype(str))
-        if trained_classes != set(spec["classes"]):
-            raise ModelerError("The training split must contain every target class.")
-    return parts[0], parts[1], parts[2]
+    if spec["kind"] in {"binary", "multiclass"} and any(
+        set(data.iloc[fold["train"]][spec["targets"][0]].astype(str)) != set(spec["classes"])
+        for fold in folds
+    ):
+        raise ModelerError("Every cross-validation training split must contain every target class.")
+    return {"method": method, "fit": development.tolist(), "test": test.tolist(), "folds": folds}
 
 
-def _forecast_partition(data: pd.DataFrame, spec: dict[str, Any]) -> tuple[Any, Any, Any]:
-    """Reserve two validation origins and one final horizon per series."""
-    parts: list[list[int]] = [[], [], []]
+def _temporal_folds(indices: Any, dates: pd.Series[Any], unique: Any) -> list[dict[str, list[int]]]:
+    """Keep equal timestamps together and reduce folds until initial fits have enough rows."""
+    folds = []
+    for count in range(min(_MAX_FOLDS, len(unique) - 1), _MIN_FOLDS - 1, -1):
+        folds = [
+            {
+                "train": indices[dates.isin(unique[train])].tolist(),
+                "validation": indices[dates.isin(unique[validation])].tolist(),
+            }
+            for train, validation in TimeSeriesSplit(n_splits=count).split(unique)
+        ]
+        if min(len(fold["train"]) for fold in folds) >= _MIN_TRAIN:
+            break
+    return folds
+
+
+def _forecast_partition(data: pd.DataFrame, spec: dict[str, Any]) -> dict[str, Any]:
+    """Reserve a final horizon and refit at two or three earlier expanding origins."""
     groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
+    ordered = [
+        frame.sort_values(spec["time"], key=pd.to_datetime).index.tolist() for _, frame in groups
+    ]
     horizon = spec["horizon"]
-    for _, frame in groups:
-        ordered = frame.sort_values(spec["time"], key=pd.to_datetime).index.to_list()
-        parts[0].extend(ordered[: -3 * horizon])
-        parts[1].extend(ordered[-3 * horizon : -horizon])
-        parts[2].extend(ordered[-horizon:])
-    return np.asarray(parts[0]), np.asarray(parts[1]), np.asarray(parts[2])
+    minimum = max(2 * horizon, _MIN_TRAIN + horizon)
+    count = min(_MAX_ORIGINS, *((len(rows) - horizon - minimum) // horizon for rows in ordered))
+    if count < _MIN_FOLDS:
+        raise ModelerError(
+            "Forecast cross-validation needs at least two full validation horizons "
+            "plus a final horizon after sufficient training history; "
+            "supply more history or a shorter horizon."
+        )
+    folds: list[dict[str, list[int]]] = [{"train": [], "validation": []} for _ in range(count)]
+    development, test = [], []
+    for rows in ordered:
+        development.extend(rows[:-horizon])
+        test.extend(rows[-horizon:])
+        for origin, fold in enumerate(folds):
+            end = len(rows) - (count - origin + 1) * horizon
+            fold["train"].extend(rows[:end])
+            fold["validation"].extend(rows[end : end + horizon])
+    return {"method": "rolling_origin", "fit": development, "test": test, "folds": folds}
+
+
+def cross_validate(
+    data: pd.DataFrame, spec: dict[str, Any], config: dict[str, Any], plan: dict[str, Any]
+) -> dict[str, Any]:
+    """Refit per frozen fold; omit fits for complexity-only requests."""
+    metrics = [spec["quality"]["objective"], *spec["quality"]["constraints"]]
+    if all(metric["metric"] in {"model_bytes", "input_feature_count"} for metric in metrics):
+        return {"scores": {}, "folds": []}
+    results: list[dict[str, Any]] = []
+    for fold in plan["folds"]:
+        training, validation = data.iloc[fold["train"]], data.iloc[fold["validation"]]
+        model = fit(training, spec, config)
+        results.append(
+            {
+                "scores": measure(model, training, validation, include_complexity=False),
+                "train_rows": len(training),
+                "validation_rows": len(validation),
+            }
+        )
+    scores = {
+        key: None
+        if any(result["scores"][key] is None for result in results)
+        else float(np.mean([result["scores"][key] for result in results]))
+        for key in results[0]["scores"]
+    }
+    return {"scores": scores, "folds": results}
 
 
 def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
@@ -161,7 +277,44 @@ def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict
     ):
         raise ModelerError("Supply a list of 1-30 positive integer lags, each at most 365.")
     result["lags"] = sorted(set(lags))
+    family, kind = result["family"], spec["kind"]
+    active = _applicable_options(spec, result)
+    inactive = set(defaults) - active
+    changed = sorted(key for key in inactive if result[key] != defaults[key])
+    if changed:
+        raise ModelerError(
+            f"Options {changed} do not apply to {kind}/{family}; remove them. "
+            "Seasonal forecasts use seasonal_period, not lags."
+        )
+    result.update({key: defaults[key] for key in inactive})
     return result
+
+
+def _applicable_options(spec: dict[str, Any], config: dict[str, Any]) -> set[str]:
+    """Identify controls that affect this predictor rather than create no-op trials."""
+    family, kind = config["family"], spec["kind"]
+    active = {"family"}
+    if family == "linear":
+        active.add("regularization")
+    if family == "extra_trees":
+        active.update({"trees", "max_depth", "min_samples_leaf"})
+    if kind == "forecast":
+        if family in {"linear", "extra_trees"}:
+            active.add("lags")
+        if family == "seasonal":
+            active.add("seasonal_period")
+    else:
+        active.update({"feature_subset", "scale"})
+        selected = config["feature_subset"] or spec["features"]
+        if set(selected) & set(spec["text_features"]):
+            active.update({"max_features", "ngram_max"})
+        if kind in {"binary", "multilabel"}:
+            active.add("threshold")
+        if kind == "multilabel":
+            active.add("strategy")
+        if kind != "regression" and family in {"linear", "extra_trees"}:
+            active.add("class_weight")
+    return active
 
 
 def _estimator(config: dict[str, Any], classification: bool) -> Any:
@@ -326,7 +479,11 @@ class PredictionModel:
                 freq=spec["frequency"],
             )[1:]
             required = (
-                config["seasonal_period"] if config["family"] == "seasonal" else max(config["lags"])
+                config["seasonal_period"]
+                if config["family"] == "seasonal"
+                else 1
+                if config["family"] == "baseline"
+                else max(config["lags"])
             )
             if len(values) < required:
                 raise ModelerError(f"Series {name!r} needs at least {required} historical values.")
@@ -393,10 +550,12 @@ def measure(
     history: pd.DataFrame,
     evaluation: pd.DataFrame,
     model_path: Path | None = None,
+    *,
+    include_complexity: bool = True,
 ) -> dict[str, Any]:
     """Score fixed validation/test observations without supplying their targets to prediction."""
     spec = model.specification
-    complexity = _complexity(model, model_path)
+    complexity_scores = complexity(model, model_path) if include_complexity else {}
     if spec["kind"] != "forecast":
         truth = (
             evaluation[spec["targets"]].to_numpy()
@@ -405,7 +564,7 @@ def measure(
         )
         if spec["kind"] in {"binary", "multiclass"}:
             truth = truth.astype(str)
-        return score(spec, truth, model.predict(evaluation)) | complexity
+        return score(spec, truth, model.predict(evaluation)) | complexity_scores
     measurements = []
     groups = (
         evaluation.groupby(spec["group"], sort=True) if spec["group"] else [("series", evaluation)]
@@ -432,10 +591,10 @@ def measure(
         if any(item[key] is None for item in measurements)
         else float(np.mean([item[key] for item in measurements]))
         for key in measurements[0]
-    } | complexity
+    } | complexity_scores
 
 
-def _complexity(model: PredictionModel, model_path: Path | None) -> dict[str, float]:
+def complexity(model: PredictionModel, model_path: Path | None = None) -> dict[str, float]:
     """Measure the complete predictor once, outside forecast-origin aggregation."""
     spec = model.specification
     requested = {

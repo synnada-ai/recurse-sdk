@@ -87,9 +87,9 @@ def _ready(tools: Any) -> dict[str, Any]:
 def _inline(tools: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fit local fixture candidates directly while preserving the worker job boundary."""
 
-    def execute(identifier: int, remaining: float) -> tuple[str, str, float]:
+    def execute(identifier: int, remaining: float, phase: str = "fit") -> tuple[str, str, float]:
         """Use the real fitting worker with a deterministic measured duration."""
-        worker.run(tools._root(), identifier)
+        worker.run(tools._root(), identifier, phase)
         return "trained", "", 0.1
 
     monkeypatch.setattr(tools, "_execute", execute)
@@ -115,6 +115,8 @@ def test_complete_run_saves_best_measured_pipeline(
     evaluation = json.loads((run / "evaluation.json").read_text())
     assert evaluation == {
         "selected_trial": 1,
+        "validation_method": "official",
+        "validation_folds": 1,
         "validation": {'f1:{"average": "binary", "positive_label": "1"}': 1.0},
         "final_test": {'f1:{"average": "binary", "positive_label": "1"}': 1.0},
         "final_test_passed": True,
@@ -543,7 +545,7 @@ def test_complexity_objective_selects_smallest_feasible_candidate(
     )
     tools.inspect_dataset()
     contract = tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["category"]})
-    assert contract["measurement_protocol"] == "predictive-modeler/v3"
+    assert contract["measurement_protocol"] == "predictive-modeler/v4"
     _inline(tools, monkeypatch)
     for config in [{"family": "extra_trees", "trees": 10}, {"family": "linear"}]:
         trial = tools.train_candidate(config, "Compare deployment size subject to quality.")
@@ -557,3 +559,60 @@ def test_complexity_objective_selects_smallest_feasible_candidate(
     )
     evaluation = json.loads((run / "evaluation.json").read_text())
     assert evaluation["selected_trial"] == 2
+
+
+@pytest.mark.parametrize("outcome", ["failed", "timeout", "no_budget"])
+def test_cross_validation_failure_cannot_accept_deployment_fit(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    """A fitted artifact needs completed CV; failed CV consumes time and stays infeasible."""
+    _ready(tools)
+    _inline(tools, monkeypatch)
+    tools.train_candidate({}, "Fit the deployment candidate.")
+    if outcome == "no_budget":
+        with state.transaction(tools._root()) as connection:
+            trial = state.trials(connection)[0]
+            trial["seconds"] = 60.0
+            connection.execute("UPDATE trials SET value = ? WHERE id = 1", (json.dumps(trial),))
+    else:
+        monkeypatch.setattr(
+            tools, "_execute", lambda identifier, remaining, phase: (outcome, "CV failed.", 2.0)
+        )
+    result = tools.evaluate_candidate(1)
+    assert result["status"] == ("timeout" if outcome == "no_budget" else outcome)
+    assert result["seconds"] == (60.0 if outcome == "no_budget" else 2.1)
+    assert "validation" not in result and "feasible" not in result
+    receipt = tools.finish_run("diminishing_returns", "No verified candidate after CV failure.")
+    assert receipt["status"] == "no_feasible_model"
+
+
+def test_cross_validation_reports_folds_and_charges_budget_once(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default stratified folds and their scores are frozen, recorded, and repeatable."""
+    tools.review_inputs("Predict binary y.", {}, [], [])
+    tools.inspect_dataset()
+    contract = tools.resolve_problem(
+        {"kind": "binary", "targets": ["y"], "features": ["x", "category"], "split": "random"}
+    )
+    assert contract["validation_method"] == "stratified_kfold"
+    assert contract["split_sizes"] == {
+        "fit": 120,
+        "test": 30,
+        "folds": [{"train": 96, "validation": 24}] * 5,
+    }
+    _inline(tools, monkeypatch)
+    tools.train_candidate({}, "Cross-validate the linear candidate.")
+    result = tools.evaluate_candidate(1)
+    assert result["seconds"] == 0.2
+    assert result["cross_validation"] == {
+        "scores": result["validation"],
+        "folds": [{"scores": result["validation"], "train_rows": 96, "validation_rows": 24}] * 5,
+    }
+    assert tools.evaluate_candidate(1) == result
+    monkeypatch.setattr(sys, "argv", ["worker", str(tools._root()), "1", "validate"])
+    monkeypatch.delitem(sys.modules, "modeler.worker", raising=False)
+    runpy.run_module("modeler.worker", run_name="__main__")
+    assert (
+        json.loads((tools._root() / "validation-1.json").read_text()) == result["cross_validation"]
+    )

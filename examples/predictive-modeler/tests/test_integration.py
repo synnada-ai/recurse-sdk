@@ -87,7 +87,7 @@ def test_real_dataset_tool_chain(name: str, rows: int, tools: Any, tmp_path: Pat
             archive.extractall(tmp_path / "bundle")
         model = joblib.load(tmp_path / "bundle/model.joblib")
         inputs = (
-            data.iloc[splits["train"] + splits["validation"]]
+            data.iloc[splits["fit"]]
             if specification["kind"] == "forecast"
             else data.iloc[splits["test"]]
         )

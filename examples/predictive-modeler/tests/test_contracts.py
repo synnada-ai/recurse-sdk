@@ -136,7 +136,7 @@ def test_constraints_require_supported_comparisons(
         ({"frequency": None}, "requires time"),
         ({"horizon": 0}, "positive integer"),
         ({"features": ["x"]}, "omit external"),
-        ({"horizon": 50}, "longer than"),
+        ({"horizon": 50}, "enough history"),
         ({"frequency": "2D"}, "regular"),
     ],
 )

@@ -41,16 +41,26 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
             "Resolved task or quality differs from the evaluator's expected contract.",
         )
         parts = learning.partition(data, expected)
-        expected_splits = dict(
-            zip(["train", "validation", "test"], [part.tolist() for part in parts], strict=True)
+        check(
+            actual.get("validation_method") == parts["method"]
+            and actual.get("split_sizes")
+            == {
+                "fit": len(parts["fit"]),
+                "test": len(parts["test"]),
+                "folds": [
+                    {key: len(rows) for key, rows in fold.items()} for fold in parts["folds"]
+                ],
+            },
+            "Resolved validation method or split sizes differ from the evaluation plan.",
         )
         splits = json.loads((workspace / "splits.json").read_text())
-        check(splits == expected_splits, "Saved splits differ from the frozen evaluation policy.")
+        check(splits == parts, "Saved splits differ from the frozen evaluation policy.")
         history = [
             json.loads(line) for line in (workspace / "trials.jsonl").read_text().splitlines()
         ]
         budget = case["request"]["budget"]
         check(len(history) <= budget["max_trials"], "Trial count exceeds the requested budget.")
+        issues.extend(_audit_budget(history, budget))
         check(
             all(item["status"] != "trained" for item in history),
             "A trained candidate was not evaluated.",
@@ -98,24 +108,27 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
                 == (actual["features"] if subset is None else subset),
                 "Saved model features differ from the selected candidate.",
             )
+            cross_validation = learning.cross_validate(
+                data, expected, winner["configuration"], parts
+            )
+            recorded_cv = winner["cross_validation"]
+            issues.extend(_audit_folds(cross_validation, recorded_cv))
+            final = learning.measure(
+                model, data.iloc[parts["fit"]], data.iloc[parts["test"]], model_path
+            )
+            complexity = {
+                key: value
+                for key, value in final.items()
+                if key in {"model_bytes:{}", "input_feature_count:{}"}
+            }
             reproduced = {
-                "validation": learning.measure(
-                    model, data.iloc[parts[0]], data.iloc[parts[1]], model_path
-                ),
-                "final_test": learning.measure(
-                    model, data.iloc[np.concatenate(parts[:2])], data.iloc[parts[2]], model_path
-                ),
+                "validation": cross_validation["scores"] | complexity,
+                "final_test": final,
             }
         for name, values in reproduced.items():
             recorded = evaluation[name]
             check(
-                values.keys() == recorded.keys()
-                and all(
-                    value is not None
-                    and recorded[key] is not None
-                    and bool(np.isclose(value, recorded[key], rtol=1e-9, atol=1e-9))
-                    for key, value in values.items()
-                ),
+                _scores_match(values, recorded),
                 f"{name} scores do not reproduce.",
             )
         check(
@@ -128,3 +141,46 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
     except Exception as error:
         issues.append(f"Artifact audit failed: {type(error).__name__}: {error}")
     return {"verified": not issues, "issues": issues}
+
+
+def _scores_match(actual: dict[str, Any], recorded: dict[str, Any]) -> bool:
+    """Compare complete finite score mappings with bounded floating point tolerance."""
+    return actual.keys() == recorded.keys() and all(
+        value is not None
+        and recorded[key] is not None
+        and bool(np.isfinite(value) and np.isfinite(recorded[key]))
+        and bool(np.isclose(value, recorded[key], rtol=1e-9, atol=1e-9))
+        for key, value in actual.items()
+    )
+
+
+def _audit_folds(actual: dict[str, Any], recorded: dict[str, Any]) -> list[str]:
+    """Reproduce every recorded fold and its equally weighted predictive mean."""
+    issues = []
+    if len(actual["folds"]) != len(recorded["folds"]):
+        issues.append("Cross-validation fold count differs.")
+    for fold, saved in zip(actual["folds"], recorded["folds"], strict=False):
+        if (fold["train_rows"], fold["validation_rows"]) != (
+            saved["train_rows"],
+            saved["validation_rows"],
+        ):
+            issues.append("Cross-validation fold sizes differ.")
+        if not _scores_match(fold["scores"], saved["scores"]):
+            issues.append("Cross-validation fold scores do not reproduce.")
+    if not _scores_match(actual["scores"], recorded["scores"]):
+        issues.append("Cross-validation aggregate scores do not reproduce.")
+    return issues
+
+
+def _audit_budget(history: list[dict[str, Any]], budget: dict[str, Any]) -> list[str]:
+    """Reject invalid durations and new trials after cumulative worker-time exhaustion."""
+    issues = []
+    elapsed = 0.0
+    for item in history:
+        if elapsed >= budget["max_training_seconds"]:
+            issues.append("A trial started after the training budget was exhausted.")
+        seconds = item["seconds"]
+        if not np.isfinite(seconds) or seconds < 0:
+            issues.append("Recorded trial duration is invalid.")
+        elapsed += seconds
+    return issues

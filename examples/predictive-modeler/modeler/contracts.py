@@ -137,7 +137,7 @@ def resolve(
     if spec["split"] == "temporal" and not time:
         raise ModelerError("A temporal split requires a time column.")
     spec["quality"] = _resolve_quality(quality, spec)
-    spec["measurement_protocol"] = "predictive-modeler/v3"
+    spec["measurement_protocol"] = "predictive-modeler/v4"
     spec["aggregation"] = "uniform across series and forecast steps"
     return spec
 
@@ -158,9 +158,10 @@ def _forecast_options(spec: dict[str, Any], data: pd.DataFrame) -> None:
     for name, frame in groups:
         dates = pd.DatetimeIndex(pd.to_datetime(frame[spec["time"]])).sort_values()
         expected = pd.date_range(dates[0], periods=len(dates), freq=spec["frequency"])
-        if not dates.equals(expected) or len(dates) <= 4 * horizon:
+        if not dates.equals(expected) or len(dates) < max(2 * horizon, 10 + horizon) + 3 * horizon:
             raise ModelerError(
-                f"Series {name!r} must be regular, unique, and longer than 4 horizons."
+                f"Series {name!r} must be regular and unique, with enough history for at least "
+                "two refitted validation horizons and a final test horizon."
             )
 
 

@@ -8,7 +8,7 @@ from typing import Any
 import joblib
 import pandas as pd
 import pytest
-from benchmarks.assessment import assess
+from benchmarks.assessment import _scores_match, assess
 from modeler import contracts, learning
 
 
@@ -19,25 +19,33 @@ def _fixture(frame: pd.DataFrame, root: Path, subset: bool = False) -> dict[str,
         "constraints": [{"metric": "f1", "operator": ">=", "value": 0.9}],
     }
     proposal = {"kind": "binary", "targets": ["y"], "features": ["category", "x"]}
-    case = {"request": {"quality": quality, "budget": {"max_trials": 2}}, "specification": proposal}
+    case = {
+        "request": {"quality": quality, "budget": {"max_trials": 2, "max_training_seconds": 120}},
+        "specification": proposal,
+    }
     spec = contracts.resolve(proposal, frame, quality)
     parts = learning.partition(frame, spec)
+    spec["validation_method"] = parts["method"]
+    spec["split_sizes"] = {
+        "fit": len(parts["fit"]),
+        "test": len(parts["test"]),
+        "folds": [{key: len(rows) for key, rows in fold.items()} for fold in parts["folds"]],
+    }
     config = learning.validate_configuration(
         {"family": "linear", "feature_subset": ["category"] if subset else None}, spec
     )
-    model = learning.fit(frame.iloc[parts[0]], spec, config)
+    model = learning.fit(frame.iloc[parts["fit"]], spec, config)
     path = root / "model.joblib"
     joblib.dump(model, path, compress=0, protocol=5)
-    validation = learning.measure(model, frame.iloc[parts[0]], frame.iloc[parts[1]], path)
-    final = learning.measure(model, frame.iloc[parts[0]], frame.iloc[parts[2]], path)
+    cv = learning.cross_validate(frame, spec, config, parts)
+    final = learning.measure(model, frame.iloc[parts["fit"]], frame.iloc[parts["test"]], path)
+    validation = cv["scores"] | {"model_bytes:{}": final["model_bytes:{}"]}
     with zipfile.ZipFile(root / "model-bundle.zip", "w") as archive:
         archive.write(path, "model.joblib")
     values = {
         "receipt.json": {"status": "succeeded"},
         "resolved-contract.json": spec,
-        "splits.json": dict(
-            zip(["train", "validation", "test"], [part.tolist() for part in parts], strict=True)
-        ),
+        "splits.json": parts,
         "evaluation.json": {
             "selected_trial": 1,
             "validation": validation,
@@ -48,6 +56,8 @@ def _fixture(frame: pd.DataFrame, root: Path, subset: bool = False) -> dict[str,
             "id": 1,
             "configuration": config,
             "status": "evaluated",
+            "seconds": 1.0,
+            "cross_validation": cv,
             "validation": validation,
         },
     }
@@ -69,7 +79,12 @@ def test_audit_reproduces_complete_pipeline_and_feature_subset(
     "mutation",
     [
         ("resolved-contract.json", ["seed"], 17, "Resolved task or quality differs"),
-        ("splits.json", ["train"], [], "Saved splits differ"),
+        ("resolved-contract.json", ["validation_method"], "unknown", "Resolved validation method"),
+        ("resolved-contract.json", ["split_sizes", "fit"], 0, "Resolved validation method"),
+        ("trials.jsonl", ["seconds"], -1, "Recorded trial duration is invalid"),
+        ("trials.jsonl", ["cross_validation", "folds"], [], "Cross-validation fold count differs"),
+        ("trials.jsonl", ["cross_validation", "scores"], {}, "Cross-validation aggregate scores"),
+        ("splits.json", ["fit"], [], "Saved splits differ"),
         ("trials.jsonl", ["status"], "trained", "A trained candidate was not evaluated"),
         ("receipt.json", ["status"], "no_feasible_model", "No accepted model"),
         ("evaluation.json", ["selected_trial"], 2, "Selected trial is not the best"),
@@ -163,3 +178,40 @@ def test_reproduced_constraint_failure_cannot_pass(frame: pd.DataFrame, tmp_path
     result = assess(case, tmp_path, frame)
     assert not result["verified"]
     assert "Reproduced final-test constraints fail." in result["issues"]
+
+
+@pytest.mark.parametrize("change", ["train_rows", "validation_rows", "scores"])
+def test_changed_fold_evidence_fails_audit(
+    frame: pd.DataFrame, tmp_path: Path, change: str
+) -> None:
+    """Fold scores and row counts must match independently replayed training."""
+    case = _fixture(frame, tmp_path)
+    path = tmp_path / "trials.jsonl"
+    record = json.loads(path.read_text())
+    record["cross_validation"]["folds"][0][change] = {} if change == "scores" else 0
+    path.write_text(json.dumps(record))
+    result = assess(case, tmp_path, frame)
+    assert not result["verified"]
+    assert any("Cross-validation fold" in issue for issue in result["issues"])
+
+
+def test_training_budget_exhaustion_forbids_starting_another_trial(
+    frame: pd.DataFrame, tmp_path: Path
+) -> None:
+    """An exhausted cumulative fit/CV budget cannot admit another candidate."""
+    case = _fixture(frame, tmp_path)
+    case["request"]["budget"]["max_training_seconds"] = 1
+    path = tmp_path / "trials.jsonl"
+    record = path.read_text()
+    path.write_text(record + "\n" + record)
+    result = assess(case, tmp_path, frame)
+    assert not result["verified"]
+    assert "A trial started after the training budget was exhausted." in result["issues"]
+
+
+@pytest.mark.parametrize(
+    "actual,recorded", [(None, 1), (1, None), (float("inf"), float("inf")), (1, float("nan"))]
+)
+def test_nonfinite_or_missing_scores_never_reproduce(actual: Any, recorded: Any) -> None:
+    """Undefined metrics cannot support an accepted reproducibility claim."""
+    assert not _scores_match({"mae:{}": actual}, {"mae:{}": recorded})

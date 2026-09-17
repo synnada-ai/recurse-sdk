@@ -65,7 +65,7 @@ A `label` selects one class/label; use a separate constraint for each class that
 Forecast errors are averaged uniformly across series and forecast origins. Within an origin,
 steps have equal weight. MASE scales each series/origin by the historical seasonal-naive MAE,
 using only history before that origin. An undefined scale makes the candidate infeasible.
-Protocol v3 orders partitions, fitting, predictions and historical scales by parsed dates,
+Protocol v4 orders partitions, fitting, predictions and historical scales by parsed dates,
 so accepted non-ISO date strings and shuffled rows preserve chronological evaluation.
 This version does not expose arbitrary aggregation weights or custom metric code.
 
@@ -87,7 +87,7 @@ size with a demonstration MAE ceiling of 10 MPa; [feature-limited classification
 maximizes bean macro F1 with at most four required raw columns. These are explicit example
 requirements, not recommended acceptance thresholds for other datasets.
 
-Measurement protocol **v3** retains the v2 complexity definitions:
+Measurement protocol **v4** retains the v2 complexity definitions:
 
 - `model_bytes`: exact length of the uncompressed `model.joblib` file delivered in the bundle,
   using joblib with pickle protocol 5. Includes the full fitted predictor, preprocessing,
@@ -147,7 +147,7 @@ horizon. It does not reproduce the competition's original evaluation protocol.
 2. `inspect_dataset` loads data and reports schema/missingness without returning held-out rows.
 3. `resolve_problem` freezes the task and disjoint split membership.
 4. `train_candidate` fits the agent's configuration under a subprocess deadline.
-5. `evaluate_candidate` scores that candidate independently on the frozen validation split.
+5. `evaluate_candidate` refits and scores fresh models on the frozen cross-validation folds.
 6. `experiment_history` provides all attempts, hypotheses, failures, and measurements.
 7. `finish_run` selects the best feasible evaluated candidate, measures it once on the final test,
    writes the report, and packages an accepted pipeline.
@@ -181,22 +181,31 @@ remain in history and consume budget. The same normalized configuration cannot b
 
 Trials are serialized with a run-local transaction and one native compute thread. Their measured
 subprocess durations, including interpreter startup, count toward the cumulative training budget.
-The budget does not include download, LLM reasoning, evaluation, or artifact-writing time; the
+Cross-validation subprocess fitting and scoring also consume this budget. Download, LLM reasoning,
+final-test scoring, and final artifact packaging do not; the
 platform's total run limit still applies. Larger CPU allocation will not make this version's
 serial fits parallel. There is no mutable global run state.
 
 ### Evaluation and model selection
 
-Tabular tasks use a fixed 60/20/20 train/validation/test split, or official assignments. Random
-binary/multiclass splits are stratified. Group splits keep groups disjoint. Temporal splits keep
-equal timestamps together and order partitions. A classification training partition must contain
-every class. Repeated validation drives search, so final-test data is never used to pick a model.
+By default, tabular tasks reserve 20% of observations for a final test and use five-fold
+cross-validation on the remaining development data. Binary and multiclass tasks use stratified
+folds; regression and multilabel tasks use shuffled folds. The default random seed is 42.
+Group-aware tasks keep groups disjoint. Temporal tasks use expanding training windows and keep
+equal timestamps together. Fold counts reduce when class counts, group counts or history require
+it; fewer than two valid folds is rejected. Every training fold needs at least ten rows.
+Supplied official train/validation/test assignments are preserved as one explicit validation fold.
 
-Forecast validation uses two successive, non-overlapping full horizons per series. Actual targets
-from the first horizon become historical observations only at the second origin. The final test
-is the next horizon. Forecast estimators retain their initial training fit; only observed history
-advances. Series have their own origins and no cross-series features. No future actual target is
-fed into lag features during a horizon.
+Forecasts reserve the last full horizon of each series for the final test and use up to three
+expanding-window validation origins, reducing to two for shorter histories. Every origin refits
+the model using only earlier observations. Each origin predicts a complete horizon without
+future actual targets entering its lag features. All series use the same number of origins.
+
+Every fold fits preprocessing and estimators from scratch. Selection uses the equal mean of
+fold predictive scores; constraints on those scores apply to that mean, not to every fold.
+Per-fold scores and row counts are recorded in each trial. Complexity is measured on the actual
+saved deployment candidate fitted on all development rows (official training rows when supplied).
+The selected artifact is evaluated once on the untouched test set, without a subsequent refit.
 
 All hard constraints must pass for a candidate to compete on its objective. Undefined metrics
 cannot pass. Ties preserve the earlier candidate. A final-test constraint failure reports
@@ -266,7 +275,7 @@ Run from that extracted directory. Classification/regression inputs contain the 
 columns. Forecast inputs contain each series' observed history through the forecast origin,
 including target, time, and series columns. The output covers the configured next horizon.
 Only load trusted model bundles: joblib uses Python pickle semantics. The bundle retains the exact
-selected training-only fit; it is not silently refitted on validation or test data.
+selected development-data fit; no test-driven refit is substituted.
 
 ## Local verification
 
