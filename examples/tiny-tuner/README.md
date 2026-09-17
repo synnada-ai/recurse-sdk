@@ -116,7 +116,8 @@ The final JSON receipt reports `target_reached`, `cv_accuracy`, `parameter_count
 - `best-model.pt` and `best-model.json`: selected checkpoint plus recipe, fold scores,
   checkpoint fold index, training example count, and protocol.
 - `receipt.json`: authoritative final output; repeated completion returns the same receipt.
-- `search.json`: the shared monotonic deadline, meaningful only on the execution host.
+- `search.json`: resolved protocol (even when no trial completes) and the shared monotonic
+  deadline, whose timestamp is meaningful only on the execution host.
 
 The saved checkpoint is trained on **the last fold's training partition**, not all 60,000
 examples. Mean CV accuracy describes the training recipe across folds, not those particular

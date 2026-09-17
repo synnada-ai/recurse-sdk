@@ -257,7 +257,7 @@ def _folds(labels: Tensor, count: int, samples: int, seed: int) -> tuple[Tensor,
 def _splits(labels: Tensor, settings: dict[str, Any]) -> tuple[tuple[Tensor, Tensor], ...]:
     """Resolve repeatable train/validation partitions without changing the selected sample."""
     method = settings["cv_method"]
-    count = settings["cv_folds"]
+    count = 2 if method == "stratified_holdout" else settings["cv_folds"]
     seed = settings["cv_seed"]
     initial = _folds(labels, count, settings["samples"], seed)
     selected = torch.cat(initial)
@@ -357,7 +357,14 @@ def _deadline(workspace: Path, seconds: float) -> float:
     """Persist the first evaluation's deadline so tool calls share one allowance."""
     path = workspace / "search.json"
     if not path.exists():
-        _write(path, {"deadline": time.monotonic() + seconds})
+        _write(
+            path,
+            {
+                "deadline": time.monotonic() + seconds,
+                "protocol": dict(recurse.context().inputs),
+                "protocol_version": 2,
+            },
+        )
     return float(json.loads(path.read_text())["deadline"])
 
 

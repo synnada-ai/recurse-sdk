@@ -376,3 +376,24 @@ def test_default_cv_preserves_baseline_folds() -> None:
             tools._folds(labels, 3, 100, 7), tools._splits(labels, settings), strict=True
         )
     )
+
+
+def test_holdout_ignores_kfold_count() -> None:
+    """Changing an irrelevant K-fold parameter cannot change holdout membership."""
+    labels = torch.arange(10).repeat_interleave(20)
+    settings = {
+        "cv_method": "stratified_holdout",
+        "cv_folds": 2,
+        "cv_repeats": 2,
+        "cv_seed": 7,
+        "samples": 100,
+        "validation_fraction": 0.2,
+    }
+    first = tools._splits(labels, settings)
+    settings["cv_folds"] = 5
+    second = tools._splits(labels, settings)
+    assert all(
+        torch.equal(a, b)
+        for split_a, split_b in zip(first, second, strict=True)
+        for a, b in zip(split_a, split_b, strict=True)
+    )
