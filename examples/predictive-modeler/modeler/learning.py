@@ -331,7 +331,7 @@ def _estimator(config: dict[str, Any], classification: bool) -> Any:
                 random_state=42,
             )
             if classification
-            else Ridge(alpha=config["regularization"], solver="lsqr")
+            else Ridge(alpha=config["regularization"], solver="lsqr", tol=1e-12, max_iter=10000)
         )
     arguments = {
         "n_estimators": config["trees"],

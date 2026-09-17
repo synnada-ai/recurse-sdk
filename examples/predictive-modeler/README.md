@@ -175,6 +175,9 @@ diminishing returns. No global-optimality claim or exhaustive enumeration is mad
 - **Forecasting:** last-value and seasonal-naive baselines, ridge or extra trees on selected lags
   and calendar features. Each series has its own model; predictions recurse through the horizon.
 
+Ridge uses tightly converged LSQR (`tol=1e-12`, `max_iter=10000`) to avoid prematurely
+truncated fits on correlated predictors, including forecast lags. The worker deadline still applies.
+
 Candidate options and defaults are defined in `validate_configuration` and described by the
 training tool. Bounds limit tree counts/depth, vocabulary sizes, and lag counts. Failed attempts
 remain in history and consume budget. The same normalized configuration cannot be repeated.

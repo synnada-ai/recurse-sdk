@@ -771,3 +771,36 @@ def test_saved_panel_predictor_rejects_missing_series_identifiers(
     data.loc[rows, "series"] = None
     with pytest.raises(ModelerError, match=r"series.*missing"):
         restored.predict(data)
+
+
+def test_unscaled_ridge_converges_to_independent_svd_solution() -> None:
+    """Different feature magnitudes must not make Ridge silently stop before converging."""
+    position = np.linspace(0, 1, 80)
+    frame = pd.DataFrame(
+        {
+            "large": 1000 * position,
+            "almost_duplicate": 1000 * position + 0.01 * np.sin(13 * position),
+            "small": 0.01 * np.cos(7 * position),
+            "wave": np.sin(5 * position),
+        }
+    )
+    frame["target"] = 0.4 * frame["large"] + 80 * frame["small"] + 2 * frame["wave"]
+    spec = resolve(
+        {"kind": "regression", "targets": ["target"], "features": list(frame.columns[:-1])},
+        frame,
+        {},
+    )
+    config = validate_configuration({"family": "linear", "scale": False}, spec)
+    model = fit(frame, spec, config)
+    design = frame[spec["features"]].to_numpy()
+    target = frame["target"].to_numpy()
+    centered = design - design.mean(axis=0)
+    left, singular, right = np.linalg.svd(centered, full_matrices=False)
+    coefficients = right.T @ (
+        singular / (singular**2 + config["regularization"]) * (left.T @ (target - target.mean()))
+    )
+    intercept = target.mean() - design.mean(axis=0) @ coefficients
+    np.testing.assert_allclose(model.estimator["model"].coef_, coefficients, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(
+        model.predict(frame), design @ coefficients + intercept, rtol=1e-9, atol=1e-9
+    )
