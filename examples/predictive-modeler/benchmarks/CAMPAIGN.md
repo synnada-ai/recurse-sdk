@@ -16,14 +16,15 @@ the **same run**, with checksum verification and separate preserved failure/reco
 
 A focused eight-run comparison then tested forest-size guidance. All eight models verified, but
 the added sentence failed to prevent oversized forests and did not improve selected-model quality.
-It was rejected. A more precise minimum-capacity probe is prepared but **blocked by service
-failures before model execution**. No experimental sentence has been added to the deployed prompt.
-The six final dataset families remain untrained; overall design convergence is not claimed.
+It was rejected. A refined minimum-capacity probe then completed eight verified runs and reduced
+oversized trials from four to one while tying all four paired CV objectives. Its exact tested
+single sentence is adopted on top of the retained baseline. This is a narrow sizing benefit,
+with no predictive gain or trial reduction. The six final dataset families remain untrained;
+the selected design will be frozen before their evaluation.
 
-Last confirmed campaign wallet decrease: **$20.169835 of the $50 allowance**, leaving $29.830165
-before the latest failed preparation attempts. Their follow-up balance reads also failed, so the
-final balance is unavailable. Account deltas can include other activity and are not itemized
-per-run charges. No top-ups occurred. All admitted training runs are terminal and collected.
+Last confirmed wallet balance: **$73.318711**. The campaign wallet decrease is **$22.271010 of
+the $50 allowance**, leaving $27.728990. Account deltas can include other activity and are not
+itemized per-run charges. No top-ups occurred. All admitted training runs are terminal and collected.
 
 ## Controlled main comparison
 
@@ -54,7 +55,7 @@ Every main-comparison run used three trials; the contender did not save trials.
 ## Forest-capacity refinement
 
 [Forest experiment records](forest-capacity-results.json) preserve both the completed comparison
-and the blocked refinement. The first candidate added one sentence asking for few shallow trees
+and the initial failed refinement preparations. The first candidate added one sentence asking for few shallow trees
 when byte caps bind. Glass and Emotions each ran twice per design with unchanged three-trial,
 120-second allowances, model, resources and evaluator. The preregistered decision required
 preserved acceptance, no paired CV regression, and repeat-consistent quality or sizing benefit.
@@ -65,14 +66,29 @@ All four guided forests remained oversized: Glass used 50 trees with depths 6 an
 in one. The phrase reduced some capacities but did not establish a useful size scale, so it was
 not adopted. An attempt with no forest is reported separately, never counted as successful sizing.
 
-The next isolated hypothesis replaces that vague sentence with:
+The refined isolated hypothesis replaced that vague sentence with:
 
 > If you explore a forest under a model_bytes cap, first measure one depth-one tree to establish serialized overhead, then choose capacity from that evidence.
 
-It keeps the same cases, repeats, resources and decision criteria. It changes one conditional
-search instruction, with no new tool or parameter. **There are no model outcomes for this
-refinement**, so the sizing hypothesis is unresolved rather than disproved. Prior results are
-retained, and neither candidate sentence is part of the current deployed prompt.
+It kept the same cases, repeats, resources and decision criteria. The
+[refined probe records](forest-probe-results.json) preserve all eight verified model outcomes.
+All four paired best-feasible CV objectives tied, and acceptance remained eight of eight.
+Oversized trials fell from four to one. Emotions used a compliant single depth-one tree in both
+guided repeats: 22261 and 19605 bytes, versus baseline forests of 66645 and 161509 bytes under
+the 50000-byte cap. This repeat-consistent sizing improvement meets the preregistered criterion.
+
+Glass illustrates the limit: guided repeat 0 used 100 depth-one trees and fit within its
+100000-byte cap at 90189 bytes; repeat 1 ignored the probe instruction and used 100 depth-five
+trees, producing 429325 bytes. Both baseline Glass forests exceeded the cap. A compliant forest
+therefore does not establish that the requested minimum probe was followed.
+
+There was no predictive-quality improvement, trial reduction, or speed gain: aggregate guided
+training time was 69.94 seconds versus 53.03 seconds for baseline. Every forest probe was the
+third and final trial, so subsequent capacity growth from measured overhead was not tested. The adopted
+change is exactly the tested minimum-probe sentence, with no new tool or parameter; the rejected
+vague sentence is absent. Prior failures and comparisons remain separate. These two validation
+datasets support a narrow improvement in sizing decisions, not general optimality or reliable
+instruction compliance on every run.
 
 ## Service failures and recovery
 
@@ -96,9 +112,13 @@ No run ID or admission recovery reference was returned. Installed SDK 0.1.7 call
 only after preparation returns and prints an admission reference if that later request fails.
 These failures occurred during preparation, before predictive tools executed. All four balance
 observations also returned Bad Gateway. No server stack trace or underlying cause was available.
-New submissions stopped; the other four refinement entries were never attempted. Every already
-admitted training run is collected. Existing spending authorization remains; service recovery is
-needed before continuing the refined experiment and final evaluation.
+New submissions stopped; the other four entries in that failed batch were never attempted.
+The user subsequently instructed work to continue while they debugged the backend. A fresh
+eight-run refinement completed with no 502 errors and no retries. The controller now records
+timestamped read errors and allows bounded retries for read-only requests and proven
+pre-admission preparation failures; ambiguous admission is never resubmitted. Known admitted
+runs are observed and recovered using their existing IDs. The earlier failed preparations and
+balance observations remain preserved separately from the successful resumed comparison.
 
 ## Evaluation and numerical verification
 
@@ -132,8 +152,8 @@ Historical protocols remain separate from v4:
   Reassessments never overwrite failures. Numerical canaries are diagnostic evidence, not extra
   favorable repeats in the design comparison.
 
-Resume the refined forest test after service recovery, preserving its failed submissions. Select
-a frozen design from development/validation evidence, then evaluate the
+The main baseline plus the exact tested minimum-probe sentence is selected from development and
+validation evidence. Freeze that design, then evaluate the
 [frozen final collection](holdout-cases.json) once: Swiss banknotes, wine, multilabel yeast,
 diamonds, chocolate search interest, and ERCOT regional demand. Only source/schema/split preflight
 has run; **no holdout models have been fitted**. Its SHA-256 remains

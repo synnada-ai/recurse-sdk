@@ -79,6 +79,8 @@ trained candidate. Use experiment_history to inspect all evidence; failed fits c
 Explain why evidence supports or weakens each hypothesis, and select subsequent experiments from
 that reasoning. Avoid repeating equivalent configurations or making changes with no rationale.
 
+If you explore a forest under a model_bytes cap, first measure one depth-one tree to establish serialized overhead, then choose capacity from that evidence.
+
 Families are baseline, linear, extra_trees; forecasting additionally offers seasonal naive.
 Text supports TF-IDF inside the training pipeline. Multilabel models can use independent outputs
 or classifier chains. Tree and feature sizes are bounded. Trials run one at a time with one native
