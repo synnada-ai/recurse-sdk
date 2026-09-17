@@ -18,8 +18,8 @@ replaces a supported modality. Small generated unit-test fixtures only exercise 
 
 - **Baseline:** current committed agent, including complexity support. Both prepared apps explicitly pin `gpt-5.6-luna`
   to avoid a service-default change between attempts.
-- **Contender:** identical tools, dependencies and input/output schemas; append
-  `complexity-aware.md` to its prompt. The only change asks the agent to diagnose predictive
+- **Contender:** identical tools, dependencies and input/output schemas; the historical pilot
+  appended a complexity-aware prompt. The only change asked the agent to diagnose predictive
   versus complexity failures and choose experiments that can plausibly improve feasibility
   or the objective under the remaining allowance.
 - **Hypothesis:** this reasoning avoids wasted experiments and produces at least comparable
@@ -29,15 +29,11 @@ replaces a supported modality. Small generated unit-test fixtures only exercise 
   specification and cannot be compared on natural-language interpretation. Its trial and
   training budgets match the autonomous request, but its lack of LLM overhead is explicit.
 
-Prepare isolated applications and an exact schedule locally:
-
-```sh
-uv run --locked python -m benchmarks.prepare /tmp/modeler-pilot
-```
-
-This creates two applications, two public request files, and a private `plan.json` with expected
-specifications and content hashes. It performs no cloud calls. Both prepared applications are
-packaging-tested: evaluator files are absent. Do not copy `plan.json` into either application.
+The initial pilot used a one-off preparation utility to freeze two isolated applications,
+two public request files, and a private plan with expected specifications and content hashes.
+That utility and the rejected prompt appendix have been removed; the
+[immutable pilot records](cloud-pilot-results.json) preserve their application hashes and results.
+The retained deployment-isolation test verifies that evaluator files are absent from the package.
 
 ## Completed initial cloud pilot
 
