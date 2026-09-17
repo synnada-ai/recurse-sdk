@@ -26,9 +26,10 @@ split and estimator seeds, so they do not estimate dataset-sampling uncertainty.
 ## Cases and source provenance
 
 `cases.json` currently contains only **development** cases: the existing six task modalities
-with a three-trial allowance, plus two additional public CSV cases. There is no claim of
-sealed holdout coverage yet. Validation and final holdout datasets must be chosen and frozen
-before agent comparisons; related datasets and all task variants stay in the same partition.
+with a three-trial allowance, plus two additional public CSV cases. `validation-cases.json`
+contains six further comparison tasks; `holdout-cases.json` is the frozen final collection,
+with source/schema/split preflight only and no fitted models yet. Related source families
+and all task variants stay in the same benchmark partition.
 
 The new CSVs are pinned to commit `71e2436a092d714350de0fc409ca8a8714e7e78f` of the
 [Seaborn example-data repository](https://github.com/mwaskom/seaborn-data), with exact SHA-256

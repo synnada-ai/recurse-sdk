@@ -1,0 +1,2945 @@
+{
+  "measurement_protocol": "predictive-modeler/v4",
+  "status": "paused_incomplete",
+  "selected_design": "baseline retained; no new winner selected",
+  "corrected_runtime_revision": "52355f8",
+  "retained_classification_runtime_revision": "2255d36",
+  "cohort_rationale": "Retained paths use DummyClassifier/LogisticRegression/ExtraTreesClassifier; Ridge-only change cannot affect their recorded fits. Each retained artifact was independently re-audited under the current verifier.",
+  "delivery_denominators": {
+    "model_slots_planned": 32,
+    "attempted_submissions_observed": 29,
+    "admissions_paused_due_to_repeated_preparation_failure": true,
+    "admitted_model_slots_observed": 27,
+    "model_slots_without_admitted_attempt": 5,
+    "by_design_observed": {
+      "baseline": 14,
+      "adaptive-search": 15
+    },
+    "successful_verified_model_deliveries": {
+      "baseline": 13,
+      "adaptive-search": 14
+    },
+    "extra_pre_admission_failures": 2,
+    "note": "Paired model-slot table reserves32 slots. Delivery reliability retains every observed submission, including both known pre-admission preparation failures. Admissions paused after repeated502; no future submission count or design winner is assumed. Pending records are not successful deliveries. This is selected comparison-cohort accounting, not the whole historical campaign."
+  },
+  "validation_objective_pairs": {
+    "adaptive_wins": 1,
+    "baseline_wins": 4,
+    "ties": 4,
+    "not_comparable": 3
+  },
+  "pairs": [
+    {
+      "case_id": "air-passengers",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "box-jenkins-airpassengers",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "baseline",
+      "objective": {
+        "metric": "mae",
+        "direction": "minimize"
+      },
+      "baseline": 20.975083344603632,
+      "adaptive_search": 21.02732841904683
+    },
+    {
+      "case_id": "air-passengers",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "box-jenkins-airpassengers",
+      "baseline_valid": false,
+      "adaptive_valid": false,
+      "comparable": false,
+      "mismatch": [
+        "request_hash",
+        "specification_hash",
+        "budget_hash",
+        "protocol",
+        "verifier_hash",
+        "environment",
+        "resources",
+        "data_hash",
+        "model",
+        "dataset_family",
+        "partition"
+      ],
+      "winner": "not_comparable"
+    },
+    {
+      "case_id": "emotions",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "music-emotions-trohidis",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "baseline",
+      "objective": {
+        "metric": "f1",
+        "direction": "maximize",
+        "parameters": {
+          "average": "micro"
+        }
+      },
+      "baseline": 0.6386762239539949,
+      "adaptive_search": 0.5971838734551859
+    },
+    {
+      "case_id": "emotions",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "music-emotions-trohidis",
+      "baseline_valid": false,
+      "adaptive_valid": true,
+      "comparable": false,
+      "mismatch": [
+        "request_hash",
+        "specification_hash",
+        "budget_hash",
+        "protocol",
+        "verifier_hash",
+        "environment",
+        "resources",
+        "data_hash",
+        "model",
+        "dataset_family",
+        "partition"
+      ],
+      "winner": "not_comparable"
+    },
+    {
+      "case_id": "glass",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "forensic-glass",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "f1",
+        "direction": "maximize",
+        "parameters": {
+          "average": "macro"
+        }
+      },
+      "baseline": 0.46962637148144387,
+      "adaptive_search": 0.46962637148144387
+    },
+    {
+      "case_id": "glass",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "forensic-glass",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "f1",
+        "direction": "maximize",
+        "parameters": {
+          "average": "macro"
+        }
+      },
+      "baseline": 0.46962637148144387,
+      "adaptive_search": 0.46962637148144387
+    },
+    {
+      "case_id": "houses",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "windsor-houseprices-1987",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "baseline",
+      "objective": {
+        "metric": "mae",
+        "direction": "minimize"
+      },
+      "baseline": 13355.022417578719,
+      "adaptive_search": 13805.556797640189
+    },
+    {
+      "case_id": "houses",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "windsor-houseprices-1987",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "baseline",
+      "objective": {
+        "metric": "mae",
+        "direction": "minimize"
+      },
+      "baseline": 13441.747043914182,
+      "adaptive_search": 13805.556797640189
+    },
+    {
+      "case_id": "mpg",
+      "repeat": 0,
+      "partition": "development",
+      "dataset_family": "mpg",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "adaptive-search",
+      "objective": {
+        "metric": "model_bytes",
+        "direction": "minimize"
+      },
+      "baseline": 5223.0,
+      "adaptive_search": 4039.0
+    },
+    {
+      "case_id": "mpg",
+      "repeat": 1,
+      "partition": "development",
+      "dataset_family": "mpg",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "baseline",
+      "objective": {
+        "metric": "model_bytes",
+        "direction": "minimize"
+      },
+      "baseline": 4135.0,
+      "adaptive_search": 5047.0
+    },
+    {
+      "case_id": "penguins",
+      "repeat": 0,
+      "partition": "development",
+      "dataset_family": "penguins",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "f1",
+        "direction": "maximize",
+        "parameters": {
+          "average": "macro"
+        }
+      },
+      "baseline": 0.9921140926006029,
+      "adaptive_search": 0.9921140926006029
+    },
+    {
+      "case_id": "penguins",
+      "repeat": 1,
+      "partition": "development",
+      "dataset_family": "penguins",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "f1",
+        "direction": "maximize",
+        "parameters": {
+          "average": "macro"
+        }
+      },
+      "baseline": 0.9921140926006029,
+      "adaptive_search": 0.9921140926006029
+    },
+    {
+      "case_id": "stocks",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "vega-five-stocks-2000-2010",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "mase",
+        "direction": "minimize",
+        "parameters": {
+          "seasonal_period": 12
+        }
+      },
+      "baseline": 1.5369373424711095,
+      "adaptive_search": 1.5369373424711095
+    },
+    {
+      "case_id": "stocks",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "vega-five-stocks-2000-2010",
+      "baseline_valid": false,
+      "adaptive_valid": false,
+      "comparable": false,
+      "mismatch": [
+        "request_hash",
+        "specification_hash",
+        "budget_hash",
+        "protocol",
+        "verifier_hash",
+        "environment",
+        "resources",
+        "data_hash",
+        "model",
+        "dataset_family",
+        "partition"
+      ],
+      "winner": "not_comparable"
+    },
+    {
+      "case_id": "wdbc",
+      "repeat": 0,
+      "partition": "validation",
+      "dataset_family": "wisconsin-diagnostic",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "adaptive-search",
+      "objective": {
+        "metric": "precision",
+        "direction": "maximize",
+        "parameters": {
+          "positive_label": "1"
+        }
+      },
+      "baseline": 0.9285862510011118,
+      "adaptive_search": 0.9771428571428572
+    },
+    {
+      "case_id": "wdbc",
+      "repeat": 1,
+      "partition": "validation",
+      "dataset_family": "wisconsin-diagnostic",
+      "baseline_valid": true,
+      "adaptive_valid": true,
+      "comparable": true,
+      "mismatch": [],
+      "winner": "tie",
+      "objective": {
+        "metric": "precision",
+        "direction": "maximize",
+        "parameters": {
+          "positive_label": "1"
+        }
+      },
+      "baseline": 0.9771428571428572,
+      "adaptive_search": 0.9771428571428572
+    }
+  ],
+  "records": [
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "bdab497d-0375-4e93-becf-44d26927e78c",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "d84b5f5345b6dcacfb4d1e9805d97feb35c9f65234c329963b84f1e0ff203979",
+      "specification_hash": "23eef23e259048344778c335fcf73f8002ef8ad1165ec2de694beea29168e5b4",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.9921140926006029,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 15.624046617000005,
+      "elapsed_seconds": 684.2145749999909,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "5ba557ce46a46fa8ae1d1096e288d4806d9f13d979bd9d7a781a2a6b12d20ec8",
+        "model": "baff43bb7cead1c10e0c20d9fda698ebac62283d7ea5bd1ba8e6091ce0273851",
+        "report": "58db51667650d43f483beabaa730fa41516642c81f375e33210a57ede8f14bb8",
+        "resolved_contract": "acc04d42d84ee7d2764bf0c03c6cfbd52c7055861f923e5fde8e9a04612d7381",
+        "review": "300358f45151b8c9eda4a1b7da8b9e8170ba2a97a3da14c2495720cc28640411",
+        "splits": "a30dd513510bdcc53030380e6ec593cdc0369c3504a0624812b2c68d3e1d4838",
+        "trials": "89ad25ca17a1525797ecbc0bce7a13c0f0a1ca8f6ce01b12940f337e3ab7c2eb"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "539b8e0384e43eaf0bdd8b7ac2df3e7d45654a1761e7fa5de3408ba9bb2c8fd8",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "54af5f56-23f2-4cbf-8679-66b1d21dd618",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "d84b5f5345b6dcacfb4d1e9805d97feb35c9f65234c329963b84f1e0ff203979",
+      "specification_hash": "23eef23e259048344778c335fcf73f8002ef8ad1165ec2de694beea29168e5b4",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.9828560296123126,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 1280149.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.9921140926006029,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 1280149.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.332645322000019,
+      "elapsed_seconds": 631.2191863330081,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "4b21e233fa697e2f4858d676a17b0092727c36826000a79935fb310aeb3d48f8",
+        "model": "626ec4d57769ddf99ad9dd2efe5114e255225059672120996d3c7e85e9562bb3",
+        "report": "866b1200158cbb1c77928fa524e1dd926fa2c8358f12350d543bca03607fdd05",
+        "resolved_contract": "acc04d42d84ee7d2764bf0c03c6cfbd52c7055861f923e5fde8e9a04612d7381",
+        "review": "eae5a8452de9505c0a1c55d852fa95d8df226d01eb23fc0ff21b7fe4a9dd3181",
+        "splits": "a30dd513510bdcc53030380e6ec593cdc0369c3504a0624812b2c68d3e1d4838",
+        "trials": "83c1f6a2f8c60aca76d07b876d413008720a299c9154ce81549e5dcf1cce4fe1"
+      },
+      "selected_configuration": {
+        "family": "extra_trees",
+        "feature_subset": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "scale": false,
+        "regularization": 1.0,
+        "trees": 200,
+        "max_depth": 30,
+        "min_samples_leaf": 1,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "315c74085ead45c2cb2e62552d576fbe8b5228265e7ec376506e10a64b706cc1",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "wdbc",
+      "dataset_family": "wisconsin-diagnostic",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "c2ed0ac3-e8b0-4b44-8749-2266aec72b9d",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "77f9379acd6f06a3430e9f3c737e9955c2cc31325747afb304aa71de2e4ba4c1",
+      "specification_hash": "fcd88b32db5ceb4594bded75d0c9c91a9e96a4ccb29061ff50823ac4af3a6854",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "bcbc246e14361dd6de979f23175e9548972ab155c182a858be9a267e583d6584",
+      "evaluation": {
+        "final_test": {
+          "model_bytes:{}": 7244.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9523809523809523,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9523809523809523
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "model_bytes:{}": 7244.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9285862510011118,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9764705882352942
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 26.133896472999965,
+      "elapsed_seconds": 798.2237683340209,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "74323ae14e99feb0226fa092387d35ba53819c39f8c3eac3d645857cf98db266",
+        "model": "3951afdf2965f446904fa566a595d5a8d0afc4c74dabf6f2747df8250f9e8fbe",
+        "report": "48f209a73bf94d0cabd7c973070c65fc22334757a9b75ed8b6616260996ec547",
+        "resolved_contract": "cb9ba450427205b49e296669a67dd5a296a53914afc6a59d4c7000052ee0e52b",
+        "review": "2fccee3117ccf3886702fa6e1a760b06ea68da6c83e7d806fbd1b5b63986a1c8",
+        "splits": "b4d7aa672414a690915fbab615368aba7e856c1d4dc8060fdc8e1a5d9d8cc995",
+        "trials": "4daa08dfc694476a659682863b77c08e38311dd6b25dfc8d4b15224185651708"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "radius_mean",
+          "texture_mean",
+          "perimeter_mean",
+          "area_mean",
+          "smoothness_mean",
+          "compactness_mean",
+          "concavity_mean",
+          "concave_points_mean",
+          "symmetry_mean",
+          "fractal_dimension_mean",
+          "radius_sd",
+          "texture_sd",
+          "perimeter_sd",
+          "area_sd",
+          "smoothness_sd",
+          "compactness_sd",
+          "concavity_sd",
+          "concave_points_sd",
+          "symmetry_sd",
+          "fractal_dimension_sd",
+          "radius_peak",
+          "texture_peak",
+          "perimeter_peak",
+          "area_peak",
+          "smoothness_peak",
+          "compactness_peak",
+          "concavity_peak",
+          "concave_points_peak",
+          "symmetry_peak",
+          "fractal_dimension_peak"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": "balanced",
+        "threshold": 0.3,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "f7aea2d0ddeac1a578a206e33ef67ca25044a592baf96073b5fc4e4ca6d8bffe",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "wdbc",
+      "dataset_family": "wisconsin-diagnostic",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "4f126564-c0e0-4e0a-80b7-be9a9ec1b338",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "77f9379acd6f06a3430e9f3c737e9955c2cc31325747afb304aa71de2e4ba4c1",
+      "specification_hash": "fcd88b32db5ceb4594bded75d0c9c91a9e96a4ccb29061ff50823ac4af3a6854",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "bcbc246e14361dd6de979f23175e9548972ab155c182a858be9a267e583d6584",
+      "evaluation": {
+        "final_test": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.975,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9285714285714286
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9771428571428572,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9529411764705882
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 13.786928091000007,
+      "elapsed_seconds": 722.2916751250159,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "6f0907d618de86491f137d70a5a911899a637ab96d323dae7c03de588f45f187",
+        "model": "89605ab80e2c8a528b664ee85c1fec1dad399bb1ff0899408e6961643c10f8df",
+        "report": "dc1fe204cf0abb6823921518393b87db1e30d1c9e5a9452590166956840aba5e",
+        "resolved_contract": "cb9ba450427205b49e296669a67dd5a296a53914afc6a59d4c7000052ee0e52b",
+        "review": "5b0e10b9beb5bcee91fe1c742a3ba7037a0fec2c99bde0a434b0cf9832c2c691",
+        "splits": "b4d7aa672414a690915fbab615368aba7e856c1d4dc8060fdc8e1a5d9d8cc995",
+        "trials": "00f8300968ef16dc8ed9f9af481631980406e7c4ba91d59acd37ba95787ae9b6"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "577405010c2e28db3f98ac9d66de50e2a5425fdb378e0e8643663d6ded4b235f",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "glass",
+      "dataset_family": "forensic-glass",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "e642b38b-9a3a-4873-8c9b-49d213a3c85e",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "05a56839cf3bc131fd7f09a082455312c26024ad6cb8a3892bca46208ce3b302",
+      "specification_hash": "1c2bb1fa8b9ac7a69b963d7c275753a4ad9f7ba37c7308b24ad1477a6d3f9793",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "0764409f72294f35733e661e9afb21c7fd2c460459b522617061d240c3420035",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.512520262304745,
+          "model_bytes:{}": 5172.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.46962637148144387,
+          "model_bytes:{}": 5172.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 10.427351400999953,
+      "elapsed_seconds": 801.6885582919931,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "87d79e4e84e684a5f1bb86e6f95d00f33f50d067d043ee5a03316bc86b57de7d",
+        "model": "308caa9f245f8324608db8a08ce9fbf7cd926d103bd53af76800d4d2cb61c894",
+        "report": "51952d93efb208c51046f6cccb812772bcaf4897f06ee31decf063bc51e53b48",
+        "resolved_contract": "41375147b4182f8b33ee23cad6e40b650c7a6b955edfc2d493451385a4cfb038",
+        "review": "092873c220d0a790998dbfb2973cb12451f34c747eafe75fb936e10f85121bb4",
+        "splits": "81c41e5342d5d415a8b8324ecf2cd48ee6e57cf631136c5b4a4f3ba0fd2dd658",
+        "trials": "8e052b1fb3e75301f1e21de77ef7b92d8f123f8cee82f2d6083952d18fd30dd1"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "RI",
+          "Na",
+          "Mg",
+          "Al",
+          "Si",
+          "K",
+          "Ca",
+          "Ba",
+          "Fe"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "ab48431474b90e0b70d318b397d7c82381dde7debaf948376605e8b3f60a74aa",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "glass",
+      "dataset_family": "forensic-glass",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "e8cfe0b2-9e9b-4c02-b270-13b3b413e961",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "05a56839cf3bc131fd7f09a082455312c26024ad6cb8a3892bca46208ce3b302",
+      "specification_hash": "1c2bb1fa8b9ac7a69b963d7c275753a4ad9f7ba37c7308b24ad1477a6d3f9793",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "0764409f72294f35733e661e9afb21c7fd2c460459b522617061d240c3420035",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.512520262304745,
+          "model_bytes:{}": 5172.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.46962637148144387,
+          "model_bytes:{}": 5172.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 12.021471844000004,
+      "elapsed_seconds": 720.740619749995,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "87d79e4e84e684a5f1bb86e6f95d00f33f50d067d043ee5a03316bc86b57de7d",
+        "model": "3771892a194b7420e8976d41ce3eecd63fe0e8b13502de97c38f690a17e655d1",
+        "report": "1519341d068090e7cb2634dc8dd4835e8781a4905e6a0ecdf589acdec70ad986",
+        "resolved_contract": "41375147b4182f8b33ee23cad6e40b650c7a6b955edfc2d493451385a4cfb038",
+        "review": "a0458e7468c336cfb6139c265bfa3de5156587546fc02720fa819bde3a7b3da0",
+        "splits": "81c41e5342d5d415a8b8324ecf2cd48ee6e57cf631136c5b4a4f3ba0fd2dd658",
+        "trials": "7c85bad7e561a3e0af1ebd04f2b733ef6f3997d1cc9c5beedc47b2b09d20368e"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "RI",
+          "Na",
+          "Mg",
+          "Al",
+          "Si",
+          "K",
+          "Ca",
+          "Ba",
+          "Fe"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "1e5ca6b2e0248bf5c6d9c9fca496c351d4202311ade80a5772205c7f2d6df590",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "emotions",
+      "dataset_family": "music-emotions-trohidis",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "cbddc2b4-6423-4d8b-9bf5-475abd04afd5",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "6377a16ec1dd5e66d4b40e91e2563427bfe43ddbbcaa3116fbee9ad28f885f34",
+      "specification_hash": "1a79df614c3c81eb3d021910080db647297aea56e0307a699de821207ade401d",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "eabda37e713c5c45299055527fe3052eda71dcd6bad515fbdc7601e652ad04b3",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"micro\"}": 0.642706131078224,
+          "model_bytes:{}": 20229.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "f1:{\"average\": \"micro\"}": 0.6386762239539949,
+          "model_bytes:{}": 20229.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.559659781000008,
+      "elapsed_seconds": 642.2582899580011,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "873d4e6adfc2bc192ce8722f565e454198697d8aede0e580e3fe8d94c02e67e0",
+        "model": "303f2fa16f762a2fd29438aec070c76f0220ba4e57dcf6a73b15b3918943c7c4",
+        "report": "2371675932fb63cc65dd6d9d488e367a6af2e39659fc838b04389b17a5247654",
+        "resolved_contract": "13c2b1fd7daec73a591186c920a4fcb1b8d0ef2964ed74f4671a886515374ab3",
+        "review": "f02b739a3fd385ff7a5f354d22bec123d28d3e20cd25c6d4539589e41b02c81c",
+        "splits": "6bd7fc14112f0d10eed2e651e7f81b51978e9558495407a72897ec3d93d35b76",
+        "trials": "92b742985bcad7187b850ca47fbc521c2d0d3dff6b8574fec86068f867ed1753"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 0.1,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.4,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "3779472055945fef8e4008490a3fadb98c7b3c6c13137b46b7f9b9007a58a74e",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "emotions",
+      "dataset_family": "music-emotions-trohidis",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "048a77c1-979a-43c4-a58e-cec3bc473e1b",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "6377a16ec1dd5e66d4b40e91e2563427bfe43ddbbcaa3116fbee9ad28f885f34",
+      "specification_hash": "1a79df614c3c81eb3d021910080db647297aea56e0307a699de821207ade401d",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "eabda37e713c5c45299055527fe3052eda71dcd6bad515fbdc7601e652ad04b3",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"micro\"}": 0.5759162303664922,
+          "model_bytes:{}": 9941.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"micro\"}": 0.5971838734551859,
+          "model_bytes:{}": 9941.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 26.21826539600005,
+      "elapsed_seconds": 764.6401010419941,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "e53b8dfba1ae6204813df18333593105d36af34f8dc46db27dc52bee0072ec22",
+        "model": "56cc62d24b399c6973026341ab5fc34b9eeb9630a992bf11eb70bdac24339911",
+        "report": "514507a68f5065dbfd04913fef0385a74183c053482d819fe9d3ef33dd31ac51",
+        "resolved_contract": "13c2b1fd7daec73a591186c920a4fcb1b8d0ef2964ed74f4671a886515374ab3",
+        "review": "f5b48cb9dd3014d7d1997ffd25460a8d324b7f02a81c8c50c029488b2ae8551d",
+        "splits": "6bd7fc14112f0d10eed2e651e7f81b51978e9558495407a72897ec3d93d35b76",
+        "trials": "74d20b3cf33d3acc5697a2a0021d5051f2d54f4e143ab538c5719fe75cca501a"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "Mean_Acc1298_Mean_Mem40_Centroid",
+          "Mean_Acc1298_Mean_Mem40_Rolloff",
+          "Mean_Acc1298_Mean_Mem40_Flux",
+          "Mean_Acc1298_Mean_Mem40_MFCC_0",
+          "Mean_Acc1298_Mean_Mem40_MFCC_1",
+          "Mean_Acc1298_Mean_Mem40_MFCC_2",
+          "Mean_Acc1298_Mean_Mem40_MFCC_3",
+          "Mean_Acc1298_Mean_Mem40_MFCC_4",
+          "Mean_Acc1298_Mean_Mem40_MFCC_5",
+          "Mean_Acc1298_Mean_Mem40_MFCC_6",
+          "Mean_Acc1298_Mean_Mem40_MFCC_7",
+          "Mean_Acc1298_Mean_Mem40_MFCC_8",
+          "Mean_Acc1298_Mean_Mem40_MFCC_9",
+          "Mean_Acc1298_Mean_Mem40_MFCC_10",
+          "Mean_Acc1298_Mean_Mem40_MFCC_11",
+          "Mean_Acc1298_Mean_Mem40_MFCC_12"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "355ea4501fee064dc896be999183227085c2c0bbcf65c84fa7fb833f6c9d61e2",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "b210300f-0199-46d6-821d-df046c032cb2",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "d84b5f5345b6dcacfb4d1e9805d97feb35c9f65234c329963b84f1e0ff203979",
+      "specification_hash": "23eef23e259048344778c335fcf73f8002ef8ad1165ec2de694beea29168e5b4",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.9921140926006029,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 12.112264693000007,
+      "elapsed_seconds": 577.6339193329914,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "5ba557ce46a46fa8ae1d1096e288d4806d9f13d979bd9d7a781a2a6b12d20ec8",
+        "model": "592f300ac29a196bcb11ac72ff0dca093bd9b7454bbfd57b480c95e242701474",
+        "report": "6026aa9104a9aab45b86c05ff5e33086d698d5fff6f1d81f22a407c1c0b98f08",
+        "resolved_contract": "acc04d42d84ee7d2764bf0c03c6cfbd52c7055861f923e5fde8e9a04612d7381",
+        "review": "282274d2ffdf2938b45ac720029422e15ea378359e2486e65d5fbde33565d0c8",
+        "splits": "a30dd513510bdcc53030380e6ec593cdc0369c3504a0624812b2c68d3e1d4838",
+        "trials": "2981fe27552fe307b2c2a0fb0756b1d3d12494eda2e07ec930fe7d7553cfdfd7"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "ca7de2dbd4678fe2ee17acd7d920f55e15e195d5538f6f8134e9b7f5caccba6d",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "penguins",
+      "dataset_family": "penguins",
+      "partition": "development",
+      "repeat": 1,
+      "design": "baseline",
+      "run_id": "8704ca3d-67c7-4cf8-a8a4-dbecbf8708ec",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "d84b5f5345b6dcacfb4d1e9805d97feb35c9f65234c329963b84f1e0ff203979",
+      "specification_hash": "23eef23e259048344778c335fcf73f8002ef8ad1165ec2de694beea29168e5b4",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "e0515ffb50c2ec3a6dfb90aad623e2343713a1368706cf52942222ae9099ee1a",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 1.0,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.9921140926006029,
+          "input_feature_count:{}": 6.0,
+          "model_bytes:{}": 5996.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.935674062000032,
+      "elapsed_seconds": 650.527031790989,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "5ba557ce46a46fa8ae1d1096e288d4806d9f13d979bd9d7a781a2a6b12d20ec8",
+        "model": "88b848080f750341a5e8776c046cc3a5df737271d2f0816a44adf54f6b3e186c",
+        "report": "06d986289d5e7a2d4c061a022214125abcf062bf5c8bef791308235314e8d07a",
+        "resolved_contract": "acc04d42d84ee7d2764bf0c03c6cfbd52c7055861f923e5fde8e9a04612d7381",
+        "review": "8e3e8613b7f0cbc6056bb39f9e3500932a610e1af57e30990ae9c35357da6ccd",
+        "splits": "a30dd513510bdcc53030380e6ec593cdc0369c3504a0624812b2c68d3e1d4838",
+        "trials": "4ff3f11affd13854b231fc2fb995948d2e752a4a2ff2d52858809a1eca7452bf"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "island",
+          "bill_length_mm",
+          "bill_depth_mm",
+          "flipper_length_mm",
+          "body_mass_g",
+          "sex"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "7dbe7d67a203cff9b1ced29fc88192d9d1827acc03e3a9775c74a071a410f806",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "wdbc",
+      "dataset_family": "wisconsin-diagnostic",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "9271b600-c474-48fd-8a66-25bc7f7ed52d",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "77f9379acd6f06a3430e9f3c737e9955c2cc31325747afb304aa71de2e4ba4c1",
+      "specification_hash": "fcd88b32db5ceb4594bded75d0c9c91a9e96a4ccb29061ff50823ac4af3a6854",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "bcbc246e14361dd6de979f23175e9548972ab155c182a858be9a267e583d6584",
+      "evaluation": {
+        "final_test": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.975,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9285714285714286
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9771428571428572,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9529411764705882
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.466018019999979,
+      "elapsed_seconds": 433.60222841700306,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "6f0907d618de86491f137d70a5a911899a637ab96d323dae7c03de588f45f187",
+        "model": "f90be978c08313a8c9c72d9beda211e54ca9d129d5dce44caa34cf9fade80088",
+        "report": "0f28e727497bca3cf44f297654354adbdf1eddd59ec4dfd0162e0d9315e3a693",
+        "resolved_contract": "cb9ba450427205b49e296669a67dd5a296a53914afc6a59d4c7000052ee0e52b",
+        "review": "16dc2419074c9d5c5fba461cc7ac0d3deb6fd31864e9902d098f19ccc7f1f1a7",
+        "splits": "b4d7aa672414a690915fbab615368aba7e856c1d4dc8060fdc8e1a5d9d8cc995",
+        "trials": "161ae8abce96d6895089ccf124bb8361751b5ab54cce213b29e0872d8f67dd4f"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "3abf3fc84ad33421aa7fa18411c741ed960a74e56a47f77fb9744c9dea22da8f",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "wdbc",
+      "dataset_family": "wisconsin-diagnostic",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "baseline",
+      "run_id": "9aad599a-305b-44ac-9be4-9c53eca1d9d1",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "77f9379acd6f06a3430e9f3c737e9955c2cc31325747afb304aa71de2e4ba4c1",
+      "specification_hash": "fcd88b32db5ceb4594bded75d0c9c91a9e96a4ccb29061ff50823ac4af3a6854",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "bcbc246e14361dd6de979f23175e9548972ab155c182a858be9a267e583d6584",
+      "evaluation": {
+        "final_test": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.975,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9285714285714286
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "model_bytes:{}": 7228.0,
+          "precision:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9771428571428572,
+          "recall:{\"average\": \"binary\", \"positive_label\": \"1\"}": 0.9529411764705882
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.631666166000045,
+      "elapsed_seconds": 572.0875657500001,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "6f0907d618de86491f137d70a5a911899a637ab96d323dae7c03de588f45f187",
+        "model": "a254620c3aa269c508d39fda48f19f695fb5dedac4aa80d3886c6a61c7d35c85",
+        "report": "e6edf707e6db202d52ee61e4d85c72664d45a1e61463ac2466e171681a1b0a5e",
+        "resolved_contract": "cb9ba450427205b49e296669a67dd5a296a53914afc6a59d4c7000052ee0e52b",
+        "review": "0b3ff5e7e289755b3f2d07c1e8ca6fbbb0c99300ccec07ec38c7b633c688fc8a",
+        "splits": "b4d7aa672414a690915fbab615368aba7e856c1d4dc8060fdc8e1a5d9d8cc995",
+        "trials": "fa167600827247372ac74b3a2ffb70ab27a57ab85d0ae518518523ff10da7493"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "aeb2ccd2ea7139a087131838c0d39a69d033df8f8c9522900c7c3a861be7b5b8",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "glass",
+      "dataset_family": "forensic-glass",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "9c5f5dc0-a736-4060-bd17-306c591e3923",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "05a56839cf3bc131fd7f09a082455312c26024ad6cb8a3892bca46208ce3b302",
+      "specification_hash": "1c2bb1fa8b9ac7a69b963d7c275753a4ad9f7ba37c7308b24ad1477a6d3f9793",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "6e70417209f22e3fe7e1972fb1e1ac262590c6d5f0db139e61f09a4a66a89100",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "0764409f72294f35733e661e9afb21c7fd2c460459b522617061d240c3420035",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.512520262304745,
+          "model_bytes:{}": 5172.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 1,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.46962637148144387,
+          "model_bytes:{}": 5172.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.003116627999987,
+      "elapsed_seconds": 543.3169568339945,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "d7eda47cfc05a955788b1c6f64338cdedec91dc91286e650e8d4f88c781e7ccb",
+        "model": "9abd23340a7ceebfdf3d1a89ee75341d47c1a5d8fa699d6964088647a03f6a84",
+        "report": "d325d31049a109a49aec857cf2b1d77e3f942462dc749967886e269a1cd8ea71",
+        "resolved_contract": "41375147b4182f8b33ee23cad6e40b650c7a6b955edfc2d493451385a4cfb038",
+        "review": "892f9634656f03c992c7d84e7babd67387a6f54c6da21230d2bf5cf47f76354d",
+        "splits": "81c41e5342d5d415a8b8324ecf2cd48ee6e57cf631136c5b4a4f3ba0fd2dd658",
+        "trials": "147398817cf50e20d834de630388295db8ae69e92755a4e777e12137b11f181b"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "RI",
+          "Na",
+          "Mg",
+          "Al",
+          "Si",
+          "K",
+          "Ca",
+          "Ba",
+          "Fe"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "090cf522cd1d70855590b5c5fdd4cbd27ca7f6c4290cab1eb66674b2e87205dc",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "glass",
+      "dataset_family": "forensic-glass",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "baseline",
+      "run_id": "2a013dfe-f606-4aea-b997-8cc43933d3a0",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "05a56839cf3bc131fd7f09a082455312c26024ad6cb8a3892bca46208ce3b302",
+      "specification_hash": "1c2bb1fa8b9ac7a69b963d7c275753a4ad9f7ba37c7308b24ad1477a6d3f9793",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "2e6c8415ae08c8d849ccb8830272f85596c62a477f9943a65594544da612320a",
+      "verifier_hash": "4b719e01cd6101b008f3cf18684052486f028e12952891ee1f2d0786b4b2cbda",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "0764409f72294f35733e661e9afb21c7fd2c460459b522617061d240c3420035",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"macro\"}": 0.512520262304745,
+          "model_bytes:{}": 5172.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"macro\"}": 0.46962637148144387,
+          "model_bytes:{}": 5172.0
+        },
+        "validation_folds": 5,
+        "validation_method": "stratified_kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 9.223711369999975,
+      "elapsed_seconds": 550.8227996670175,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "87d79e4e84e684a5f1bb86e6f95d00f33f50d067d043ee5a03316bc86b57de7d",
+        "model": "9ca5d58de2a69ce07913e29408826f03798a83553c7ebb4ff444165e0451dd84",
+        "report": "88dccb9b6bc40cea29c16c0e9e46003c462b312a625f4c6bd85660d5ad2c2df8",
+        "resolved_contract": "41375147b4182f8b33ee23cad6e40b650c7a6b955edfc2d493451385a4cfb038",
+        "review": "393639aa5f7b4df6bd1a7e3c5fe334ec27f87adae7917b04fc105555dfa85632",
+        "splits": "81c41e5342d5d415a8b8324ecf2cd48ee6e57cf631136c5b4a4f3ba0fd2dd658",
+        "trials": "3dfef46868801a0e8223bf098ad9f094998034367f09d18d645c8b880f285f91"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "RI",
+          "Na",
+          "Mg",
+          "Al",
+          "Si",
+          "K",
+          "Ca",
+          "Ba",
+          "Fe"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r2-unaffected-classification",
+      "original_record_sha256": "24803e92ff5b4157b400cfdc4407114d38185631bdcd722c6f6ced2e4af00956",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "reassessment_sha256": "81cf24fba2f7a3d72f1d090688584859df65b441a6813700dca136394de1a12f"
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "b4cf6bfa-75f2-4788-9a3a-2afb849a596d",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "af025fbc1efb728ae809854541ec1a9247bc1a46133e8fd798d7bc7cdc7d0858",
+      "specification_hash": "25e1a4e2968ffef4891e56e680193e8c63a893cb19e48d763ede3e947c554208",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.285002772781726,
+          "model_bytes:{}": 5223.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "mae:{}": 2.6684801507295726,
+          "model_bytes:{}": 5223.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 10.461201120999974,
+      "elapsed_seconds": 697.9067025409895,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "b5b76e1eeb82e63c16747a57eaca8f3d664bf46fc28a13f3ad0558fa42545a43",
+        "model": "f5ef1316e647bd7c0763477a3fcf033ff0056e270943dc9129b9fe7fb8df4793",
+        "report": "1cee5d343314b3ea2f7045437301cc30d77c1b8f19ff55f628e694ed80b43da1",
+        "resolved_contract": "bf140f7d8f800c7e3c0647b0922bf359106dc2892757170000df4b563dbdfa93",
+        "review": "ec51138d5c7baf20d526d6f28cf5df624647f12fa4fc57ac91139f0ec9cc343b",
+        "splits": "0762d0da29feb5a26d122616f7fe860ee28e4302ec30bc9262e0cdddcf311d1c",
+        "trials": "c8f0f7f80129cea3d549e4d323a05a19fdcf55eef679ecdc4b070a56f8123d64"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "3bb0461f4650d0abc792bd1ef6439656752f9b167843c0c32b9b01075d7c8d78",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "1f28fba8-05b6-408f-ae5b-7428cdc0a4aa",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "af025fbc1efb728ae809854541ec1a9247bc1a46133e8fd798d7bc7cdc7d0858",
+      "specification_hash": "25e1a4e2968ffef4891e56e680193e8c63a893cb19e48d763ede3e947c554208",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.45379522105152,
+          "model_bytes:{}": 4039.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 2.7294192582582038,
+          "model_bytes:{}": 4039.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 13.017073170999993,
+      "elapsed_seconds": 431.18210895801894,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "3cd1e490720cd925c2b9cd82ba910cbcd4716426fa0f8672303b3f32ff439b00",
+        "model": "c5717f00d50c9fad4c3ed93dcf1cf500058e230b06a9e9e7f610919d30122912",
+        "report": "9aa498f1d829c9deae1bfa191f008ce494168902500c58806c7b2722d4122cd1",
+        "resolved_contract": "bf140f7d8f800c7e3c0647b0922bf359106dc2892757170000df4b563dbdfa93",
+        "review": "0795d192ab2ac3ffad47651cf9360d2d3ab7121b45b2d1d2bff0333c75fa413c",
+        "splits": "0762d0da29feb5a26d122616f7fe860ee28e4302ec30bc9262e0cdddcf311d1c",
+        "trials": "33ffc9f567a556ba33bb11a58f491253eab7439878a76f4098aceffe021dfd50"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "weight",
+          "model_year",
+          "horsepower"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "fcc3fbbc9d926f3bd4210b53ca12b4711fd895e60e8e88e90c839acec4630258",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "houses",
+      "dataset_family": "windsor-houseprices-1987",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "90ab5ad5-e7db-42ee-a7d6-f7698df05d1e",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "0ce93a5c61cd5d2f56a457f5786b04865559849f51f055bb897c0f2585ee7b67",
+      "specification_hash": "69eb2709afd662ea35674dbc047d3ba9c489f4bae3bd7b8f520aa7986062fa77",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "9ef3d8f9b0225b4c35060af2dadd50a0f6b33592aaa8b66eb0da7882314ef18a",
+      "evaluation": {
+        "final_test": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 12774.483981909989
+        },
+        "final_test_passed": true,
+        "selected_trial": 1,
+        "validation": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 13355.022417578719
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.354382953000005,
+      "elapsed_seconds": 633.8463763750042,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "c8ad0540f4e1f84f8a96f732d3236c6005f60b46808008c37a66d386809db24e",
+        "model": "132d6fc7299d78704369dd30d9db3e4cc28865ae18eeb39f0bff7dfa30f8cb12",
+        "report": "637f675bb8432b5a12fb76c7cbefcc8edcabd7220b29449f8d08b1f64531c508",
+        "resolved_contract": "fd824ad017305c554190d3c62548204dab6c1afa00724df5615fc80df6de8ebb",
+        "review": "cb7eed599f9436346f3e3d4f1ead7d2a1eb7965597edd82d7c368fe11c1b646c",
+        "splits": "23ad3f5e95c6448925035c589539a95965a59c4e761871baeb321a8cb27b0d49",
+        "trials": "4e89c2f054b4d721953ed41e3e4e4ea8cdaacd26ba91960f6593fe3156b29387"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "lotsize",
+          "bathrooms",
+          "stories",
+          "garage"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "e9e4c20cc2f804f249ccc78e3df132168b4cba6fc73728d9b5e7433187b2bf2c",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "houses",
+      "dataset_family": "windsor-houseprices-1987",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "17e46281-1438-49a5-800e-d84102f123dc",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "0ce93a5c61cd5d2f56a457f5786b04865559849f51f055bb897c0f2585ee7b67",
+      "specification_hash": "69eb2709afd662ea35674dbc047d3ba9c489f4bae3bd7b8f520aa7986062fa77",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "9ef3d8f9b0225b4c35060af2dadd50a0f6b33592aaa8b66eb0da7882314ef18a",
+      "evaluation": {
+        "final_test": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 12611.318199283238
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 13805.556797640189
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.647232034000027,
+      "elapsed_seconds": 652.9851405409863,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "629c66c1c26654a344dd997d29fb120ed401ca06146def225c3f97994e51bc46",
+        "model": "9a440571114b91eb92845e3f538ab38d727bd54d5fb6e84d180e40662df39b12",
+        "report": "ed96b38c6db523f5a0e9c026a152e24dbfb965bc83a74c8d05075f288eb16db4",
+        "resolved_contract": "fd824ad017305c554190d3c62548204dab6c1afa00724df5615fc80df6de8ebb",
+        "review": "a1bd47ebb1e6954dd823fc687f2ba7f99c77ed633e89b1f98bdeb303c94315f2",
+        "splits": "23ad3f5e95c6448925035c589539a95965a59c4e761871baeb321a8cb27b0d49",
+        "trials": "1bb80ce9e4e610204339e064516c2f0d480a3dd5912541694e2a0b9039e44c00"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "lotsize",
+          "bedrooms",
+          "bathrooms",
+          "stories"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "4b78974db6e6117e42da336d99f39e788bd4f0143df736ac44860c351c5c7ff6",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "air-passengers",
+      "dataset_family": "box-jenkins-airpassengers",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "695e4843-8cd5-4e42-b1a3-c41011c758b7",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "ee2e06e96ab1c931bee13eddea54725883c7976bddbdd2b75721d122efae3a97",
+      "specification_hash": "8d3f558ee142f35145575a43dc9b01a21755270bd26ebf442accf851ce858b20",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "cac5a0b984d2cb871dd38bb23c895cfd281038971a9e92a0575db73a11ab4024",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 14.952646452146714
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 20.975083344603632
+        },
+        "validation_folds": 3,
+        "validation_method": "rolling_origin"
+      },
+      "trial_count": 3,
+      "training_seconds": 13.54097989600001,
+      "elapsed_seconds": 700.7481146659702,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "30d2bdd2eb06490c75d211fdb4df8cda318ca2bb23940e8a3943da48f03d90ed",
+        "model": "f4e58c13454b646a96a54d6552c44faecd9588265202e7dc080c235b5b293b23",
+        "report": "7b07929997ef62c21a906617669bb8134dc52da2cbdfa5d6415fb47542604731",
+        "resolved_contract": "3260bbbb0d5e6364ed4c3efd1c29a8782f3427dd0b000c6da95f91dae09b8843",
+        "review": "5f88ad47bb2051be3e62101c9f4ccb02f61f7bd80e788235a0aab5322098e0d6",
+        "splits": "5487a232259fe5a9a94344abb4d2dc6786e4296e6ad2e3992ed8b26b086529fd",
+        "trials": "e27fd596b845749864e6582f3e952d3e034d4f3448a38014fb0b0320734addeb"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          2,
+          3,
+          12
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "edc1d75224df7f09b7d186f444742e84a8bfc5aafd9c0ad63ee859f0393dea51",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "air-passengers",
+      "dataset_family": "box-jenkins-airpassengers",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "edbfd032-8388-488d-a9c3-d033fc1b2ca9",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "ee2e06e96ab1c931bee13eddea54725883c7976bddbdd2b75721d122efae3a97",
+      "specification_hash": "8d3f558ee142f35145575a43dc9b01a21755270bd26ebf442accf851ce858b20",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "cac5a0b984d2cb871dd38bb23c895cfd281038971a9e92a0575db73a11ab4024",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 15.66928902083742
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 21.02732841904683
+        },
+        "validation_folds": 3,
+        "validation_method": "rolling_origin"
+      },
+      "trial_count": 3,
+      "training_seconds": 12.95867895699999,
+      "elapsed_seconds": 654.1400873339735,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "2de7ddc98064fc8b4fda1657bdf84a0055bf808c60144776b91170e6ed83deb5",
+        "model": "f04c0a253d7346b4a1760e63ca0e71b0c71c205ddbf34e54f3fe89028b0696a1",
+        "report": "bf8d9cce90445ec37e9489183e604d77f196d967fc18c9d09f2455bac502aeea",
+        "resolved_contract": "3260bbbb0d5e6364ed4c3efd1c29a8782f3427dd0b000c6da95f91dae09b8843",
+        "review": "63288a2243b61cbfdfe1b33dbe3937889c5d604b85ab66242fa135e5ccc0503c",
+        "splits": "5487a232259fe5a9a94344abb4d2dc6786e4296e6ad2e3992ed8b26b086529fd",
+        "trials": "09a59e7d5e876f1f2b590f6b4cc9ba732a772dced7e83851b4d781325caa466d"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          12
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "1609675cc7fe20ba5c49f3cdd9cb14dcc029c9acd4de5d146fdcad51c5af8b67",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "stocks",
+      "dataset_family": "vega-five-stocks-2000-2010",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "baseline",
+      "run_id": "97ca266a-f426-4ab0-8101-f17b141f93fd",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "04a39cd322438152abb39d3be09b7d8a565bc565917fb925359f23ba6add0f95",
+      "specification_hash": "b05b06b7c5832ac2a95a5c47d8f8ada5950ee47718abc82a81297a59a1b1a201",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "131d91a56a264281d8bc56872cc54eeecad993af1bb0db110f015f03d3bd1d4e",
+      "evaluation": {
+        "final_test": {
+          "mase:{\"seasonal_period\": 12}": 1.89267961920715
+        },
+        "final_test_passed": true,
+        "selected_trial": 1,
+        "validation": {
+          "mase:{\"seasonal_period\": 12}": 1.5369373424711095
+        },
+        "validation_folds": 2,
+        "validation_method": "rolling_origin"
+      },
+      "trial_count": 3,
+      "training_seconds": 12.914418230999999,
+      "elapsed_seconds": 685.1116315000108,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "83458e727d9e2533abdcc55ed1ec299e28417e6c113575d6474e9d3847bbbc71",
+        "model": "e828553ba980e131999d8f1de6a8d00d1c90c93c78d5be47f6d785f3a36038b6",
+        "report": "cd35a8f1c2b46eb06d1823b9239a7fae61b77ae66a3105ee91fca4e3e86cd76e",
+        "resolved_contract": "49c579798d208cacbdd9a66f7fb01335f842a6487f5f9fe6f9f7ebd811c59989",
+        "review": "aecf69e321872f3812c3c7ef4fdda4e5567da25c3e59e3aa1198d4b574e21437",
+        "splits": "9f4fb766ab80b37a834d0886675f79639a165cd390649e909c81107b0a4f3eba",
+        "trials": "a29cd9b4237e9a8976ff065d4b0109f7faf3585c88658218f3fe0cdee5aeb12d"
+      },
+      "selected_configuration": {
+        "family": "baseline",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "41a1580088eb7e43c16d59aac595e400abb32b34770c80993fc296e9d674b0aa",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "stocks",
+      "dataset_family": "vega-five-stocks-2000-2010",
+      "partition": "validation",
+      "repeat": 0,
+      "design": "adaptive-search",
+      "run_id": "4281c2d5-27bb-4376-9dda-fa54053bd857",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "04a39cd322438152abb39d3be09b7d8a565bc565917fb925359f23ba6add0f95",
+      "specification_hash": "b05b06b7c5832ac2a95a5c47d8f8ada5950ee47718abc82a81297a59a1b1a201",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "131d91a56a264281d8bc56872cc54eeecad993af1bb0db110f015f03d3bd1d4e",
+      "evaluation": {
+        "final_test": {
+          "mase:{\"seasonal_period\": 12}": 1.89267961920715
+        },
+        "final_test_passed": true,
+        "selected_trial": 1,
+        "validation": {
+          "mase:{\"seasonal_period\": 12}": 1.5369373424711095
+        },
+        "validation_folds": 2,
+        "validation_method": "rolling_origin"
+      },
+      "trial_count": 3,
+      "training_seconds": 12.029523579999967,
+      "elapsed_seconds": 657.1700713750324,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "83458e727d9e2533abdcc55ed1ec299e28417e6c113575d6474e9d3847bbbc71",
+        "model": "83bd7d4762c7d48328feba26643d5ad5b4b569455d09d8223af20a922fe8942e",
+        "report": "ab87ffb0305e7cc665b7719385b5d79e24d3d15d0e798f4f023fcb0497f231e2",
+        "resolved_contract": "49c579798d208cacbdd9a66f7fb01335f842a6487f5f9fe6f9f7ebd811c59989",
+        "review": "d03875878e77eeb997b044ecf6390bb50b804e4bda4311300735b8505baab344",
+        "splits": "9f4fb766ab80b37a834d0886675f79639a165cd390649e909c81107b0a4f3eba",
+        "trials": "37d059d29ce69bc30073d0a7cc595026b89a78cf91afd854fbbe169dcc3cb86e"
+      },
+      "selected_configuration": {
+        "family": "baseline",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "2e0f83d7d61474685983e5ab32270ea9e3a0582a41e3d7ddbf5c9589890cdf9e",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "3c881c2a-9b17-4b3e-bf1a-b5ba6356663c",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "af025fbc1efb728ae809854541ec1a9247bc1a46133e8fd798d7bc7cdc7d0858",
+      "specification_hash": "25e1a4e2968ffef4891e56e680193e8c63a893cb19e48d763ede3e947c554208",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.3183712943533403,
+          "model_bytes:{}": 5047.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 2.6492850212156625,
+          "model_bytes:{}": 5047.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 10.855672591000015,
+      "elapsed_seconds": 357.05307887500385,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "e6cf212d372ec3f3f3cfdcdcaae3c71e04e6f89bfdb0cb018347b366b898d0ba",
+        "model": "cb16c25eeaeed5c1f92b9d617a97241dff106ba7d53f5f88a66c048ad7670cb6",
+        "report": "98021876c5f50b0becfe1ba7cfe30254b642d3c24a696dcfeab4a86040fd4088",
+        "resolved_contract": "bf140f7d8f800c7e3c0647b0922bf359106dc2892757170000df4b563dbdfa93",
+        "review": "3f3a5d4751f94ba785eca9a75fa4981b77c8fb06fd69ace7ca890e24b7922cdc",
+        "splits": "0762d0da29feb5a26d122616f7fe860ee28e4302ec30bc9262e0cdddcf311d1c",
+        "trials": "157d1391a5e44fc042d318b1876f0ef57137cdd92807fb932e2a902ed920430e"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "horsepower",
+          "weight",
+          "acceleration",
+          "model_year",
+          "origin"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "6ea7378f558903d1ceac145b661ebf1cac50d36e7e7e1e8550caf0f46a802de8",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "mpg",
+      "dataset_family": "mpg",
+      "partition": "development",
+      "repeat": 1,
+      "design": "baseline",
+      "run_id": "44d0e96b-e367-468b-aed0-b8ac8c40d086",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "af025fbc1efb728ae809854541ec1a9247bc1a46133e8fd798d7bc7cdc7d0858",
+      "specification_hash": "25e1a4e2968ffef4891e56e680193e8c63a893cb19e48d763ede3e947c554208",
+      "budget_hash": "29ee003f419e3e66da69b937efde25b7825c66807c52eafbe37bf06b6dabafb2",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "907a54359c029fc867d5841b48ebd9957fb291f4dd8f28d98788bdd52e0b3756",
+      "evaluation": {
+        "final_test": {
+          "mae:{}": 2.454809946460915,
+          "model_bytes:{}": 4135.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 3,
+        "validation": {
+          "mae:{}": 2.73301654294134,
+          "model_bytes:{}": 4135.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 13.307492342999993,
+      "elapsed_seconds": 298.7899381670286,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "538b0fab15f724e0cbe2796d8fdcb52fd65fb39ef586ecc869b03655c0508659",
+        "model": "9e23679bedecebd18da92cb4a54d46d13133a8939e0650389f5cb872f1dfefc3",
+        "report": "91fa0358213ac5ec4f503d9ff689cc2d874a9413b6c1a3371efff86a67f9dbe0",
+        "resolved_contract": "bf140f7d8f800c7e3c0647b0922bf359106dc2892757170000df4b563dbdfa93",
+        "review": "9cc7b52113cf00868057b7d99ff1a76c9e89f23e86d6696ad3a2dd4d51c1a2ca",
+        "splits": "0762d0da29feb5a26d122616f7fe860ee28e4302ec30bc9262e0cdddcf311d1c",
+        "trials": "d55ce8c231b27eb5981edb749890102b6d385db98b35af4fb70af69383a44baf"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "weight",
+          "model_year",
+          "horsepower",
+          "displacement"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-corrected-runtime",
+      "original_record_sha256": "19c5420ab6bafe6cd3f9d3df56f9f7df07a316cf846eeac8aacf48a8d950fe07",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "houses",
+      "dataset_family": "windsor-houseprices-1987",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "3b6eb23a-fd6f-4ec1-81d1-04cbc727e43d",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "0ce93a5c61cd5d2f56a457f5786b04865559849f51f055bb897c0f2585ee7b67",
+      "specification_hash": "69eb2709afd662ea35674dbc047d3ba9c489f4bae3bd7b8f520aa7986062fa77",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "9ef3d8f9b0225b4c35060af2dadd50a0f6b33592aaa8b66eb0da7882314ef18a",
+      "evaluation": {
+        "final_test": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 12611.318199283238
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 13805.556797640189
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 11.614759998000011,
+      "elapsed_seconds": 258.256377667014,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "1be6beac67a0eb12cd5e806eaeae17853d050b79b1b757d5c406b1dd4029e3a9",
+        "model": "e1e1ba8ef669b69d9c47a02f2b45248ad120ab6756022571f799aab49802d12c",
+        "report": "88969693864e2d59671ab71418d2cd3c65d6adf3d4413ce3ec79cbfb0dbf38f9",
+        "resolved_contract": "fd824ad017305c554190d3c62548204dab6c1afa00724df5615fc80df6de8ebb",
+        "review": "7066dd24b53432e2fdbf58ccd771f12033c99840001e14c09a60e00d5c63bc9c",
+        "splits": "23ad3f5e95c6448925035c589539a95965a59c4e761871baeb321a8cb27b0d49",
+        "trials": "05a9f280cae28edec1c7a4bdadb6340680bbe02913b3ba74f4fb89408bb56610"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": [
+          "lotsize",
+          "bedrooms",
+          "bathrooms",
+          "stories"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-completion-after-pre-admission-failure",
+      "original_record_sha256": "5d37a60a0772716cd9503b8e5935a1848cab626781a5c4c5643e84167bb8677a",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "houses",
+      "dataset_family": "windsor-houseprices-1987",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "baseline",
+      "run_id": "bc93a6dd-1ed3-4f44-8672-7a6d15187611",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "0ce93a5c61cd5d2f56a457f5786b04865559849f51f055bb897c0f2585ee7b67",
+      "specification_hash": "69eb2709afd662ea35674dbc047d3ba9c489f4bae3bd7b8f520aa7986062fa77",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "636c827016fbaddeb97be1fd1876e3f41a5254ff486ecd07b1a9b59c5fd2d380",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "9ef3d8f9b0225b4c35060af2dadd50a0f6b33592aaa8b66eb0da7882314ef18a",
+      "evaluation": {
+        "final_test": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 13332.741884061288
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "input_feature_count:{}": 4.0,
+          "mae:{}": 13441.747043914182
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 14.375535653,
+      "elapsed_seconds": 343.89097941695945,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "b23ed590d9f024a439d31a8e1fe2e4ff66a311d996a9d716b3c036cb53259387",
+        "model": "17b3bdf56b08ae64c592183a6d86c724dcc6ca9500e355ffddd9b232aa879cc5",
+        "report": "79905bcf18d71b3521ae433bd65f6b57c9a2d3c3f0b85446af485c63a3469b6e",
+        "resolved_contract": "fd824ad017305c554190d3c62548204dab6c1afa00724df5615fc80df6de8ebb",
+        "review": "909e7bfab1472b71788de3386f8c831e9f551e8f411af1e3217073e3a2e8f684",
+        "splits": "23ad3f5e95c6448925035c589539a95965a59c4e761871baeb321a8cb27b0d49",
+        "trials": "15f1f832d77d7a659a819ecfb2c5db3484672713073c502bf524d01398d9c5fa"
+      },
+      "selected_configuration": {
+        "family": "extra_trees",
+        "feature_subset": [
+          "lotsize",
+          "bathrooms",
+          "aircon",
+          "prefer"
+        ],
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 300,
+        "max_depth": 12,
+        "min_samples_leaf": 3,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-completion-after-pre-admission-failure",
+      "original_record_sha256": "0a8a95816e7fcf3259a50d6f839b64b4472e3b3f09dd6d1b87c7f68929c30e78",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    },
+    {
+      "case_id": "emotions",
+      "dataset_family": "music-emotions-trohidis",
+      "partition": "validation",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "run_id": "23072a4c-2e12-478d-9dac-fff2ea71c934",
+      "service_status": "succeeded",
+      "status": "succeeded",
+      "model": "gpt-5.6-luna",
+      "protocol": "predictive-modeler/v4",
+      "request_hash": "6377a16ec1dd5e66d4b40e91e2563427bfe43ddbbcaa3116fbee9ad28f885f34",
+      "specification_hash": "1a79df614c3c81eb3d021910080db647297aea56e0307a699de821207ade401d",
+      "budget_hash": "4e0051dec685bc9d7f07ea486346d3c3a546073c633cac649ac6f91b96a05b03",
+      "source_hash": "ee999c15306efe008d1339824710984e71bd889af68bcdcd5e130b31f3791ae1",
+      "verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845",
+      "environment": {
+        "packages": {
+          "joblib": "1.6.0",
+          "numpy": "2.5.3",
+          "pandas": "3.0.5",
+          "scikit-learn": "1.9.1",
+          "scipy": "1.18.1"
+        },
+        "python": "3.14.2 (main, Dec  8 2025, 23:38:13) [GCC 12.2.0]"
+      },
+      "data_hash": "eabda37e713c5c45299055527fe3052eda71dcd6bad515fbdc7601e652ad04b3",
+      "evaluation": {
+        "final_test": {
+          "f1:{\"average\": \"micro\"}": 0.6431924882629108,
+          "model_bytes:{}": 20229.0
+        },
+        "final_test_passed": true,
+        "selected_trial": 2,
+        "validation": {
+          "f1:{\"average\": \"micro\"}": 0.6336213541389553,
+          "model_bytes:{}": 20229.0
+        },
+        "validation_folds": 5,
+        "validation_method": "kfold"
+      },
+      "trial_count": 3,
+      "training_seconds": 15.176040120000003,
+      "elapsed_seconds": 333.84152462502243,
+      "monetary_cost": null,
+      "assessment": {
+        "verified": true,
+        "issues": []
+      },
+      "receipt_matches_public_output": true,
+      "resources": {
+        "cpu": 1,
+        "memory_mib": 2048,
+        "timeout_seconds": 900
+      },
+      "artifacts": {
+        "evaluation": "313213832e6cd0b19a8008020232fd977c0ae8c7ce82037eee4f918a33d46480",
+        "model": "8e7bda31b4c98b5097c569dad0d0bdbd68617698778c9f36e85aa04afb2c5fd0",
+        "report": "46dbbdcd7ad23bb5f2d1c9a51927aa67c7f1444e6a7d1cf5de1b574a8b99fd7b",
+        "resolved_contract": "13c2b1fd7daec73a591186c920a4fcb1b8d0ef2964ed74f4671a886515374ab3",
+        "review": "b5f7a07a000d5c6780e31f07c63b24101080e1b0e1eb42c89c4adbcf14c0aab3",
+        "splits": "6bd7fc14112f0d10eed2e651e7f81b51978e9558495407a72897ec3d93d35b76",
+        "trials": "74d54493b8cd668c878dfee63a93ba85771feb9218258a528db09f2749a99601"
+      },
+      "selected_configuration": {
+        "family": "linear",
+        "feature_subset": null,
+        "scale": true,
+        "regularization": 1.0,
+        "trees": 100,
+        "max_depth": 12,
+        "min_samples_leaf": 2,
+        "class_weight": null,
+        "threshold": 0.5,
+        "strategy": "independent",
+        "lags": [
+          1,
+          7,
+          14
+        ],
+        "seasonal_period": 7,
+        "max_features": 10000,
+        "ngram_max": 1
+      },
+      "cohort": "r3-completion-after-pre-admission-failure",
+      "original_record_sha256": "c84be40dec445af9cd72a955d8c74072dbb2e63aedfe2b0414c4fbd973235195",
+      "assessment_verifier_hash": "3f34cabbeafb55d9fc2fe0880c5ed70d63353a3c687b7c34ad9a2a191b73f845"
+    }
+  ],
+  "preparation_failures": [
+    {
+      "case_id": "houses",
+      "repeat": 1,
+      "design": "adaptive-search",
+      "cohort": "r3-corrected-runtime",
+      "run_id": null,
+      "service_error": "request_failed: Bad Gateway (HTTP 502). The Recurse service could not complete the request.",
+      "phase": "application preparation before source upload and run admission",
+      "successful_model": false,
+      "original_record_sha256": "cd76a8ccab2d949b00285deee33ca8e36f420a6757c486b6cc885c88cbd03760",
+      "cli_log_sha256": "a66db6c7ba82083043f6a9450b566f64148d9f79d2c9fdf749b5e4b14f99459b",
+      "original_diagnostic": "Run admission identity unknown; preserve CLI log and do not retry.",
+      "diagnosis": "SDK0.1.7 _prepare1437-1456 failed with HTTP502 before _run1972-1999 admission; log ends before upload/preparing/run markers. Original generic unknown-admission diagnostic is preserved unchanged.",
+      "elapsed_seconds": 2.0348634580150247
+    },
+    {
+      "case_id": "emotions",
+      "repeat": 1,
+      "design": "baseline",
+      "cohort": "r3-completion-after-pre-admission-failure",
+      "run_id": null,
+      "service_error": "request_failed: Bad Gateway (HTTP 502). The Recurse service could not complete the request.",
+      "phase": "application preparation before source upload and run admission",
+      "successful_model": false,
+      "original_record_sha256": "11ad6ff6f06afb33028875e024e1a4c54aed46ce62e6c165af16fd4e38069f26",
+      "cli_log_sha256": "a66db6c7ba82083043f6a9450b566f64148d9f79d2c9fdf749b5e4b14f99459b",
+      "original_diagnostic": "Run admission identity unknown; preserve CLI log and do not retry.",
+      "diagnosis": "SDK0.1.7 _prepare1437-1456 failed with HTTP502 before _run1972-1999 admission; log ends before upload/preparing/run markers. Original generic unknown-admission diagnostic is preserved unchanged.",
+      "elapsed_seconds": 4.037680415960494
+    }
+  ],
+  "campaign_spending": {
+    "allowance_usd": 50,
+    "starting_wallet_usd": 95.589721,
+    "latest_wallet_usd": 78.41402,
+    "observed_decrease_usd": 17.175701,
+    "remaining_allowance_usd": 32.824299,
+    "note": "Whole campaign observed wallet change, including excluded historical attempts and canaries. May include other account activity; per-run charges unavailable. No top-ups."
+  },
+  "limitations": [
+    "Five of 32 model slots lack admitted attempts; no convergence claim.",
+    "Fourteen retained classification runs were uniformly re-audited; old continuous outcomes are excluded.",
+    "Final-test objective scores did not select designs.",
+    "Later temporal missing-date rejection and scaffolding cleanup have local coverage; these frozen cloud runs predate them.",
+    "Six final dataset families remain untrained."
+  ]
+}

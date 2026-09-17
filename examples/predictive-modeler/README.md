@@ -330,12 +330,14 @@ These local runs establish tool behavior. Autonomous task interpretation, consis
 and experimental decision-making require separate end-to-end cloud-agent validation. Do not
 report local tool probes as evidence that the autonomous agent passed those checks.
 
-For actual cloud outcomes, run IDs, reproduced model scores, and remaining backend blockers,
-see [autonomous validation evidence](tests/CLOUD-VALIDATION.md). Successful model receipts include
-only available, nonempty artifact paths; the agent must return the saved receipt unchanged.
-All six task types have accepted cloud bundles with locally reproduced validation/final-test
-scores; panel evidence uses the three-trial request above. These runs demonstrate functionality,
-not repeated reliability estimates or a guarantee of strong performance on arbitrary datasets.
+For historical cloud outcomes and run IDs, see
+[autonomous validation evidence](tests/CLOUD-VALIDATION.md); the current v4 comparison and service
+blocker are recorded in the [design campaign](benchmarks/CAMPAIGN.md). Successful model receipts
+include only available, nonempty artifact paths; the agent must return the saved receipt unchanged.
+Under the earlier evaluation protocol, all six task types have accepted cloud bundles with
+locally reproduced validation/final-test scores; panel evidence uses the three-trial request above.
+These runs demonstrate functionality, not repeated reliability estimates or a guarantee of strong
+performance on arbitrary datasets.
 
 ## Comparing agent designs
 
@@ -344,7 +346,7 @@ from public agent inputs. It provides versioned dataset/request/budget/source fi
 fixed-search baselines, independent trusted-bundle score reproduction, and failure-preserving
 paired comparisons. The initial development suite adds two pinned public CSV datasets to the
 six existing examples. These cases do not constitute an untouched holdout or generalization proof.
-See the [next comparison campaign](benchmarks/CAMPAIGN.md) for the frozen prompt hypothesis,
+See the [comparison campaign](benchmarks/CAMPAIGN.md) for the frozen prompt hypothesis,
 run schedule, and staged expansion across unseen task families.
 
 ## Limitations

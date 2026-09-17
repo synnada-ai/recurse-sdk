@@ -1,6 +1,8 @@
 # Autonomous-agent validation
 
-Latest status: all six task types have cloud-trained bundles with reproduced validation/final
+This file records historical pre-v4 verification. For current cross-validation results and the
+preparation-service blocker, see the [design campaign](../benchmarks/CAMPAIGN.md). Historical
+status: all six task types have cloud-trained bundles with reproduced validation/final
 scores, and all six contradictory tasks reject before loading data. Panel evidence uses the
 current three-trial request; its earlier eight-trial run timed out. See **SDK 0.1.7 engine
 verification** and **Panel source and workload verification** below. Earlier attempts remain

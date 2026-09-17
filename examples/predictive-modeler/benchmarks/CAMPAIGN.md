@@ -1,156 +1,110 @@
 # Agent-design comparison campaign
 
-## Current evidence and next decision
+## Current status
 
-The original six cloud examples are development fixtures. Their successful v1 runs establish
-representative functionality, not repeated reliability or generalization. Complexity adds
-measurement protocol `predictive-modeler/v2`. The prepared initial pilot remains frozen at v2.
-Current code uses `predictive-modeler/v4`: task-appropriate cross-validation with fresh fold fits,
-a separate final test, and deployment-artifact complexity. It retains v3 parsed-date ordering.
-Historical v2/v3 evidence remains unchanged and is not pooled with v4 comparisons.
+Default task-aware cross-validation is implemented. The canonical prompt remains the baseline;
+**design comparison is paused and incomplete**, with no convergence or general-superiority claim.
+All admitted runs have finished and their artifacts are collected. Two later submissions failed
+with HTTP 502 during application preparation, including one at reduced concurrency.
 
-The new Penguins and MPG cases are also **development** data once inspected here. The fixed-search
-pilot checks the evaluator and provides a cheap reference, not a test of an autonomous agent.
-Both keep their full real source data, with a pinned CSV URL/checksum. No synthetic benchmark
-replaces a supported modality. Small generated unit-test fixtures only exercise edge cases.
+[Versioned v4 records](cloud-validation-v4-results.json) retain 27 independently verified model
+results, two failed preparation submissions, and five missing slots from the 32-slot comparison.
+The selected cohorts contain 29 observed submissions: 13/14 baseline submissions and 14/15
+contender submissions delivered verified models. The two failures occurred before run admission;
+these denominators must not be mistaken for complete 16-run-per-design success estimates.
 
-## Pilot hypothesis and controlled change
+The whole campaign's observed wallet decrease is **$17.175701 of the $50 allowance**; $32.824299
+remains. This includes earlier diagnostic attempts and canaries. Wallet changes can include other
+account activity and are not itemized per-run charges. No funds were added.
 
-- **Baseline:** current committed agent, including complexity support. Both prepared apps explicitly pin `gpt-5.6-luna`
-  to avoid a service-default change between attempts.
-- **Contender:** identical tools, dependencies and input/output schemas; the historical pilot
-  appended a complexity-aware prompt. The only change asked the agent to diagnose predictive
-  versus complexity failures and choose experiments that can plausibly improve feasibility
-  or the objective under the remaining allowance.
-- **Hypothesis:** this reasoning avoids wasted experiments and produces at least comparable
-  feasible outcomes with fewer trials, less time, or improved objective values. It may have
-  no benefit when constraints are loose; report that rather than declaring a win.
-- **Local reference:** the fixed baseline/linear/extra-trees probes. It receives the expected
-  specification and cannot be compared on natural-language interpretation. Its trial and
-  training budgets match the autonomous request, but its lack of LLM overhead is explicit.
+## Controlled comparison
 
-The initial pilot used a one-off preparation utility to freeze two isolated applications,
-two public request files, and a private plan with expected specifications and content hashes.
-That utility and the rejected prompt appendix have been removed; the
-[immutable pilot records](cloud-pilot-results.json) preserve their application hashes and results.
-The retained deployment-isolation test verifies that evaluator files are absent from the package.
+- **Baseline:** establish a simple baseline, compare substantively different approaches before
+  local tuning, then choose experiments from measured evidence.
+- **Contender:** replace mandatory family diversity with choices driven by objective/constraint
+  gaps, and permit stopping at a feasible mathematical optimum. Tools, schemas and dependencies
+  are identical. No contender instructions are added to the deployed prompt without evidence.
+- **Cases:** Penguins and MPG development tasks, plus six frozen
+  [validation requests](validation-cases.json): WDBC binary classification, multiclass Glass,
+  Houses regression, Emotions multilabel classification, AirPassengers, and a five-series Stocks
+  forecast. Two repeats per case/design measure agent variability, not independent datasets.
+- **Allowances:** explicit `gpt-5.6-luna`, one CPU, 2 GiB, three trials each. Penguins/MPG allow 60
+  cumulative training seconds; other cases allow 120. Deployment fitting and CV fitting/scoring
+  both consume this allowance. The platform has a separate 15-minute execution limit.
+- **Controls:** identical public requests, seed 42, data checksums, expected specifications,
+  resource ceilings and verifier within pairs. Alternate design order between repeats; independent
+  jobs may run concurrently. Evaluator answers are excluded from application bundles.
 
-## Completed initial cloud pilot
+Of nine completed validation pairs, baseline wins four, contender wins one, and four tie. Three
+validation pairs remain incomplete. Development pairs are reported separately; neither raw F1
+and MAE nor development and validation outcomes are averaged into an overall quality score.
+These partial results do not select a winner. All observed runs used their three-trial allowance.
 
-- Two public CSV tasks: Penguins macro-F1 with size/input constraints; MPG minimum model bytes
-  with MAE at most 5 mpg. Requirements are frozen in `cases.json` before launch.
-- Two prompt designs, two repeats each: **eight runs** total. Repeats preserve the task/data
-  split and test variation in agent behavior; they are not independent datasets.
-- Three training trials and 60 cumulative training seconds per run; one CPU, 2 GiB, explicit `gpt-5.6-luna`
-  for both designs, and the platform's 15-minute execution limit.
-  Record the actual resolved model/version for each run; refuse comparisons if these differ.
-- Execute serially, alternating design order between repeats. This avoids overlapping costs
-  and makes failures easier to diagnose; independent runs could be parallelized in a larger batch.
-- Initial user-approved spending allowance: **$5**, subsequently expanded to **$50 total**
-  for the design campaign, including this pilot, with no top-ups. Check balance before admission and after
-  each terminal run; stop starting work before the remaining allowance cannot reasonably cover
-  another run. Balance deltas can include other account activity and are not itemized invoices.
-- Stop early on repeated infrastructure failure, retrieve all available evidence, and do not
-  automatically relaunch unknown-state runs. A timeout is a failure, not convergence.
+## Evaluation and numerical verification
 
-For each scheduled entry, run the corresponding app and request through `recurse run` with
-`--cpu 1 --memory-mib 2048`; retain its run ID, public terminal status, receipt, actual model
-identity, elapsed time, and available cost evidence. Download artifacts promptly. Match the
-public output exactly to `receipt.json`. Independently assess trusted accepted bundles using
-`assessment.assess(case, downloaded_directory, original_dataframe)` under the same dependencies.
-The local CLI does not automatically orchestrate this paid batch.
+Protocol `predictive-modeler/v4` uses fresh preprocessing/model fits in every validation fold,
+a separate final test, and actual deployment-artifact complexity. See the
+[evaluation policy](../README.md#evaluation-and-model-selection). Predictive constraints apply to
+mean fold scores. Final-test scores cannot guide subsequent model selection or refitting.
 
-## Initial pilot outcome and current comparison
+An initial cross-platform replay exposed poorly converged default Ridge LSQR fits on correlated
+predictors. The runtime now uses `tol=1e-12, max_iter=10000`, tested against an independent SVD
+ridge reference. Cloud canaries actually exercised Ridge on MPG and AirPassengers: all five MPG
+folds and all three forecast origins reproduced within 7e-11 absolute MAE. Saved predictor scores
+also reproduced. The verifier's bounded refit tolerance was not widened to hide underconvergence.
 
-All eight v2 autonomous runs completed, their public outputs exactly matched the receipts,
-and independent model/artifact audits passed. All four paired comparisons were comparable.
-The [immutable records](cloud-pilot-results.json) retain run IDs, hashes, measurements and costs.
+The current comparison retains 14 classification attempts from revision `2255d36`, uniformly
+re-audited with the corrected verifier. Their classifier code paths are unaffected by the Ridge
+change. Thirteen additional model runs use corrected revision `52355f8`. Original source/verifier
+hashes and reassessment fingerprints remain explicit. **All old continuous-model outcomes are
+excluded from ranking.** Later missing-temporal-date rejection and obsolete-preparer cleanup
+have local test coverage; the frozen cloud runs predate those changes.
 
-| Task | Repeat | Baseline objective | Appendix objective |
-| --- | --- | ---: | ---: |
-| Penguins: maximize validation macro F1 | 1 | 1.0 | 1.0 |
-| Penguins | 2 | 1.0 | 1.0 |
-| MPG: minimize model bytes | 1 | 3927 | 5111 |
-| MPG | 2 | 3638 | 3927 |
+The two preparation logs contain only `Packaging application...` followed by:
 
-All MPG final MAEs passed the unchanged limit of 5. Every run used three trials. The appendix
-lost both size comparisons and saved no trials, so it is not selected. Observed wallet decrease
-was $1.629812. These two development datasets do not establish general convergence.
+```text
+error: request_failed: Bad Gateway (HTTP 502). The Recurse service could not complete the request.
+```
 
-The subsequent frozen v3 comparison replaced mandatory family diversity with objective-directed
-experiments and permits stopping when a feasible validation objective reaches its mathematical
-bound. Duplicate configuration lists are removed. Both designs share the parsed-chronology fix
-and clarified baseline/tie tool descriptions. There are no new runtime tools or dependencies.
+Installed SDK 0.1.7 calls run admission only after preparation returns. Neither failed submission
+reached source upload, runtime preparation completion, or run admission. Preserve the original
+errors and their later diagnosis separately; these are not unexplained `execution_failed` model
+runs. New admissions stopped after the repeated error, and every admitted run was collected.
 
-The batch planned 32 attempts: two designs, two repeats, and eight real datasets. It repeats
-Penguins and MPG and adds diagnostic breast-cancer classification, multiclass glass,
-house-price regression, music-emotion multilabel classification, airline-passenger forecasting,
-and a five-series stock-price panel. Four independent cloud jobs run at once, each using
-`gpt-5.6-luna`, one CPU, 2 GiB and three trials. New cases allow 120 training seconds; the two
-pilot tasks retain 60 seconds. Within every paired comparison the resources are identical.
-The total campaign allowance is $50, including the initial pilot, with no top-ups.
+## Historical evidence
 
-Six additional source families are reserved for final evaluation after selecting a frozen design.
-The [validation requests](validation-cases.json) are frozen before their cloud outcomes.
-The final collection preflight checks only source bytes, schemas, contract validity and split validity; no
-models have been fitted. Keep those outcomes separate from development and validation choices.
+Historical protocols remain separate from v4:
 
-## Decision rules
+- [Eight-run v2 pilot](cloud-pilot-results.json): all bundles verified. The added complexity
+  appendix tied both Penguins comparisons, lost both MPG size comparisons, and saved no trials.
+  It was rejected; its one-off preparer and appendix were removed. Immutable results remain.
+- Sixteen v3 runs finished before the CV change: 13 verified, one honest no-feasible result,
+  and two forecast seed-contract mismatches. No v3 scores are pooled with v4.
+- Early v4 diagnostic cohorts and their original failed replay/receipt audits are retained locally.
+  Reassessments never overwrite original failures. Numerical canaries are diagnostic evidence,
+  not extra favorable repeats in the design comparison.
 
-Report every scheduled attempt, including missing artifacts and infrastructure failures.
-A correct task interpretation, frozen split, all required constraints, reproducible selected
-model, and valid completion receipt are prerequisites for an accepted result. The artifact
-audit checks recorded selection and reproduces the selected model, but cannot prove an LLM
-never saw holdout data or reconstruct discarded candidate fits.
+## Next decision and final evaluation
 
-Keep quality comparisons within matching case/repeat, request, data, verifier, environment,
-service model, and resource allowances. Summarize acceptance rate first, then objective values,
-required inputs, bytes, trials, wall time and cost. Keep per-task-family results visible;
-never average raw F1 and MAE, or exclude failed runs from success-rate denominators.
+After preparation works, complete the five missing model slots with explicit new submission
+records. Reassess both designs uniformly if the verifier changes. Compare reliable delivery,
+then within-case validation objectives, trials, time and measured cost. A failed or missing
+attempt stays in the denominator; a higher score cannot compensate for violated requirements.
 
-This tiny pilot may justify continuing a hypothesis, fixing instrumentation, or rejecting a
-specific prompt change. It is insufficient to select a generally superior agent design.
-Do not change thresholds after seeing the final-test results. Any verifier change requires
-re-running both baseline and contender; retain older outcomes separately.
+One trace-based follow-up hypothesis is recorded but **not launched**: start forests with lower
+capacity when a model-size cap binds. Nine of ten inspected classification forest trials exceeded
+their byte cap. The sole feasible reduced forest underperformed linear, so better sizing has not
+yet demonstrated better selected-model quality. Test a minimal instruction with matched repeats
+before keeping it; do not accumulate untested prompt appendices or tools.
 
-## Expansion before a generalization claim
+The [frozen final collection](holdout-cases.json) contains Swiss banknotes, wine, multilabel yeast,
+diamonds, chocolate search interest, and ERCOT regional demand. Only source/schema/split preflight
+has run; **no holdout models have been fitted**. Its SHA-256 is
+`de0b7e9684e8441126d2f66b2452fbac52f1bd8cf2fc5d6dcc691243819ef4ff`.
+Select a frozen design from development/validation evidence, then evaluate this collection once.
+Tuning from final outcomes would consume that holdout and require a new untouched collection.
 
-[Dataset candidates](DATASET-CANDIDATES.md) records sourced proposals and conversion risks for
-all six modalities. These source proposals informed the frozen validation requests and reserved final collection.
-
-1. Freeze at least two additional real datasets per modality as development cases, varying
-   imbalance, categorical/text inputs, missingness, series length/seasonality and panel structure.
-   All variants of a dataset/source family remain in one benchmark partition.
-2. Add quality-first, complexity-first and binding-constraint requests, task paraphrases,
-   ambiguous requests, and genuine contradictions. Score incorrect refusals as well as
-   missed contradictions. Paraphrases do not increase the independent dataset count.
-3. Reserve separate validation datasets for scheduled checkpoints and a sealed final collection
-   covering all six modalities. Dataset selection and task ground truth precede agent outcomes.
-   The final collection remains unfitted during design comparison; metadata preflight is not
-   performance evaluation.
-4. Compare specific hypotheses (profiling, experiment allocation, constraint diagnosis) with
-   equal resources and repeated paired runs. Inspect failures and resolve contradictory evidence
-   before changing designs. A repaired example alone is not generalization evidence.
-5. Select a frozen design from development/validation evidence, then assess it once on the
-   final collection. Keep within-dataset train/validation/test separation distinct from this
-   across-dataset agent-design separation. Further tuning consumes that holdout and requires
-   a new untouched collection.
-6. Stop on agreed acceptance criteria, evidenced diminishing returns, a resource limit, or
-   a concrete blocker. Report uncertainty and weak task families instead of claiming global
-   optimality. Review runtime complexity, resource cleanup and idiomatic implementation before
-   adopting any change.
-
-## Cross-validation milestone
-
-The v3 comparison stopped admitting work when default CV was requested. All 16 launched runs
-completed and their artifacts were collected: 13 passed independent verification, one honestly
-reported no feasible model, and two forecast runs selected seed 0 instead of the frozen seed 42.
-The second repeat was never launched. Observed total wallet decrease including the initial pilot
-was $5.368644; $44.631356 of the campaign allowance remains. No backend execution failures
-without diagnostics occurred in these 16 runs.
-
-V4 reserves a final test and refits every validation fold. Fold fitting/scoring consumes the same
-training budget as deployment fitting. Official partitions remain intact. Independent assessment
-replays CV and verifies the saved deployment model. Future prompt comparisons must restart with
-both designs on this protocol and explicitly preserve the requested seed. The six reserved final
-dataset families remain untrained; no generalization or design-convergence claim is made yet.
+These small real datasets cover different task semantics without establishing universal accuracy.
+[Source proposals](DATASET-CANDIDATES.md) record their provenance and conversion risks. Future
+broader evaluation should vary missingness, text/categorical inputs, imbalance, grouping, task
+paraphrases and ambiguity while keeping related source families within one partition.

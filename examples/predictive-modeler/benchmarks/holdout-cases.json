@@ -1,0 +1,363 @@
+{
+  "version": 1,
+  "measurement_protocol": "predictive-modeler/v4",
+  "cases": [
+    {
+      "id": "swiss-banknotes",
+      "dataset_family": "flury-riedwyl-swiss-banknotes",
+      "partition": "holdout",
+      "source_sha256": "0c7f254c0d31fd1663fef798b22c64f96de03d7f81c22c9c55664d109a784591",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/bgreenwell/treebook/e9c8f3abe483b24f6af8562a7d8808612940749c/datasets/banknote.csv",
+        "task": "Detect counterfeit Swiss banknotes from physical measurements. Predict binary y, where 1 means counterfeit and 0 genuine. Maximize F1 for positive class 1. The deployed model may require no more than three raw measurement columns; choose a subset from the eligible columns. Use a stratified random split. Eligible predictor columns are length, left, right, bottom, top, diagonal. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "positive_label": "1"
+            }
+          },
+          "constraints": [
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 3
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "binary",
+        "targets": [
+          "y"
+        ],
+        "features": [
+          "length",
+          "left",
+          "right",
+          "bottom",
+          "top",
+          "diagonal"
+        ],
+        "seed": 42
+      }
+    },
+    {
+      "id": "wine",
+      "dataset_family": "uci-wine-cultivars",
+      "partition": "holdout",
+      "source_sha256": "f295f06d18e62351ee3c0ea3b508558d07e1d72d7fb5bb848fe066d7c1b9884e",
+      "request": {
+        "dataset": "https://gist.githubusercontent.com/tijptjik/9408623/raw/b237fa5848349a14a14e5d4107dc7897c21951f5/wine.csv",
+        "task": "Identify the wine cultivar class in Wine, treating it as multiclass classification. Maximize macro F1 while keeping the complete fitted model no larger than 100000 bytes. Use a stratified random split. Eligible predictor columns are Alcohol, Malic.acid, Ash, Acl, Mg, Phenols, Flavanoids, Nonflavanoid.phenols, Proanth, Color.int, Hue, OD, Proline. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "average": "macro"
+            }
+          },
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 100000
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "multiclass",
+        "targets": [
+          "Wine"
+        ],
+        "features": [
+          "Alcohol",
+          "Malic.acid",
+          "Ash",
+          "Acl",
+          "Mg",
+          "Phenols",
+          "Flavanoids",
+          "Nonflavanoid.phenols",
+          "Proanth",
+          "Color.int",
+          "Hue",
+          "OD",
+          "Proline"
+        ],
+        "seed": 42
+      }
+    },
+    {
+      "id": "yeast",
+      "dataset_family": "elisseeff-weston-multilabel-yeast",
+      "partition": "holdout",
+      "source_sha256": "04c8fd8eb1b2267a4b901210628bc958041541f4987356489b4935aa6f35047e",
+      "request": {
+        "dataset": "https://huggingface.co/datasets/imodels/multitask-tabular-datasets/resolve/e649ec66df475f09d760a60bdaa3c3a77819782a/yeast.csv",
+        "task": "Predict all applicable yeast functional classes as fourteen separate binary labels: Class1__target, Class2__target, Class3__target, Class4__target, Class5__target, Class6__target, Class7__target, Class8__target, Class9__target, Class10__target, Class11__target, Class12__target, Class13__target, Class14__target. This is multilabel classification. Maximize micro F1 with complete fitted model size at most 200000 bytes. Use a random split; this CSV has no official split column. Eligible predictor columns are Att1, Att2, Att3, Att4, Att5, Att6, Att7, Att8, Att9, Att10, Att11, Att12, Att13, Att14, Att15, Att16, Att17, Att18, Att19, Att20, Att21, Att22, Att23, Att24, Att25, Att26, Att27, Att28, Att29, Att30, Att31, Att32, Att33, Att34, Att35, Att36, Att37, Att38, Att39, Att40, Att41, Att42, Att43, Att44, Att45, Att46, Att47, Att48, Att49, Att50, Att51, Att52, Att53, Att54, Att55, Att56, Att57, Att58, Att59, Att60, Att61, Att62, Att63, Att64, Att65, Att66, Att67, Att68, Att69, Att70, Att71, Att72, Att73, Att74, Att75, Att76, Att77, Att78, Att79, Att80, Att81, Att82, Att83, Att84, Att85, Att86, Att87, Att88, Att89, Att90, Att91, Att92, Att93, Att94, Att95, Att96, Att97, Att98, Att99, Att100, Att101, Att102, Att103. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "f1",
+            "direction": "maximize",
+            "parameters": {
+              "average": "micro"
+            }
+          },
+          "constraints": [
+            {
+              "metric": "model_bytes",
+              "operator": "<=",
+              "value": 200000
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "multilabel",
+        "targets": [
+          "Class1__target",
+          "Class2__target",
+          "Class3__target",
+          "Class4__target",
+          "Class5__target",
+          "Class6__target",
+          "Class7__target",
+          "Class8__target",
+          "Class9__target",
+          "Class10__target",
+          "Class11__target",
+          "Class12__target",
+          "Class13__target",
+          "Class14__target"
+        ],
+        "features": [
+          "Att1",
+          "Att2",
+          "Att3",
+          "Att4",
+          "Att5",
+          "Att6",
+          "Att7",
+          "Att8",
+          "Att9",
+          "Att10",
+          "Att11",
+          "Att12",
+          "Att13",
+          "Att14",
+          "Att15",
+          "Att16",
+          "Att17",
+          "Att18",
+          "Att19",
+          "Att20",
+          "Att21",
+          "Att22",
+          "Att23",
+          "Att24",
+          "Att25",
+          "Att26",
+          "Att27",
+          "Att28",
+          "Att29",
+          "Att30",
+          "Att31",
+          "Att32",
+          "Att33",
+          "Att34",
+          "Att35",
+          "Att36",
+          "Att37",
+          "Att38",
+          "Att39",
+          "Att40",
+          "Att41",
+          "Att42",
+          "Att43",
+          "Att44",
+          "Att45",
+          "Att46",
+          "Att47",
+          "Att48",
+          "Att49",
+          "Att50",
+          "Att51",
+          "Att52",
+          "Att53",
+          "Att54",
+          "Att55",
+          "Att56",
+          "Att57",
+          "Att58",
+          "Att59",
+          "Att60",
+          "Att61",
+          "Att62",
+          "Att63",
+          "Att64",
+          "Att65",
+          "Att66",
+          "Att67",
+          "Att68",
+          "Att69",
+          "Att70",
+          "Att71",
+          "Att72",
+          "Att73",
+          "Att74",
+          "Att75",
+          "Att76",
+          "Att77",
+          "Att78",
+          "Att79",
+          "Att80",
+          "Att81",
+          "Att82",
+          "Att83",
+          "Att84",
+          "Att85",
+          "Att86",
+          "Att87",
+          "Att88",
+          "Att89",
+          "Att90",
+          "Att91",
+          "Att92",
+          "Att93",
+          "Att94",
+          "Att95",
+          "Att96",
+          "Att97",
+          "Att98",
+          "Att99",
+          "Att100",
+          "Att101",
+          "Att102",
+          "Att103"
+        ],
+        "seed": 42
+      }
+    },
+    {
+      "id": "diamonds",
+      "dataset_family": "awesomegems-diamonds-2005",
+      "partition": "holdout",
+      "source_sha256": "e3d626a1de72d211bd76468519cb455ae5f72a613457d4e397d5d3f032de0a6a",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/1dcc2bf5f955cc1224a3e1307256e1fe86b68dae/csv/Stat2Data/Diamonds.csv",
+        "task": "Estimate the diamond TotalPrice in its recorded dollar units. Minimize mean absolute error using at most three raw predictor columns chosen from the eligible attributes. Exclude rownames and PricePerCt: price per carat is derived from the target and unavailable before a valuation. Use a random split. Eligible predictor columns are Carat, Color, Clarity, Depth. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "mae",
+            "direction": "minimize"
+          },
+          "constraints": [
+            {
+              "metric": "input_feature_count",
+              "operator": "<=",
+              "value": 3
+            }
+          ]
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "regression",
+        "targets": [
+          "TotalPrice"
+        ],
+        "features": [
+          "Carat",
+          "Color",
+          "Clarity",
+          "Depth"
+        ],
+        "seed": 42
+      }
+    },
+    {
+      "id": "chocolate",
+      "dataset_family": "google-trends-chocolate",
+      "partition": "holdout",
+      "source_sha256": "0f360421f65d1de828e3ea8969254e2bc6799ebbca9765ebcbc275cffd7ece44",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/Nixtla/transfer-learning-time-series/7e1222dc771e5c1c89aafb052d723200362c45a0/datasets/google_trend_chocolate.csv",
+        "task": "Forecast chocolate search-interest observations for the next twelve months. The target column is chocolate and the month column gives the time; frequency is MS. Minimize MAE in the published index units. Use only historical target values and calendar features, chronological evaluation, and complete twelve-step horizons without revealing future values. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "mae",
+            "direction": "minimize"
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "forecast",
+        "targets": [
+          "chocolate"
+        ],
+        "features": [],
+        "time": "month",
+        "frequency": "MS",
+        "horizon": 12,
+        "seed": 42
+      }
+    },
+    {
+      "id": "ercot",
+      "dataset_family": "ercot-regional-demand",
+      "partition": "holdout",
+      "source_sha256": "e821a7a84b562b8fe04e5af0c5a9377e221b62cb1a721d2f377508b49b48798c",
+      "request": {
+        "dataset": "https://raw.githubusercontent.com/Nixtla/transfer-learning-time-series/7e1222dc771e5c1c89aafb052d723200362c45a0/datasets/ercot_multiple_ts.csv",
+        "task": "Forecast value for the next 24 hours for every ERCOT regional series. Use unique_id as series identifier and timestamp as hourly time column, frequency h. Minimize MAE, giving series and evaluation origins equal weight. Use only each series' historical value observations and calendar information. Evaluate chronologically over complete 24-step horizons without reading future values; no external predictors are available. Use evaluation seed 42 for all randomized splitting and fitting.",
+        "quality": {
+          "objective": {
+            "metric": "mae",
+            "direction": "minimize"
+          },
+          "constraints": []
+        },
+        "budget": {
+          "max_trials": 3,
+          "max_training_seconds": 120
+        }
+      },
+      "specification": {
+        "kind": "forecast",
+        "targets": [
+          "value"
+        ],
+        "features": [],
+        "time": "timestamp",
+        "frequency": "h",
+        "horizon": 24,
+        "group": "unique_id",
+        "seed": 42
+      }
+    }
+  ]
+}
