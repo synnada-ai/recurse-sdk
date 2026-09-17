@@ -6,7 +6,7 @@ uv sync --locked --group dev
 uv run --frozen --no-sync --group dev ruff format --check .
 uv run --frozen --no-sync --group dev ruff check .
 uv run --frozen --no-sync --group dev mypy
-uv run --frozen --no-sync --group dev pytest -n auto --cov --cov-branch --cov-report=term-missing -q
+uv run --frozen --no-sync --group dev pytest --cov --cov-branch --cov-report=term-missing -q
 uv build --no-sources
 uv run --directory examples/rna-fold-lab/tests --locked \
   pytest --cov --cov-branch --cov-report=term-missing -q
