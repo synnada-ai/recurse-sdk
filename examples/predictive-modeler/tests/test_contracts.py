@@ -301,3 +301,28 @@ def test_forecast_rejects_missing_series_identifiers(frame: pd.DataFrame, missin
             data,
             {},
         )
+
+
+@pytest.mark.parametrize("invalid_date", [None, "NaT", "not-a-date"])
+@pytest.mark.parametrize(
+    ("kind", "target"),
+    [("binary", "y"), ("multiclass", "y"), ("multilabel", "a"), ("regression", "value")],
+)
+def test_temporal_tabular_tasks_reject_unusable_timestamps(
+    frame: pd.DataFrame, kind: str, target: str, invalid_date: str | None
+) -> None:
+    """Unknown chronology must not silently place observations in the final test."""
+    frame["date"] = frame["date"].astype(str).astype(object)
+    frame.loc[1, "date"] = invalid_date
+    with pytest.raises(ModelerError, match=r"time column 'date'.*valid timestamp for every row"):
+        resolve(
+            {
+                "kind": kind,
+                "targets": [target],
+                "features": ["x"],
+                "time": "date",
+                "split": "temporal",
+            },
+            frame,
+            {},
+        )

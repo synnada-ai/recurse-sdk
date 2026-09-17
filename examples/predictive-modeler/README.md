@@ -195,8 +195,9 @@ By default, tabular tasks reserve 20% of observations for a final test and use f
 cross-validation on the remaining development data. Binary and multiclass tasks use stratified
 folds; regression and multilabel tasks use shuffled folds. The default random seed is 42.
 Group-aware tasks keep groups disjoint. Temporal tasks use expanding training windows and keep
-equal timestamps together. Fold counts reduce when class counts, group counts or history require
-it; fewer than two valid folds is rejected. Every training fold needs at least ten rows.
+equal timestamps together; every row must have a valid timestamp. Fold counts reduce when class
+counts, group counts or history require it; fewer than two valid folds is rejected. Every training
+fold needs at least ten rows.
 Supplied official train/validation/test assignments are preserved as one explicit validation fold.
 
 Forecasts reserve the last full horizon of each series for the final test and use up to three

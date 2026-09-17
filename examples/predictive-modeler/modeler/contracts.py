@@ -134,8 +134,13 @@ def resolve(
         raise ModelerError("split must be random, group, temporal, or official.")
     if spec["split"] == "group" and not group:
         raise ModelerError("A grouped split requires a group column.")
-    if spec["split"] == "temporal" and not time:
-        raise ModelerError("A temporal split requires a time column.")
+    if spec["split"] == "temporal" and (
+        not time or pd.to_datetime(data[time], errors="coerce").isna().any()
+    ):
+        raise ModelerError(
+            f"Invalid temporal time column {time!r}: "
+            "supply a valid timestamp for every row; missing or invalid dates are not allowed."
+        )
     spec["quality"] = _resolve_quality(quality, spec)
     spec["measurement_protocol"] = "predictive-modeler/v4"
     spec["aggregation"] = "uniform across series and forecast steps"
