@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "measurement_protocol": "predictive-modeler/v2",
+  "measurement_protocol": "predictive-modeler/v3",
   "cases": [
     {
       "id": "binary",

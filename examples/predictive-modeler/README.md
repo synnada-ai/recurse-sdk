@@ -65,6 +65,8 @@ A `label` selects one class/label; use a separate constraint for each class that
 Forecast errors are averaged uniformly across series and forecast origins. Within an origin,
 steps have equal weight. MASE scales each series/origin by the historical seasonal-naive MAE,
 using only history before that origin. An undefined scale makes the candidate infeasible.
+Protocol v3 orders partitions, fitting, predictions and historical scales by parsed dates,
+so accepted non-ISO date strings and shuffled rows preserve chronological evaluation.
 This version does not expose arbitrary aggregation weights or custom metric code.
 
 ### Model complexity
@@ -85,7 +87,7 @@ size with a demonstration MAE ceiling of 10 MPa; [feature-limited classification
 maximizes bean macro F1 with at most four required raw columns. These are explicit example
 requirements, not recommended acceptance thresholds for other datasets.
 
-Measurement protocol **v2** defines:
+Measurement protocol **v3** retains the v2 complexity definitions:
 
 - `model_bytes`: exact length of the uncompressed `model.joblib` file delivered in the bundle,
   using joblib with pickle protocol 5. Includes the full fitted predictor, preprocessing,

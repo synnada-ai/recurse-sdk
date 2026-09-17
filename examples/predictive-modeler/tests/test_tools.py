@@ -543,7 +543,7 @@ def test_complexity_objective_selects_smallest_feasible_candidate(
     )
     tools.inspect_dataset()
     contract = tools.resolve_problem({"kind": "binary", "targets": ["y"], "features": ["category"]})
-    assert contract["measurement_protocol"] == "predictive-modeler/v2"
+    assert contract["measurement_protocol"] == "predictive-modeler/v3"
     _inline(tools, monkeypatch)
     for config in [{"family": "extra_trees", "trees": 10}, {"family": "linear"}]:
         trial = tools.train_candidate(config, "Compare deployment size subject to quality.")

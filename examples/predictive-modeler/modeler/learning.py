@@ -82,7 +82,7 @@ def _forecast_partition(data: pd.DataFrame, spec: dict[str, Any]) -> tuple[Any, 
     groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
     horizon = spec["horizon"]
     for _, frame in groups:
-        ordered = frame.sort_values(spec["time"]).index.to_list()
+        ordered = frame.sort_values(spec["time"], key=pd.to_datetime).index.to_list()
         parts[0].extend(ordered[: -3 * horizon])
         parts[1].extend(ordered[-3 * horizon : -horizon])
         parts[2].extend(ordered[-horizon:])
@@ -313,7 +313,7 @@ class PredictionModel:
         groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
         rows = []
         for name, frame in groups:
-            ordered = frame.sort_values(spec["time"])
+            ordered = frame.sort_values(spec["time"], key=pd.to_datetime)
             values = ordered[spec["targets"][0]].astype(float).tolist()
             dates = pd.date_range(
                 pd.Timestamp(ordered[spec["time"]].iloc[-1]),
@@ -363,7 +363,7 @@ def fit(data: pd.DataFrame, spec: dict[str, Any], config: dict[str, Any]) -> Pre
     estimators = {}
     groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]
     for name, frame in groups:
-        ordered = frame.sort_values(spec["time"])
+        ordered = frame.sort_values(spec["time"], key=pd.to_datetime)
         if config["family"] not in {"baseline", "seasonal"}:
             features, target = _forecast_rows(
                 ordered[spec["targets"][0]].tolist(),
@@ -400,7 +400,8 @@ def measure(
     )
     for name, frame in groups:
         past = history[history[spec["group"]] == name] if spec["group"] else history
-        ordered = frame.sort_values(spec["time"])
+        past = past.sort_values(spec["time"], key=pd.to_datetime)
+        ordered = frame.sort_values(spec["time"], key=pd.to_datetime)
         for start in range(0, len(ordered), spec["horizon"]):
             window = ordered.iloc[start : start + spec["horizon"]]
             predictions = model.predict(past)["prediction"].to_numpy()

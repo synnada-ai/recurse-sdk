@@ -347,3 +347,64 @@ def test_complexity_objective_preserves_constraint_positive_class(frame: pd.Data
     assert (
         measure(model, frame, frame)['recall:{"average": "binary", "positive_label": "0"}'] == 1.0
     )
+
+
+@pytest.mark.parametrize("date_format", ["%Y-%m-%d", "%b %d %Y"])
+@pytest.mark.parametrize("panel", [False, True])
+@pytest.mark.parametrize("family", ["baseline", "seasonal", "linear", "extra_trees"])
+def test_forecast_chronology_is_independent_of_date_format_and_row_order(
+    panel: bool, family: str, date_format: str
+) -> None:
+    """Equivalent dates preserve chronological splits, fitted forecasts, and rolling MASE."""
+    dates = pd.date_range("2000-01-01", periods=60, freq="MS")
+    frame = pd.DataFrame(
+        {"date": dates, "value": np.arange(60) ** 1.5 + np.sin(np.arange(60)), "series": "a"}
+    )
+    if panel:
+        frame = pd.concat(
+            [frame, frame.assign(series="b", value=frame["value"] * 2)], ignore_index=True
+        )
+    proposal = {
+        "kind": "forecast",
+        "targets": ["value"],
+        "time": "date",
+        "frequency": "MS",
+        "horizon": 12,
+        "group": "series" if panel else None,
+    }
+    quality = {
+        "objective": {
+            "metric": "mase",
+            "direction": "minimize",
+            "parameters": {"seasonal_period": 12},
+        }
+    }
+    spec = resolve(proposal, frame, quality)
+    train, validation, test = partition(frame, spec)
+    config = validate_configuration(
+        {"family": family, "trees": 3, "lags": [1, 12], "seasonal_period": 12}, spec
+    )
+    expected_model = fit(frame.iloc[train], spec, config)
+    expected_predictions = expected_model.predict(frame.iloc[train])
+    expected_scores = measure(expected_model, frame.iloc[train], frame.iloc[validation])
+    expected_final = measure(
+        expected_model, frame.iloc[np.concatenate([train, validation])], frame.iloc[test]
+    )
+    formatted = frame.assign(date=frame["date"].dt.strftime(date_format))
+    shuffled = formatted.sample(frac=1, random_state=23).reset_index(drop=True)
+    actual_spec = resolve(proposal, shuffled, quality)
+    actual_parts = partition(shuffled, actual_spec)
+    for expected_rows, actual_rows in zip((train, validation, test), actual_parts, strict=True):
+        expected = frame.iloc[expected_rows].reset_index(drop=True)
+        actual = shuffled.iloc[actual_rows].reset_index(drop=True)
+        actual["date"] = pd.to_datetime(actual["date"])
+        pd.testing.assert_frame_equal(expected, actual)
+    actual_train, actual_validation, actual_test = actual_parts
+    history = shuffled.iloc[actual_train].sample(frac=1, random_state=11)
+    evaluation = shuffled.iloc[actual_validation].sample(frac=1, random_state=12)
+    model = fit(history, actual_spec, config)
+    pd.testing.assert_frame_equal(expected_predictions, model.predict(history))
+    assert measure(model, history, evaluation) == pytest.approx(expected_scores)
+    assert measure(
+        model, pd.concat([history, evaluation]), shuffled.iloc[actual_test]
+    ) == pytest.approx(expected_final)

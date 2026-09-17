@@ -137,7 +137,7 @@ def resolve(
     if spec["split"] == "temporal" and not time:
         raise ModelerError("A temporal split requires a time column.")
     spec["quality"] = _resolve_quality(quality, spec)
-    spec["measurement_protocol"] = "predictive-modeler/v2"
+    spec["measurement_protocol"] = "predictive-modeler/v3"
     spec["aggregation"] = "uniform across series and forecast steps"
     return spec
 

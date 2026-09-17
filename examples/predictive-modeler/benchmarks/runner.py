@@ -23,7 +23,7 @@ from .assessment import assess
 
 __all__ = ["audit", "compare", "fingerprint", "load_cases", "main", "run"]
 ROOT = Path(__file__).parents[1]
-PROTOCOL = "predictive-modeler/v2"
+PROTOCOL = "predictive-modeler/v3"
 _MAX_PROBES = 3
 
 

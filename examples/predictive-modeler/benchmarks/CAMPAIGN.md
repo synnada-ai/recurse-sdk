@@ -4,8 +4,10 @@
 
 The original six cloud examples are development fixtures. Their successful v1 runs establish
 representative functionality, not repeated reliability or generalization. Complexity adds
-measurement protocol `predictive-modeler/v2`; compare all contenders under that same protocol.
-Do not rank v1 and v2 size measurements together.
+measurement protocol `predictive-modeler/v2`. The prepared initial pilot remains frozen at v2.
+Current code uses `predictive-modeler/v3`, correcting parsed-date ordering throughout forecasting
+and historical MASE scales. Historical v2 records remain unchanged. Compare contenders only under
+the same protocol; rerun both designs at v3 before comparing subsequent outcomes.
 
 The new Penguins and MPG cases are also **development** data once inspected here. The fixed-search
 pilot checks the evaluator and provides a cheap reference, not a test of an autonomous agent.

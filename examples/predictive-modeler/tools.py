@@ -362,7 +362,7 @@ def _report(
         receipt["summary"],
         "## Evaluation",
         "```json\n" + json.dumps(evaluation, indent=2) + "\n```",
-        "## Measurement protocol (v2)",
+        "## Measurement protocol (v3)",
         "model_bytes is the exact uncompressed model.joblib file size (joblib, pickle protocol 5), "
         "including preprocessing, configuration and every label/series estimator; excluding "
         "prediction code, dependency packages, reports and caller-supplied forecast history. "
@@ -386,6 +386,8 @@ def _report(
         "Validation guided selection; final-test measurements are reported once. "
         "Thresholds apply to positive-class probability (binary) or each label (multilabel). "
         "Forecast metrics average equally across series and forecast origins. "
+        "Partitions, fitting, predictions and historical error scales "
+        "use parsed chronological dates. "
         "Only load joblib artifacts you trust, using the bundled dependency versions.",
     ]
     return "\n\n".join(sections) + "\n"
