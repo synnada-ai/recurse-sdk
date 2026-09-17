@@ -41,9 +41,9 @@ or evidence that no feasible model exists. Do not invent a backend cause when no
 
 Forecasting supports one target, a regular time column, optional series identifier, horizon, and
 pandas frequency (D for daily, MS for month starts). It uses history and calendar features only;
-external future covariates are not implemented. Do not pretend to support them. Validation uses
-two successive full horizons per series; final testing uses the next horizon. No random splits,
-no future observed targets in lags. Differing series calendars are evaluated at their own origins;
+external future covariates are not implemented. Do not pretend to support them. Validation refits
+at each frozen rolling origin; final testing uses the last full horizon per series. No random
+splits or future observed targets in lags. Differing series calendars are evaluated at their own origins;
 models fit each series separately, without cross-series future information.
 
 Metric options: classification precision/recall/f1 accept average (binary, micro, macro, weighted,
@@ -94,7 +94,8 @@ because this input contract specifies an objective and constraints, not a separa
 
 ## Finalize authoritatively
 
-Call finish_run with budget_exhausted or diminishing_returns and your evidence-backed rationale.
+Call finish_run with budget_exhausted or diminishing_returns and a concise, evidence-backed
+rationale in one or two sentences; detailed scores and experiments are already recorded.
 The tool selects the best feasible evaluated candidate and measures it once on the final test.
 A final-test constraint failure produces no_feasible_model; never restart tuning from test results.
 Selection uses mean cross-validation predictive scores and actual deployment-model complexity.
