@@ -408,3 +408,33 @@ def test_forecast_chronology_is_independent_of_date_format_and_row_order(
     assert measure(
         model, pd.concat([history, evaluation]), shuffled.iloc[actual_test]
     ) == pytest.approx(expected_final)
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "message"),
+    [
+        ("scale", "false", "scale must be a boolean"),
+        ("scale", "standard", "scale must be a boolean"),
+        ("scale", 0, "scale must be a boolean"),
+        ("scale", None, "scale must be a boolean"),
+        ("scale", [], "scale must be a boolean"),
+        ("family", [], "family must be"),
+        ("family", {}, "family must be"),
+        ("class_weight", [], "class_weight must be"),
+        ("class_weight", {}, "class_weight must be"),
+        ("strategy", [], "strategy must be"),
+        ("strategy", {}, "strategy must be"),
+        ("feature_subset", [["x"]], "feature_subset must be"),
+        ("feature_subset", [{}], "feature_subset must be"),
+        ("lags", 7, "Supply a list"),
+        ("lags", True, "Supply a list"),
+        ("lags", {1: "invalid"}, "Supply a list"),
+        ("lags", (1, 7), "Supply a list"),
+    ],
+)
+def test_malformed_candidate_values_raise_actionable_domain_errors(
+    spec: dict[str, Any], option: str, value: Any, message: str
+) -> None:
+    """Malformed proposal values fail before fitting instead of coercion or generic errors."""
+    with pytest.raises(ModelerError, match=message):
+        validate_configuration({option: value}, spec)

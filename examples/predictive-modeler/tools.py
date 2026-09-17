@@ -225,7 +225,8 @@ def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) ->
     """Fit a proposed candidate without revealing validation or final-test measurements.
 
     Args:
-        configuration: family (baseline/linear/extra_trees; seasonal for forecasts), scale,
+        configuration: family (baseline/linear/extra_trees; seasonal for forecasts),
+            scale (boolean, default true),
             regularization, trees, max_depth, min_samples_leaf, class_weight (null/balanced),
             threshold, multilabel strategy (independent/chain), forecast lags, seasonal_period,
             text max_features and ngram_max, and feature_subset (eligible tabular columns).

@@ -110,17 +110,20 @@ def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict
     if set(config) - set(defaults):
         raise ModelerError(f"Unknown candidate options: {set(config) - set(defaults)}")
     result = defaults | config
+    if not isinstance(result["scale"], bool):
+        raise ModelerError("scale must be a boolean (true or false); omitted defaults to true.")
     subset = result["feature_subset"]
     if subset is not None and (
         not isinstance(subset, list)
         or not subset
+        or any(not isinstance(name, str) for name in subset)
         or len(set(subset)) != len(subset)
         or not set(subset) <= set(spec["features"])
     ):
         raise ModelerError(
             "feature_subset must be a nonempty distinct subset of eligible features."
         )
-    if result["family"] not in {"baseline", "linear", "extra_trees", "seasonal"}:
+    if result["family"] not in ("baseline", "linear", "extra_trees", "seasonal"):
         raise ModelerError("family must be baseline, linear, extra_trees, or seasonal.")
     if result["family"] == "seasonal" and spec["kind"] != "forecast":
         raise ModelerError("seasonal is only available for forecasting.")
@@ -144,17 +147,18 @@ def validate_configuration(config: dict[str, Any], spec: dict[str, Any]) -> dict
             raise ModelerError(f"{key} must be between {lower} and {upper}.")
         if key not in {"regularization", "threshold"} and not isinstance(value, int):
             raise ModelerError(f"{key} must be an integer.")
-    if result["class_weight"] not in {None, "balanced"}:
+    if result["class_weight"] not in (None, "balanced"):
         raise ModelerError("class_weight must be null or balanced.")
-    if result["strategy"] not in {"independent", "chain"}:
+    if result["strategy"] not in ("independent", "chain"):
         raise ModelerError("Multilabel strategy must be independent or chain.")
     lags = result["lags"]
     if (
-        not lags
+        not isinstance(lags, list)
+        or not lags
         or len(lags) > _MAX_LAGS
         or any(type(lag) is not int or not 1 <= lag <= _MAX_LAG for lag in lags)
     ):
-        raise ModelerError("Supply 1-30 positive integer lags, each at most 365.")
+        raise ModelerError("Supply a list of 1-30 positive integer lags, each at most 365.")
     result["lags"] = sorted(set(lags))
     return result
 
