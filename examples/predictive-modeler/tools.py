@@ -229,7 +229,9 @@ def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) ->
             regularization, trees, max_depth, min_samples_leaf, class_weight (null/balanced),
             threshold, multilabel strategy (independent/chain), forecast lags, seasonal_period,
             text max_features and ngram_max, and feature_subset (eligible tabular columns).
-            Omitted values use documented defaults.
+            Omitted values use documented defaults. The baseline family uses class priors,
+            the training-target mean (regression), or the last observed value (forecasting);
+            it does not learn feature effects.
         hypothesis: Why this experiment should improve the frozen objective or feasibility.
 
     Returns:
@@ -405,6 +407,7 @@ def finish_run(stop_reason: str, explanation: str) -> dict[str, Any]:
 
     Returns:
         Final status, stop reason, summary, conflicts/questions, and relative artifact paths.
+        Among feasible evaluated candidates, exact objective ties retain the earliest trial.
         A failed final acceptance yields no_feasible_model and no accepted model bundle.
         Copy this entire receipt unchanged into the final JSON, including all conflicts and
         exactly the artifact keys returned. Do not paraphrase or add empty optional paths.
