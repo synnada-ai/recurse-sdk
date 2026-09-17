@@ -18,6 +18,7 @@ from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.multioutput import ClassifierChain, MultiOutputClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.utils.class_weight import compute_sample_weight
 
 from .contracts import ModelerError, score
 
@@ -360,9 +361,16 @@ def fit(data: pd.DataFrame, spec: dict[str, Any], config: dict[str, Any]) -> Pre
             if spec["kind"] == "multilabel"
             else data[spec["targets"][0]].to_numpy()
         )
+        fit_options = {}
         if spec["kind"] in {"binary", "multiclass"}:
             target = target.astype(str)
-        estimator.fit(_features(data, spec), target)
+            if config["family"] == "extra_trees" and config["class_weight"] == "balanced":
+                # sklearn 1.9.1 converts numeric-string keys to integers when expanding
+                # a forest's balanced class-weight dictionary. Direct sample weights
+                # preserve the same inverse-frequency weighting and original labels.
+                estimator.set_params(model__class_weight=None)
+                fit_options["model__sample_weight"] = compute_sample_weight("balanced", target)
+        estimator.fit(_features(data, spec), target, **fit_options)
         return PredictionModel(spec, config, estimator)
     estimators = {}
     groups = data.groupby(spec["group"], sort=True) if spec["group"] else [("series", data)]

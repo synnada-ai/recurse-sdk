@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 from modeler.contracts import ModelerError, resolve
 from modeler.learning import fit, measure, partition, validate_configuration
+from sklearn.ensemble import ExtraTreesClassifier
 
 
 @pytest.mark.parametrize("split", ["random", "official", "temporal", "group"])
@@ -438,3 +439,40 @@ def test_malformed_candidate_values_raise_actionable_domain_errors(
     """Malformed proposal values fail before fitting instead of coercion or generic errors."""
     with pytest.raises(ModelerError, match=message):
         validate_configuration({option: value}, spec)
+
+
+@pytest.mark.parametrize("kind", ["binary", "multiclass"])
+@pytest.mark.parametrize("labels", ["integers", "numeric_strings", "names"])
+def test_balanced_trees_preserve_class_labels_and_inverse_frequency_weights(
+    kind: str, labels: str
+) -> None:
+    """Class balancing matches integer-encoded training for every supported label spelling."""
+    target = np.repeat(
+        np.arange(2 if kind == "binary" else 3), [60, 30] if kind == "binary" else [60, 30, 15]
+    )
+    values = np.arange(len(target))
+    frame = pd.DataFrame({"x": np.sin(values), "z": np.cos(values / 7), "target": target})
+    if labels != "integers":
+        frame["target"] = frame["target"].astype(str)
+        if labels == "names":
+            frame["target"] = "class-" + frame["target"]
+    spec = resolve({"kind": kind, "targets": ["target"], "features": ["x", "z"]}, frame, {})
+    config = validate_configuration(
+        {"family": "extra_trees", "trees": 3, "class_weight": "balanced"}, spec
+    )
+    model = fit(frame, spec, config)
+    classes, encoded = np.unique(frame["target"].astype(str), return_inverse=True)
+    expected = ExtraTreesClassifier(
+        n_estimators=3,
+        max_depth=12,
+        min_samples_leaf=2,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=1,
+    ).fit(model.estimator["features"].transform(frame), encoded)
+    np.testing.assert_array_equal(model.estimator.classes_, classes)
+    np.testing.assert_allclose(
+        model.estimator.predict_proba(frame),
+        expected.predict_proba(model.estimator["features"].transform(frame)),
+    )
+    assert model.configuration["class_weight"] == "balanced"
