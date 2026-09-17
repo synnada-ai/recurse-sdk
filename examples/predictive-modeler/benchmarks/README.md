@@ -95,6 +95,19 @@ feasibility, selection, and reproduced scores. Loading a model bundle executes p
 only assess artifacts from your own trusted runs. File hashing alone establishes artifact
 integrity, not scientific validity or absence of leakage.
 
+Independent CV refits can differ slightly across numerical libraries even with identical
+source bytes, splits, preprocessing statistics and seeds. For refitted MAE, RMSE, MASE and
+absolute bias only, score reproduction permits relative tolerance `1e-6` and absolute
+tolerance `1e-8`. Classification scores and predictions from the saved deployment artifact
+retain `1e-9` relative/absolute tolerance; model bytes and raw input counts must match exactly.
+Every fold and the aggregate must reproduce, and the recorded aggregate must equal its own
+fold mean under the stricter tolerance. Recomputed CV and final-test constraints must pass
+the original hard bounds without any tolerance allowance. Near-equal objective scores
+within numerical tolerance are not evidence that one agent design is better.
+
+A verifier revision changes its fingerprint. Preserve original audit results and record
+uniform reassessments separately; never silently overwrite failed historical audits.
+
 The next comparison should pair the current agent and one explicitly hypothesized contender
 under equal allowances. Measure correct interpretation/rejection, completion, feasible-model
 rate, per-case quality/complexity, latency, and cost; report each modality separately. Only

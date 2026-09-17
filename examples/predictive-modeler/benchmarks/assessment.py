@@ -14,6 +14,9 @@ from modeler import contracts, learning
 
 __all__ = ["assess"]
 
+_CONTINUOUS = {"mae", "rmse", "mase", "absolute_bias"}
+_COMPLEXITY = {"model_bytes", "input_feature_count"}
+
 
 def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[str, Any]:
     """Audit a trusted accepted bundle against evaluator-owned semantics and observations.
@@ -111,8 +114,7 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
             cross_validation = learning.cross_validate(
                 data, expected, winner["configuration"], parts
             )
-            recorded_cv = winner["cross_validation"]
-            issues.extend(_audit_folds(cross_validation, recorded_cv))
+            issues.extend(_audit_folds(cross_validation, winner["cross_validation"]))
             final = learning.measure(
                 model, data.iloc[parts["fit"]], data.iloc[parts["test"]], model_path
             )
@@ -128,9 +130,13 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
         for name, values in reproduced.items():
             recorded = evaluation[name]
             check(
-                _scores_match(values, recorded),
+                _scores_match(values, recorded, refitted=name == "validation"),
                 f"{name} scores do not reproduce.",
             )
+        check(
+            contracts.feasible(expected, reproduced["validation"]),
+            "Reproduced cross-validation constraints fail.",
+        )
         check(
             contracts.feasible(expected, reproduced["final_test"]),
             "Reproduced final-test constraints fail.",
@@ -143,15 +149,25 @@ def assess(case: dict[str, Any], workspace: Path, data: pd.DataFrame) -> dict[st
     return {"verified": not issues, "issues": issues}
 
 
-def _scores_match(actual: dict[str, Any], recorded: dict[str, Any]) -> bool:
-    """Compare complete finite score mappings with bounded floating point tolerance."""
-    return actual.keys() == recorded.keys() and all(
-        value is not None
-        and recorded[key] is not None
-        and bool(np.isfinite(value) and np.isfinite(recorded[key]))
-        and bool(np.isclose(value, recorded[key], rtol=1e-9, atol=1e-9))
-        for key, value in actual.items()
-    )
+def _scores_match(
+    actual: dict[str, Any], recorded: dict[str, Any], *, refitted: bool = False
+) -> bool:
+    """Allow numerical refit drift only for continuous metrics, never model complexity."""
+    if actual.keys() != recorded.keys():
+        return False
+    for key, value in actual.items():
+        saved = recorded[key]
+        if value is None or saved is None or not np.isfinite(value) or not np.isfinite(saved):
+            return False
+        metric = key.split(":", 1)[0]
+        if metric in _COMPLEXITY:
+            matches = value == saved
+        else:
+            rtol, atol = (1e-6, 1e-8) if refitted and metric in _CONTINUOUS else (1e-9, 1e-9)
+            matches = bool(np.isclose(value, saved, rtol=rtol, atol=atol))
+        if not matches:
+            return False
+    return True
 
 
 def _audit_folds(actual: dict[str, Any], recorded: dict[str, Any]) -> list[str]:
@@ -165,10 +181,22 @@ def _audit_folds(actual: dict[str, Any], recorded: dict[str, Any]) -> list[str]:
             saved["validation_rows"],
         ):
             issues.append("Cross-validation fold sizes differ.")
-        if not _scores_match(fold["scores"], saved["scores"]):
+        if not _scores_match(fold["scores"], saved["scores"], refitted=True):
             issues.append("Cross-validation fold scores do not reproduce.")
-    if not _scores_match(actual["scores"], recorded["scores"]):
+    if not _scores_match(actual["scores"], recorded["scores"], refitted=True):
         issues.append("Cross-validation aggregate scores do not reproduce.")
+    means = (
+        {
+            key: None
+            if any(fold["scores"].get(key) is None for fold in recorded["folds"])
+            else float(np.mean([fold["scores"][key] for fold in recorded["folds"]]))
+            for key in recorded["scores"]
+        }
+        if recorded["folds"]
+        else {}
+    )
+    if not _scores_match(means, recorded["scores"]):
+        issues.append("Recorded cross-validation aggregate differs from its fold mean.")
     return issues
 
 

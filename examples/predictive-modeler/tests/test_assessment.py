@@ -1,5 +1,6 @@
 """Independent checks of trusted benchmark model artifacts and recorded selection."""
 
+import copy
 import json
 import zipfile
 from pathlib import Path
@@ -8,17 +9,22 @@ from typing import Any
 import joblib
 import pandas as pd
 import pytest
-from benchmarks.assessment import _scores_match, assess
+from benchmarks.assessment import _audit_folds, _scores_match, assess
 from modeler import contracts, learning
 
 
-def _fixture(frame: pd.DataFrame, root: Path, subset: bool = False) -> dict[str, Any]:
+def _fixture(
+    frame: pd.DataFrame, root: Path, subset: bool = False, *, regression: bool = False
+) -> dict[str, Any]:
     """Create known accepted artifacts from deterministic fixture observations."""
     quality = {
         "objective": {"metric": "model_bytes", "direction": "minimize"},
         "constraints": [{"metric": "f1", "operator": ">=", "value": 0.9}],
     }
     proposal = {"kind": "binary", "targets": ["y"], "features": ["category", "x"]}
+    if regression:
+        quality["constraints"] = [{"metric": "mae", "operator": "<=", "value": 2.0}]
+        proposal.update(kind="regression", targets=["value"])
     case = {
         "request": {"quality": quality, "budget": {"max_trials": 2, "max_training_seconds": 120}},
         "specification": proposal,
@@ -215,3 +221,79 @@ def test_training_budget_exhaustion_forbids_starting_another_trial(
 def test_nonfinite_or_missing_scores_never_reproduce(actual: Any, recorded: Any) -> None:
     """Undefined metrics cannot support an accepted reproducibility claim."""
     assert not _scores_match({"mae:{}": actual}, {"mae:{}": recorded})
+
+
+@pytest.mark.parametrize("drift,accepted", [(1e-7, True), (0.01, False)])
+def test_refitted_continuous_scores_allow_only_small_numerical_drift(
+    frame: pd.DataFrame, tmp_path: Path, drift: float, accepted: bool
+) -> None:
+    """Platform refits may differ slightly without weakening saved-model verification."""
+    case = _fixture(frame, tmp_path, regression=True)
+    path = tmp_path / "trials.jsonl"
+    trial = json.loads(path.read_text())
+    trial["cross_validation"]["scores"]["mae:{}"] += drift
+    for fold in trial["cross_validation"]["folds"]:
+        fold["scores"]["mae:{}"] += drift
+    trial["validation"]["mae:{}"] += drift
+    path.write_text(json.dumps(trial))
+    path = tmp_path / "evaluation.json"
+    evaluation = json.loads(path.read_text())
+    evaluation["validation"] = trial["validation"]
+    path.write_text(json.dumps(evaluation))
+    assert assess(case, tmp_path, frame)["verified"] is accepted
+
+
+def test_small_refit_drift_cannot_cross_hard_cv_constraint(
+    frame: pd.DataFrame, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A score within reproducibility tolerance still must satisfy the original bound."""
+    case = _fixture(frame, tmp_path, regression=True)
+    path = tmp_path / "trials.jsonl"
+    trial = json.loads(path.read_text())
+    trial["cross_validation"]["scores"]["mae:{}"] = 2.0
+    for fold in trial["cross_validation"]["folds"]:
+        fold["scores"]["mae:{}"] = 2.0
+    trial["validation"]["mae:{}"] = 2.0
+    path.write_text(json.dumps(trial))
+    path = tmp_path / "evaluation.json"
+    evaluation = json.loads(path.read_text())
+    evaluation["validation"] = trial["validation"]
+    path.write_text(json.dumps(evaluation))
+    replay = copy.deepcopy(trial["cross_validation"])
+    replay["scores"]["mae:{}"] += 1e-7
+    for fold in replay["folds"]:
+        fold["scores"]["mae:{}"] += 1e-7
+    monkeypatch.setattr(learning, "cross_validate", lambda *args: replay)
+    assert assess(case, tmp_path, frame) == {
+        "verified": False,
+        "issues": ["Reproduced cross-validation constraints fail."],
+    }
+
+
+def test_recorded_cv_mean_is_not_given_refit_tolerance() -> None:
+    """A small but inconsistent recorded mean is not a platform refit discrepancy."""
+    actual: dict[str, Any] = {
+        "scores": {"mae:{}": 2.0},
+        "folds": [{"scores": {"mae:{}": 2.0}, "train_rows": 40, "validation_rows": 10}],
+    }
+    recorded = copy.deepcopy(actual)
+    recorded["scores"]["mae:{}"] += 1e-7
+    assert _audit_folds(actual, recorded) == [
+        "Recorded cross-validation aggregate differs from its fold mean."
+    ]
+
+
+@pytest.mark.parametrize("refitted", [False, True])
+@pytest.mark.parametrize("metric", ["model_bytes", "input_feature_count"])
+def test_complexity_is_always_compared_exactly(refitted: bool, metric: str) -> None:
+    """Even sub-tolerance differences in discrete artifact metrics are rejected."""
+    key = metric + ":{}"
+    assert not _scores_match({key: 100.0}, {key: 100.0 + 1e-8}, refitted=refitted)
+
+
+@pytest.mark.parametrize("metric", ["mae", "f1"])
+def test_saved_predictions_and_classification_keep_strict_tolerance(metric: str) -> None:
+    """Only refitted continuous scores receive the wider numerical allowance."""
+    key = metric + ":{}"
+    assert not _scores_match({key: 1.0}, {key: 1.0 + 1e-7})
+    assert _scores_match({key: 1.0}, {key: 1.0 + 1e-7}, refitted=True) is (metric == "mae")
