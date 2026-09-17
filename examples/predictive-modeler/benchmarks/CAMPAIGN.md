@@ -19,11 +19,12 @@ the added sentence failed to prevent oversized forests and did not improve selec
 It was rejected. A refined minimum-capacity probe then completed eight verified runs and reduced
 oversized trials from four to one while tying all four paired CV objectives. Its exact tested
 single sentence is adopted on top of the retained baseline. This is a narrow sizing benefit,
-with no predictive gain or trial reduction. The six final dataset families remain untrained;
-the selected design will be frozen before their evaluation.
+with no predictive gain or trial reduction in that paired experiment. The frozen selected design
+then delivered **six of six independently verified models on new dataset families**, with improved
+CV objectives over each run's simple baseline. Final-test results are reported separately below.
 
-Last confirmed wallet balance: **$73.318711**. The campaign wallet decrease is **$22.271010 of
-the $50 allowance**, leaving $27.728990. Account deltas can include other activity and are not
+Final confirmed wallet balance: **$71.889028**. The campaign wallet decrease is **$23.700693 of
+the $50 allowance**, leaving $26.299307. Account deltas can include other activity and are not
 itemized per-run charges. No top-ups occurred. All admitted training runs are terminal and collected.
 
 ## Controlled main comparison
@@ -139,7 +140,7 @@ retained bundles were uniformly re-audited under the current verifier before com
 five resumed runs. Original audits and source hashes remain explicit. **Old continuous outcomes
 from before the Ridge correction are excluded from ranking.** All forest attempts use `a28f747`.
 
-## Historical evidence and next decision
+## Historical evidence and stopping decision
 
 Historical protocols remain separate from v4:
 
@@ -152,13 +153,49 @@ Historical protocols remain separate from v4:
   Reassessments never overwrite failures. Numerical canaries are diagnostic evidence, not extra
   favorable repeats in the design comparison.
 
-The main baseline plus the exact tested minimum-probe sentence is selected from development and
-validation evidence. Freeze that design, then evaluate the
-[frozen final collection](holdout-cases.json) once: Swiss banknotes, wine, multilabel yeast,
-diamonds, chocolate search interest, and ERCOT regional demand. Only source/schema/split preflight
-has run; **no holdout models have been fitted**. Its SHA-256 remains
-`de0b7e9684e8441126d2f66b2452fbac52f1bd8cf2fc5d6dcc691243819ef4ff`.
-Tuning from final outcomes would consume that holdout and require a new untouched collection.
+The main baseline plus the exact tested minimum-probe sentence was selected and committed before
+final evaluation. We stop further prompt iteration for **practical diminishing returns**, not
+budget exhaustion or proof of a global optimum. The complexity appendix, adaptive-search
+replacement, and vague forest guidance failed their measured goals; only the precise probe earned
+its added instruction. Further speculative wording would increasingly tune to the same inspected
+dataset families. Larger searches, more model families, and calibrated sizing policies remain
+possible future experiments, but would add capability or evaluation scope beyond this small example.
+The remaining budget is a ceiling, not an obligation to spend.
+
+## Frozen final dataset evaluation
+
+[Final evaluation records](final-holdout-results.json) preserve the six requests, frozen source,
+run IDs, complete trial evidence, independent audits, and artifacts' hashes. The application hash
+`ac746e041d36ff19eef19b20c2eb252aa717db04037f2fbf509186a0d5235b64` exactly matches the tested
+refined variant. The [final dataset manifest](holdout-cases.json) was frozen before any fits, with
+SHA-256 `de0b7e9684e8441126d2f66b2452fbac52f1bd8cf2fc5d6dcc691243819ef4ff`.
+No final outcome changed the prompt, tools, allowances, or selection criteria.
+
+All six runs completed, matched their authoritative receipts, and passed independent replay and
+constraint checks. Each used three trials, 120 cumulative training seconds maximum, Luna, one CPU,
+and 2 GiB. There were six CLI submissions, no retries, and no gateway failures. The preceding
+resumed eight-run comparison was also free of gateway failures; this does not establish that the
+backend issue is permanently fixed.
+
+| Dataset / task | Objective | Simple baseline CV | Selected CV | Final test | Selected family |
+| --- | --- | ---: | ---: | ---: | --- |
+| Swiss banknotes / binary | F1 ↑ | 0.6667 | 0.9814 | 1.0000 | Linear |
+| Wine / multiclass | Macro-F1 ↑ | 0.1909 | 0.9796 | 0.9710 | Linear |
+| Yeast / multilabel | Micro-F1 ↑ | 0.4788 | 0.6249 | 0.6351 | Linear |
+| Diamonds / regression | MAE ↓ | 5189.46 | 1211.67 | 1028.94 | Extra Trees |
+| Chocolate interest / forecasting | MAE ↓ | 11.19 | 6.17 | 2.58 | Linear |
+| ERCOT regions / panel forecasting | MAE ↓ | 1112.96 | 423.42 | 269.23 | Seasonal naive |
+
+Baseline and selected CV scores use the same frozen folds. Only the selected model receives a
+final-test measurement; no baseline final-test comparison is implied. Banknotes and diamonds meet
+their three-input limits; wine and yeast meet their 100000-byte and 200000-byte caps. These cases
+specified no predictive acceptance floors, so verified acceptance alone is not a claim that quality
+is sufficient for every application. All six selected CV objectives improved over their measured
+simple baselines, but the gains and final-test values remain specific to each dataset and split.
+
+There is one run per new dataset, so this final collection does not estimate agent variability or
+statistical superiority. The six families are now used evaluation data: tuning from their outcomes
+would require retiring them as holdouts and freezing a new untouched collection.
 
 Do not average incompatible objectives or exclude failed/missing attempts from denominators.
 A higher score cannot compensate for violated requirements. These small datasets cover distinct

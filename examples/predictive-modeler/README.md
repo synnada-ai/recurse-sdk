@@ -331,13 +331,14 @@ and experimental decision-making require separate end-to-end cloud-agent validat
 report local tool probes as evidence that the autonomous agent passed those checks.
 
 For historical cloud outcomes and run IDs, see
-[autonomous validation evidence](tests/CLOUD-VALIDATION.md); the current v4 comparison and service
-blocker are recorded in the [design campaign](benchmarks/CAMPAIGN.md). Successful model receipts
+[autonomous validation evidence](tests/CLOUD-VALIDATION.md); the completed v4 comparisons and final
+evaluation are recorded in the [design campaign](benchmarks/CAMPAIGN.md). Successful model receipts
 include only available, nonempty artifact paths; the agent must return the saved receipt unchanged.
-Under the earlier evaluation protocol, all six task types have accepted cloud bundles with
-locally reproduced validation/final-test scores; panel evidence uses the three-trial request above.
-These runs demonstrate functionality, not repeated reliability estimates or a guarantee of strong
-performance on arbitrary datasets.
+The frozen selected design produced independently verified models on six new real dataset families,
+covering all supported task types; each improved on its simple baseline in cross-validation.
+The campaign reports independent final-test scores separately, plus earlier service failures and
+rejected designs. One run per final dataset does not establish repeated reliability or guarantee
+strong performance on arbitrary datasets.
 
 ## Comparing agent designs
 
@@ -346,8 +347,8 @@ from public agent inputs. It provides versioned dataset/request/budget/source fi
 fixed-search baselines, independent trusted-bundle score reproduction, and failure-preserving
 paired comparisons. The initial development suite adds two pinned public CSV datasets to the
 six existing examples. These cases do not constitute an untouched holdout or generalization proof.
-See the [comparison campaign](benchmarks/CAMPAIGN.md) for the frozen prompt hypothesis,
-run schedule, and staged expansion across unseen task families.
+See the [comparison campaign](benchmarks/CAMPAIGN.md) for the tested hypotheses,
+selected minimal prompt change, run schedules, and final evaluation across new task families.
 
 ## Limitations
 
