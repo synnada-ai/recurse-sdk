@@ -16,3 +16,7 @@ uv run --directory examples/backpack-3d/tests --locked \
   pytest --cov --cov-branch --cov-report=term-missing -q
 MYPYPATH=../../../src uv run --directory examples/backpack-3d/tests --locked \
   mypy --config-file pyproject.toml ../tools.py test_backpack.py
+uv run --directory examples/tiny-tuner/tests --locked \
+  pytest -n auto --cov --cov-branch --cov-report=term-missing -q
+MYPYPATH=../../../src uv run --directory examples/tiny-tuner/tests --locked \
+  mypy --config-file pyproject.toml ../tools.py test_tiny_tuner.py

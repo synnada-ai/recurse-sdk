@@ -16,7 +16,7 @@ from jsonschema import Draft202012Validator
 from recurse import _activate as activate
 from recurse import _deactivate as deactivate
 
-_SOURCE = Path(__file__).parents[1] / "examples" / "tiny-tuner" / "tools.py"
+_SOURCE = Path(__file__).parents[1] / "tools.py"
 _MANIFEST = _SOURCE.with_name("agent.yaml")
 
 
