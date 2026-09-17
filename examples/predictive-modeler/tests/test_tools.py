@@ -383,6 +383,22 @@ def test_training_subprocess_enforces_timeout(
     assert seconds >= 0
 
 
+@pytest.mark.parametrize("phase", ["fit", "validate"])
+def test_completed_worker_cannot_earn_success_after_deadline(
+    run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    """Successful process exit cannot make an over-budget fit or CV result eligible."""
+    ticks = iter((100.0, 102.01))
+    monkeypatch.setattr(tools.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(
+        tools.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", "")
+    )
+    status, diagnostic, seconds = tools._execute(1, 2.0, phase)
+    assert status == "timeout"
+    assert "remaining cumulative training budget" in diagnostic
+    assert seconds == pytest.approx(2.01)
+
+
 def test_training_worker_inherits_parent_application_dependencies(
     run: Path, tools: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

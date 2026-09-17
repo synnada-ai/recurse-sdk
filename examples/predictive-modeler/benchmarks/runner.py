@@ -253,11 +253,10 @@ def compare(left: list[dict[str, Any]], right: list[dict[str, Any]]) -> list[dic
                     "dataset_family",
                     "verifier_hash",
                     "environment",
+                    "data_hash",
                 )
-                if a[field] != b[field]
+                if not a.get(field) or not b.get(field) or a[field] != b[field]
             ]
-            if not a["data_hash"] or not b["data_hash"] or a["data_hash"] != b["data_hash"]:
-                mismatch.append("data_hash")
         output.append(
             {
                 "case_id": key[0],

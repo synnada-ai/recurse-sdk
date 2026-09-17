@@ -224,7 +224,13 @@ def _execute(identifier: int, remaining: float, phase: str = "fit") -> tuple[str
             "timeout",
             "Training exceeded the remaining cumulative training budget.",
         )
-    return status, diagnostic, time.monotonic() - started
+    seconds = time.monotonic() - started
+    if status == "trained" and seconds > remaining:
+        status, diagnostic = (
+            "timeout",
+            "Training exceeded the remaining cumulative training budget.",
+        )
+    return status, diagnostic, seconds
 
 
 def train_candidate(configuration: dict[str, ProposalValue], hypothesis: str) -> dict[str, Any]:

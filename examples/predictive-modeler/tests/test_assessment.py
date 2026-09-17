@@ -9,7 +9,7 @@ from typing import Any
 import joblib
 import pandas as pd
 import pytest
-from benchmarks.assessment import _audit_folds, _scores_match, assess
+from benchmarks.assessment import _audit_budget, _audit_folds, _scores_match, assess
 from modeler import contracts, learning
 
 
@@ -297,3 +297,24 @@ def test_saved_predictions_and_classification_keep_strict_tolerance(metric: str)
     key = metric + ":{}"
     assert not _scores_match({key: 1.0}, {key: 1.0 + 1e-7})
     assert _scores_match({key: 1.0}, {key: 1.0 + 1e-7}, refitted=True) is (metric == "mae")
+
+
+def test_final_evaluated_trial_cannot_exceed_cumulative_time(
+    frame: pd.DataFrame, tmp_path: Path
+) -> None:
+    """An accepted last candidate must obey the same cumulative budget as earlier trials."""
+    case = _fixture(frame, tmp_path)
+    path = tmp_path / "trials.jsonl"
+    trial = json.loads(path.read_text())
+    trial["seconds"] = 121.0
+    path.write_text(json.dumps(trial))
+    result = assess(case, tmp_path, frame)
+    assert not result["verified"]
+    assert "A successful trial exceeded the cumulative training budget." in result["issues"]
+
+
+@pytest.mark.parametrize("status", ["failed", "timeout"])
+def test_failed_final_worker_may_finish_cleanup_after_deadline(status: str) -> None:
+    """Cleanup overrun preserves a failed trial without treating it as successful training."""
+    history = [{"seconds": 1.0, "status": "evaluated"}, {"seconds": 120.0, "status": status}]
+    assert _audit_budget(history, {"max_training_seconds": 120}) == []

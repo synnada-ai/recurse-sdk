@@ -207,3 +207,45 @@ def test_benchmark_ground_truth_is_excluded_from_deployment() -> None:
     artifacts, _ = build_bundle(ROOT)
     with tarfile.open(fileobj=io.BytesIO(artifacts["source"]), mode="r:gz") as archive:
         assert not any("benchmarks" in Path(name).parts for name in archive.getnames())
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "request_hash",
+        "specification_hash",
+        "budget_hash",
+        "protocol",
+        "partition",
+        "dataset_family",
+        "verifier_hash",
+        "environment",
+        "data_hash",
+    ],
+)
+@pytest.mark.parametrize("missing", [False, True])
+def test_missing_comparison_identity_never_matches(field: str, missing: bool) -> None:
+    """Equal absent provenance cannot establish a comparable experiment pair."""
+    row: dict[str, Any] = dict.fromkeys(
+        [
+            "request_hash",
+            "specification_hash",
+            "budget_hash",
+            "protocol",
+            "partition",
+            "dataset_family",
+            "verifier_hash",
+            "environment",
+            "data_hash",
+        ],
+        "same",
+    )
+    row.update(case_id="case", repeat=0, status="succeeded", assessment={"verified": True})
+    if missing:
+        del row[field]
+    else:
+        row[field] = None
+    comparison = runner.compare([row], [row])[0]
+    assert not comparison["comparable"]
+    assert comparison["mismatch"] == [field]
+    assert comparison["left"] == comparison["right"] == row

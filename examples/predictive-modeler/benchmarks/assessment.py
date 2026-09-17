@@ -201,7 +201,7 @@ def _audit_folds(actual: dict[str, Any], recorded: dict[str, Any]) -> list[str]:
 
 
 def _audit_budget(history: list[dict[str, Any]], budget: dict[str, Any]) -> list[str]:
-    """Reject invalid durations and new trials after cumulative worker-time exhaustion."""
+    """Reject successful overruns; failed workers may finish cleanup after the deadline."""
     issues = []
     elapsed = 0.0
     for item in history:
@@ -211,4 +211,6 @@ def _audit_budget(history: list[dict[str, Any]], budget: dict[str, Any]) -> list
         if not np.isfinite(seconds) or seconds < 0:
             issues.append("Recorded trial duration is invalid.")
         elapsed += seconds
+        if item["status"] == "evaluated" and elapsed > budget["max_training_seconds"]:
+            issues.append("A successful trial exceeded the cumulative training budget.")
     return issues
