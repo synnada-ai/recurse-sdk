@@ -37,7 +37,7 @@ This creates two applications, two public request files, and a private `plan.jso
 specifications and content hashes. It performs no cloud calls. Both prepared applications are
 packaging-tested: evaluator files are absent. Do not copy `plan.json` into either application.
 
-## Proposed cloud batch (awaiting spending allowance)
+## Approved cloud pilot
 
 - Two public CSV tasks: Penguins macro-F1 with size/input constraints; MPG minimum model bytes
   with MAE at most 5 mpg. Requirements are frozen in `cases.json` before launch.
@@ -48,7 +48,7 @@ packaging-tested: evaluator files are absent. Do not copy `plan.json` into eithe
   Record the actual resolved model/version for each run; refuse comparisons if these differ.
 - Execute serially, alternating design order between repeats. This avoids overlapping costs
   and makes failures easier to diagnose; independent runs could be parallelized in a larger batch.
-- Proposed spending allowance: **$5**, no top-ups. Check balance before admission and after
+- User-approved spending allowance: **$5**, no top-ups. Check balance before admission and after
   each terminal run; stop starting work before the remaining allowance cannot reasonably cover
   another run. Balance deltas can include other account activity and are not itemized invoices.
 - Stop early on repeated infrastructure failure, retrieve all available evidence, and do not
@@ -80,6 +80,9 @@ Do not change thresholds after seeing the final-test results. Any verifier chang
 re-running both baseline and contender; retain older outcomes separately.
 
 ## Expansion before a generalization claim
+
+[Dataset candidates](DATASET-CANDIDATES.md) records sourced proposals and conversion risks for
+all six modalities. These are not populated or evaluated holdout collections.
 
 1. Freeze at least two additional real datasets per modality as development cases, varying
    imbalance, categorical/text inputs, missingness, series length/seasonality and panel structure.
