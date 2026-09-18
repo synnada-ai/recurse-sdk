@@ -263,18 +263,17 @@ def _format_manifest_value_error(
     """Format one scalar or collection constraint failure."""
     if validator == "type":
         expected_type = cast("str | list[str]", error.validator_value)
-        if isinstance(expected_type, list):
-            return f"{path} must be an {' or '.join(expected_type)}"
-        expected = {"object": "mapping", "boolean": "boolean", "string": "string"}.get(
-            expected_type, expected_type
-        )
-        return f"{path} must be a {expected}"
+        names = expected_type if isinstance(expected_type, list) else [expected_type]
+        expected = " or ".join({"object": "mapping"}.get(name, name) for name in names)
+        article = "an" if expected[0] in "aeiou" else "a"
+        return f"{path} must be {article} {expected}"
     if validator == "enum":
         choices = ", ".join(str(choice) for choice in cast("list[object]", error.validator_value))
         return f"{path} must be one of: {choices}"
     messages = {
         "minLength": f"{path} must be a non-empty string",
         "minProperties": f"{path} must not be empty",
+        "minimum": f"{path} must be at least {error.validator_value}",
         "const": f"{path} must be {error.validator_value}",
     }
     return messages[validator]
@@ -282,6 +281,10 @@ def _format_manifest_value_error(
 
 def _validate_manifest(manifest: dict[str, Any]) -> None:
     """Validate one portable manifest against the packaged public schema."""
+    agent = manifest.get("agent")
+    timeout = agent.get("timeout_tools") if isinstance(agent, dict) else None
+    if isinstance(timeout, float) and not math.isfinite(timeout):
+        raise ManifestError("agent.timeout_tools must be a finite number")
     error = next(_MANIFEST_VALIDATOR.iter_errors(manifest), None)
     if error is not None:
         raise ManifestError(_format_manifest_error(error))

@@ -215,6 +215,43 @@ def test_surrogate_text_is_rejected_as_an_encoding_problem(app: Path) -> None:
             lambda m: m["tools"].__setitem__("register", {"": None}),
             r"^tools\.register keys must be non-empty strings$",
         ),
+        (lambda m: m["agent"].__setitem__("retries", 1), r"^agent has an unknown field: retries$"),
+        (
+            lambda m: m["agent"].__setitem__("max_llm_errors", -1),
+            r"^agent\.max_llm_errors must be at least 0$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("max_llm_errors", True),
+            r"^agent\.max_llm_errors must be an integer$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("max_tool_errors", "5"),
+            r"^agent\.max_tool_errors must be an integer$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("max_tool_errors", 1.5),
+            r"^agent\.max_tool_errors must be an integer$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("timeout_tools", -0.5),
+            r"^agent\.timeout_tools must be at least 0$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("timeout_tools", "30"),
+            r"^agent\.timeout_tools must be a number or null$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("timeout_tools", True),
+            r"^agent\.timeout_tools must be a number or null$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("timeout_tools", float("nan")),
+            r"^agent\.timeout_tools must be a finite number$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("timeout_tools", float("inf")),
+            r"^agent\.timeout_tools must be a finite number$",
+        ),
     ],
 )
 def test_invalid_manifests_name_the_offending_field(
@@ -232,6 +269,25 @@ def test_unsupported_model_is_rejected_locally(edit_manifest: Edit, model: str) 
     app = edit_manifest(lambda m: m["agent"].update(model=model))
     with pytest.raises(recurse.ManifestError, match=r"agent\.model must be one of"):
         load_manifest(app)
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [
+        {},
+        {"max_llm_errors": 0, "max_tool_errors": 0, "timeout_tools": 0},
+        {"max_llm_errors": 3, "max_tool_errors": 5, "timeout_tools": 30},
+        {"timeout_tools": 2.5},
+        {"timeout_tools": None},
+    ],
+    ids=["omitted", "zero", "integers", "float-timeout", "null-timeout"],
+)
+def test_reliability_limits_survive_loading(edit_manifest: Edit, limits: dict[str, Any]) -> None:
+    """Authored limits load unchanged and omitted limits stay omitted."""
+    app = edit_manifest(lambda m: m["agent"].update(limits))
+    agent = load_manifest(app)["agent"]
+    assert {name: agent.get(name, "omitted") for name in limits} == limits
+    assert set(agent) == {"prompt", *limits}
 
 
 @pytest.mark.parametrize("pure_args", [None, [], ["item"]])
