@@ -25,7 +25,7 @@ inputs:
       exclusiveMinimum: 0
       maximum: 600
       default: 300
-      description: Shared wall-clock allowance starting with the first evaluation.
+      description: Shared wall-clock allowance starting with the first profile or evaluation.
     max_trials:
       type: integer
       minimum: 1
@@ -107,7 +107,7 @@ outputs:
       minimum: 1
     trials_attempted:
       type: integer
-      minimum: 1
+      minimum: 0
     stop_reason:
       enum: [wall_clock, trial_budget, diminishing_returns]
   additionalProperties: false
@@ -116,6 +116,8 @@ tools:
   built_in: true
   register:
     design_network: ~
+    profile_network:
+      volatile: true
     evaluate_network:
       volatile: true
     finish_search:

@@ -329,6 +329,7 @@ def test_manifest_defaults_match_requested_search_contract() -> None:
     assert defaults["samples"] == 60000
     assert set(manifest["tools"]["register"]) == {
         "design_network",
+        "profile_network",
         "evaluate_network",
         "finish_search",
     }
@@ -413,3 +414,43 @@ def test_spatial_head_preserves_detail_at_measured_parameter_cost() -> None:
         sum(p.numel() for p in large.parameters()) - sum(p.numel() for p in small.parameters())
         == (49 - 4) * 8 * 10
     )
+
+
+def test_profile_measures_cost_without_scoring_or_consuming_trial(run: Path) -> None:
+    """Profiles share the deadline but their discarded weights cannot qualify."""
+    candidate = tools.design_network("cnn", (4,), epochs=1, batch_size=16)
+    first = tools.profile_network(candidate)
+    deadline = json.loads((run / "search.json").read_text())["deadline"]
+    second = tools.profile_network(candidate)
+    assert first["estimated_training_seconds"] == first["sample_seconds"] * 2
+    assert first["parameter_count"] == sum(
+        p.numel() for p in tools._network(candidate).parameters()
+    )
+    assert 0 < second["remaining_seconds"] < first["remaining_seconds"] < 300
+    assert json.loads((run / "search.json").read_text())["deadline"] == deadline
+    assert len(json.loads((run / "profiles.json").read_text())) == 2
+    assert tools._ledger(run) == []
+    assert not list(run.glob("*.pt"))
+    assert tools.evaluate_network(candidate)["status"] == "completed"
+    tools.finish_search("diminishing_returns")
+    with pytest.raises(ValueError, match="finalized"):
+        tools.profile_network(candidate)
+
+
+def test_profile_enforces_epochs_and_deadline(run: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Even a run exhausted by profiling alone can return a truthful empty receipt."""
+    with pytest.raises(ValueError, match="max_epochs"):
+        tools.profile_network(tools.design_network("cnn", (4,), epochs=3))
+    tools._deadline(run, 300)
+    monkeypatch.setattr(time, "monotonic", lambda: math.inf)
+    with pytest.raises(TimeoutError):
+        tools.profile_network(tools.design_network("cnn", (4,), epochs=1))
+    receipt = tools.finish_search("wall_clock")
+    assert receipt == {
+        "target_reached": False,
+        "cv_accuracy": None,
+        "parameter_count": None,
+        "trials_attempted": 0,
+        "stop_reason": "wall_clock",
+    }
+    Draft202012Validator(yaml.safe_load(_MANIFEST.read_text())["outputs"]).validate(receipt)

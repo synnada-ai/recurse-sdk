@@ -8,7 +8,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -18,7 +18,7 @@ from torchvision.datasets import MNIST
 
 import recurse
 
-__all__ = ["Candidate", "design_network", "evaluate_network", "finish_search"]
+__all__ = ["Candidate", "design_network", "evaluate_network", "finish_search", "profile_network"]
 
 _IMAGE_WIDTH = 28
 _CLASSES = 10
@@ -401,6 +401,59 @@ def _winner(history: list[dict[str, Any]]) -> dict[str, Any] | None:
     )
 
 
+def profile_network(candidate: Candidate) -> dict[str, Any]:
+    """Estimate full-CV training cost from a short discarded training sample.
+
+    Starts and consumes the shared search allowance. No validation accuracy, checkpoint,
+    qualification, or trial is produced. Estimates include model/optimizer initialization
+    but exclude full validation, tool latency and runtime variability; reserve a margin.
+
+    Args:
+        candidate: Proposed recipe to time before committing to complete CV.
+
+    Returns:
+        Measured sample duration, projected training duration for all configured splits,
+        parameter count, and remaining seconds. Evidence is retained in profiles.json.
+    """
+    _check(candidate)
+    context = recurse.context()
+    settings = context.inputs
+    if candidate.epochs > settings["max_epochs"]:
+        raise ValueError("epochs exceeds the run's max_epochs")
+    with _locked(context.workspace / "search.lock"), _cpu():
+        if (context.workspace / "receipt.json").exists():
+            raise ValueError("Search is finalized; start a new run for more trials")
+        deadline = _deadline(context.workspace, settings["max_seconds"])
+        _remaining(deadline)
+        images, labels = _data()
+        splits = _splits(labels, dict(settings))
+        training = splits[0][0]
+        sample = training[: candidate.batch_size * 12]
+        pilot = replace(candidate, epochs=1)
+        _train(
+            pilot, images, labels, sample[: candidate.batch_size * 2], settings["seed"], deadline
+        )
+        started = time.monotonic()
+        model = _train(pilot, images, labels, sample, settings["seed"], deadline)
+        elapsed = time.monotonic() - started
+        batches = sum(math.ceil(len(train) / candidate.batch_size) for train, _ in splits)
+        result = {
+            "candidate": asdict(candidate),
+            "sample_seconds": elapsed,
+            "estimated_training_seconds": elapsed
+            / math.ceil(len(sample) / candidate.batch_size)
+            * batches
+            * candidate.epochs,
+            "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
+            "remaining_seconds": max(0.0, deadline - time.monotonic()),
+        }
+        path = context.workspace / "profiles.json"
+        profiles = json.loads(path.read_text()) if path.exists() else []
+        profiles.append(result)
+        _write(path, profiles)
+        return result
+
+
 def evaluate_network(candidate: Candidate) -> dict[str, Any]:
     """Train fresh models on fixed folds and record independently measured CV accuracy.
 
@@ -503,7 +556,7 @@ def finish_search(
             saved: dict[str, Any] = json.loads(receipt.read_text())
             return saved
         history = _ledger(context.workspace)
-        if not history:
+        if not history and not (context.workspace / "search.json").exists():
             raise ValueError("No attempted trials; evaluate a network before finishing")
         if reason == "trial_budget" and len(history) < context.inputs["max_trials"]:
             raise ValueError("Trial budget remains; continue or use diminishing_returns")

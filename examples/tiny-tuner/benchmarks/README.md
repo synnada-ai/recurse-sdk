@@ -10,7 +10,7 @@ A service status of `succeeded` means the agent returned a valid receipt; feasib
 - Full 60,000-example MNIST training set; official test split unused.
 - Stratified three-fold CV, one repetition; split seed 7, training seed 7.
 - Search allowance: 300 seconds from first evaluation, 30 attempted recipes, 10 epochs/fold max.
-- Cloud ceiling: 4 CPU, 4096 MiB; tools currently use one intra-op training thread.
+- Cloud ceiling: 4 CPU, 4096 MiB; baseline tools use one intra-op training thread; later revisions may use the full ceiling.
 - Agent model: service-resolved gpt-5.6-luna. Runtime SDK 0.1.8, PyTorch 2.14.0 CPU.
 
 ## Baseline — 2026-09-18
@@ -57,3 +57,19 @@ observation does not disprove cost-aware planning; it shows this prompt alone di
 or enforce a reliable estimate. Future revisions need measurable trial-cost feedback or
 training-throughput improvements before claiming the five-minute 99% objective is attainable.
 No evidence of diminishing returns or a successful 99% agent has been established yet.
+
+## CPU layout timing probe
+
+Run `d7286977-1ab7-470c-9a66-08fc9cbaa3d3` measured a synthetic CNN(16,32) batch of 128,
+with batch normalization, under the same 4-CPU ceiling. Two warm-up batches preceded ten
+measured batches per combination. Seconds per training batch:
+
+| Threads | Contiguous | Channels-last |
+| --- | --- | --- |
+| 1 | 0.036184 | 0.016384 |
+| 2 | 0.023492 | 0.015770 |
+| 4 | 0.015791 | 0.013920 |
+
+This is short-run throughput evidence, not an accuracy result or a guarantee of sustained
+speed. It motivates channels-last storage and four intra-op threads. Concurrent autonomous
+comparisons isolate throughput changes from a further spatial-head/prompt revision.

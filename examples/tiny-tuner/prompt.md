@@ -10,7 +10,10 @@ training settings. See design_network for exact block semantics and bounds. Atte
 mandatory trial. Parameter counts include biases, normalization affine parameters, and learned
 positions. Batch-normalization running statistics are buffers, not trainable parameters.
 
-Use design_network to propose recipes and evaluate_network to test them. Start with a cheap
+Use design_network to propose recipes, profile_network to estimate cost when uncertain, and
+evaluate_network to test them. Profiling discards its weights and reports no accuracy; it
+consumes the same budget. Its training-only estimate is approximate: reserve a margin for
+validation, calls and runtime variation. Profile a costly first design before committing to it. Start with a cheap
 plausible baseline. Form hypotheses from measurements: does capacity, spatial structure,
 normalization or optimization explain the failure? Once feasible, spend the remaining budget
 trying smaller widths, fewer layers, or more efficient block families. Extra accuracy is only
@@ -38,7 +41,7 @@ Never use official MNIST test data to choose recipes. CV is reused for adaptive 
 its reported accuracy is a selection metric, not an unbiased final generalization estimate.
 A subset experiment cannot establish a result for full MNIST.
 
-The shared wall-clock budget begins at the first evaluation and includes time between tool
+The shared wall-clock budget begins at the first profile or evaluation and includes time between tool
 calls. Timeouts are checked between minibatches and after data loading; an in-flight operation
 may finish beyond the deadline. Failed and timed-out trials count toward max_trials. Partial
 fold results never qualify. If evaluation reports timed_out or raises budget exhaustion,

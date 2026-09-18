@@ -35,6 +35,9 @@ optional experiment; the agent need not spend its limited budget testing every f
 ## How the loop works
 
 - `design_network` constructs a bounded recipe without training.
+- `profile_network` times a small discarded training sample and estimates full-CV training
+  cost. It starts/consumes the shared allowance, produces no accuracy score, and saves timing
+  evidence in `profiles.json`. Estimates exclude full validation and tool latency; reserve margin.
 - `evaluate_network` trains a fresh CPU model for each fixed, stratified fold. It measures
   held-out accuracy, records its arithmetic mean and population standard deviation, counts
   parameters, and saves a checkpoint. The official test split is never used for selection.
@@ -43,7 +46,7 @@ optional experiment; the agent need not spend its limited budget testing every f
   qualifies, the highest-accuracy completed trial is saved as a diagnostic with
   `target_reached: false`. If none completed, metrics are null and there is no model artifact.
 
-The 300-second wall-clock allowance starts at the first evaluation and includes data loading,
+The 300-second wall-clock allowance starts at the first profile or evaluation and includes data loading,
 training, scoring, and time between calls. Checks occur between minibatches and after data
 loading: an in-flight download or tensor operation can overrun the deadline. This is a
 cooperative search deadline, not a hard process timeout or a guarantee on total agent latency.
