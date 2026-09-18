@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "level-designer-slide-collect"
+version = "1.0.0"
+description = "Minimal Recurse level designer for a slide-and-collect puzzle"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "agent.yaml",
+  "prompts.md",
+  "tools.py",
+  "uv.lock",
+  "toolkit.py",
+  "builder.py",
+  "sim.py",
+  "metrics.py",
+  "report_util.py",
+  "data/reference-features.json",
+]
+
+[tool.hatch.build.targets.wheel]
+include = [
+  "agent.yaml",
+  "prompts.md",
+  "tools.py",
+  "toolkit.py",
+  "builder.py",
+  "sim.py",
+  "metrics.py",
+  "report_util.py",
+  "data/reference-features.json",
+]
