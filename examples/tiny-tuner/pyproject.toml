@@ -21,5 +21,13 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torch = [
+  { url = "https://download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.14' and platform_machine == 'x86_64'" },
+  { url = "https://download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl", marker = "sys_platform == 'linux' and python_version == '3.14' and platform_machine == 'aarch64'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux' and (python_version != '3.14' or (platform_machine != 'x86_64' and platform_machine != 'aarch64'))" }
+]
+torchvision = [
+  { url = "https://download.pytorch.org/whl/cpu/torchvision-0.29.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl", marker = "sys_platform == 'linux' and python_version == '3.14' and platform_machine == 'x86_64'" },
+  { url = "https://download.pytorch.org/whl/cpu/torchvision-0.29.0%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl", marker = "sys_platform == 'linux' and python_version == '3.14' and platform_machine == 'aarch64'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux' and (python_version != '3.14' or (platform_machine != 'x86_64' and platform_machine != 'aarch64'))" }
+]
