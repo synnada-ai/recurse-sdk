@@ -20,3 +20,7 @@ uv run --directory examples/predictive-modeler/tests --locked \
   pytest --cov --cov-branch --cov-report=term-missing -q
 MYPYPATH=../../../src uv run --directory examples/predictive-modeler/tests --locked \
   mypy --config-file pyproject.toml ../modeler ../tools.py ../benchmarks .
+for level_design_tests in examples/level-design/*/tests; do
+  [ -d "$level_design_tests" ] || continue
+  uv run --directory "$level_design_tests" --locked pytest -q
+done

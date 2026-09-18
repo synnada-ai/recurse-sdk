@@ -1,0 +1,57 @@
+apiVersion: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: level-designer-slide-collect
+  title: Slide-and-Collect Level Designer
+  summary: Designs one certified slide-and-collect puzzle level for a target campaign slot.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  model: gpt-5.6-luna
+  prompt: prompts.md
+inputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    slot:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 34
+      description: Target campaign position; sets the size and density bands the level must fit.
+    brief:
+      type: string
+      maxLength: 500
+      default: ""
+      description: Optional extra design direction.
+    task:
+      type: string
+      default: >-
+        Design one slide-and-collect level for campaign slot {{ input.slot }} and save it.
+        Extra direction: {{ input.brief }}
+  additionalProperties: false
+outputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [verdict]
+  properties:
+    verdict:
+      type: string
+      enum: [SAVED, FAILED]
+      description: Whether a certified level was saved.
+  additionalProperties: false
+tools:
+  source: tools.py
+  built_in: false
+  register:
+    begin_design: ~
+    window: {storable: false}
+    new_board: {storable: false}
+    place_seat: {storable: false}
+    add_obstacle: {storable: false}
+    set_inner: {storable: false}
+    populate: {storable: false}
+    clear_settlers: {storable: false}
+    critique_design: {storable: false}
+    save_design: {storable: false}
