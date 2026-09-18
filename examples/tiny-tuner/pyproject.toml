@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "tiny-tuner"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = ["recurse-sdk==0.1.7", "torch==2.14.0", "torchvision==0.29.0"]
+dependencies = ["recurse-sdk>=0.1.7,<0.2", "torch==2.14.0", "torchvision==0.29.0"]
 
 [tool.hatch.build.targets.sdist]
 include = ["agent.yaml", "prompt.md", "tools.py", "uv.lock"]

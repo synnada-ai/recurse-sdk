@@ -420,7 +420,7 @@ wheels = [
 
 [[package]]
 name = "recurse-sdk"
-version = "0.1.7"
+version = "0.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
@@ -428,9 +428,9 @@ dependencies = [
     { name = "keyring" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7d/4c/a96f85e283b5054e8fbd5afe88d04efd8d24a157d181a13e3dc46de2372a/recurse_sdk-0.1.7.tar.gz", hash = "sha256:7fa1307da819af7aedaae4f77198bdfa8b8e6c9b22b769556e362e89117d0081", size = 38727, upload-time = "2026-09-16T22:32:39.722Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/0f/63d65b3c46fd9b32342b35a2521bcf77f3e77388784f35c75a46c7cbf1da/recurse_sdk-0.1.8.tar.gz", hash = "sha256:b3c939cef39fffd8fb050fe590e1f4b7050b1acca1111ed552f5b487fb5b0dc5", size = 39651, upload-time = "2026-09-18T16:18:24.455Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9b/ab/52c90c9623c20f1b73e8e120e415cee882a2090e7fbb031e30e86d4cd038/recurse_sdk-0.1.7-py3-none-any.whl", hash = "sha256:0033e97869346b73fb5b4c31950a849daef20a4131bae9e133709af76942a44d", size = 40358, upload-time = "2026-09-16T22:32:38.664Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/b8/f2eacfd3de3e579a6ee32ef65441e6f9a9f93bcd192cfee0186a0fb4a0ce/recurse_sdk-0.1.8-py3-none-any.whl", hash = "sha256:644106f6b802b68ec85072046cc1b775c000d6c79cd3b3f98ba0004813aa1650", size = 41142, upload-time = "2026-09-18T16:18:25.413Z" },
 ]
 
 [[package]]
@@ -564,7 +564,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "recurse-sdk", specifier = "==0.1.7" },
+    { name = "recurse-sdk", specifier = ">=0.1.7,<0.2" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.14.0" },
     { name = "torch", marker = "(python_full_version != '3.14.*' and platform_machine == 'aarch64' and sys_platform == 'linux') or (python_full_version != '3.14.*' and platform_machine == 'x86_64' and sys_platform == 'linux') or (platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux')", specifier = "==2.14.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "python_full_version == '3.14.*' and platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://download.pytorch.org/whl/cpu/torch-2.14.0%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl" },
