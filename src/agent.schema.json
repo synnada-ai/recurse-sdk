@@ -71,7 +71,7 @@
       }
     },
     "agent": {
-      "description": "The agent that drives the application's tools: its system prompt and optional model selection.",
+      "description": "The agent that drives the application's tools: its system prompt, optional model selection, and optional reliability limits.",
       "type": "object",
       "additionalProperties": false,
       "required": ["prompt"],
@@ -89,6 +89,27 @@
           "format": "relative-path",
           "minLength": 1,
           "examples": ["prompt.md"]
+        },
+        "max_llm_errors": {
+          "description": "Consecutive model errors tolerated before the run stops. `0` disables this limit.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 3,
+          "examples": [3]
+        },
+        "max_tool_errors": {
+          "description": "Consecutive tool batches in which every call fails, tolerated before the run stops; any successful call resets the count. `0` disables this limit.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 5,
+          "examples": [5]
+        },
+        "timeout_tools": {
+          "description": "Timeout in seconds applied to each application tool call. `0` and `null` disable the timeout.",
+          "type": ["number", "null"],
+          "minimum": 0,
+          "default": 30,
+          "examples": [30]
         }
       }
     },

@@ -178,10 +178,15 @@ Use `tools.defaults` for shared settings and override individual registrations w
 `tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
 
-Each application tool call has a 30-second timeout, separate from the 15-minute run limit.
-A tool timeout is reported to the specialist for recovery; it does not necessarily end the run
-immediately. Design individual calls to fit that budget, breaking longer work into smaller steps
-where practical. The manifest does not expose a per-tool timeout setting.
+Each application tool call has a timeout, separate from the 15-minute run limit. It is set by
+`agent.timeout_tools` in seconds (default 30); `0` or `null` disables it. A tool timeout is
+reported to the specialist for recovery; it does not necessarily end the run immediately. Design
+individual calls to fit that budget, breaking longer work into smaller steps where practical.
+
+Two more optional `agent` settings bound repeated failures. `agent.max_llm_errors` (default 3) is
+the number of consecutive model errors tolerated before the run stops. `agent.max_tool_errors`
+(default 5) counts consecutive tool batches in which every call fails; any successful call resets
+the count. `0` disables either limit, and omitting a setting keeps its default.
 
 ### Input and output contracts
 
@@ -238,7 +243,8 @@ Tools can read the same value through `recurse.context().inputs["max_trials"]`.
 For tool design, separating actions from independent validation is recommended so measurements
 can guide the agent's next choice. A completion tool can check acceptance conditions, save the
 result, and return measured facts. See the [agent design guidance](https://recurse.run/SKILL.md#agent-design-and-learning-from-evidence)
-for the broader workflow; the [Tiny Tuner walkthrough](#tiny-tuner-walkthrough) shows an SDK application.
+for the broader workflow. The [Tiny Tuner walkthrough](#tiny-tuner-walkthrough) shows a compact
+SDK application; [Predictive Modeler](#predictive-modeler-walkthrough) covers multiple prediction tasks.
 
 ## Building application artifacts
 
@@ -455,9 +461,8 @@ files, verify size and SHA-256, and only then atomically move the file into plac
 
 For automation, `recurse run` exits with `0` on success, `1` on agent failure, `2` on timeout,
 `3` when it observes a remotely cancelled run, and `4` on infrastructure failure. A CLI interrupted
-by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax exits
-with `2` as well, so inspect the printed status and error rather than treating that code alone as
-proof of a remote timeout. Other reported CLI errors exit with `1`.
+by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax and
+other reported CLI errors exit with `1`, leaving `2` specific to a confirmed remote timeout.
 
 Confirmed run failures include the run ID, status, a stable public error identifier and a short
 explanation. `recurse run` and `recurse status` display the service's public failure detail when
@@ -610,3 +615,43 @@ print(record["apiVersion"], record["source"]["sha256"], len(artifacts["source"])
 
 Run it directly with `recurse run examples/tiny-tuner --inputs inputs.json`, or deploy it with
 `recurse deploy examples/tiny-tuner --as mcp`.
+
+## Predictive Modeler walkthrough
+
+`examples/predictive-modeler` searches scikit-learn pipelines for a dataset and prediction task.
+Its shared input contract is `dataset`, natural-language `task`, optional structured `quality`,
+and `budget`. Runnable real-data requests cover binary, multiclass, and multilabel classification,
+regression, and single/panel forecasting.
+
+1. `get_request` exposes structured inputs; `review_inputs` records the agent's first consistency
+   check. Contradictory prose and quality stop with `inconsistent_inputs` before training.
+2. `inspect_dataset` profiles the table. `resolve_problem` freezes targets, available features,
+   task-specific metrics, and disjoint evaluation splits.
+3. `train_candidate` fits bounded candidates in deadline-controlled subprocesses.
+4. `evaluate_candidate` refits and scores fresh models on frozen cross-validation folds;
+   `experiment_history` records every attempt.
+5. `finish_run` chooses the best feasible measured candidate, tests that winner once, and writes
+   a reloadable pipeline, report, contract, splits, and trial history. Failed final acceptance
+   returns `no_feasible_model`, never a replacement chosen on test performance.
+
+The agent chooses experiments from hypotheses and evidence. Tools enforce metrics, budget, and
+artifact selection. Semantic interpretation is an agent responsibility. See the
+[example README](../examples/predictive-modeler/README.md) for its support matrix and limitations.
+
+Build the application locally:
+
+```python
+import recurse
+
+artifacts, record = recurse.build_bundle("examples/predictive-modeler")
+print(record["apiVersion"], record["source"]["sha256"], len(artifacts["source"]))
+```
+
+Run the binary request with:
+
+```sh
+recurse run examples/predictive-modeler \
+  --inputs examples/predictive-modeler/inputs/binary.json --memory-mib 2048
+```
+
+Or deploy with `recurse deploy examples/predictive-modeler --as mcp --memory-mib 2048`.

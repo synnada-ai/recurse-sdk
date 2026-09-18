@@ -19,3 +19,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+.worktrees/
+PROJECT.md
+.dataset-cache/
+.baseline-results/

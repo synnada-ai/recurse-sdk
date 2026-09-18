@@ -1,0 +1,18 @@
+{
+  "dataset": "example:goemotions",
+  "task": "Predict all applicable emotion labels, including neutral, from text. comment_id is an identifier, not a feature. Use the provided _split assignments. Maximize micro F1 across all 28 labels.",
+  "quality": {
+    "objective": {
+      "metric": "f1",
+      "direction": "maximize",
+      "parameters": {
+        "average": "macro"
+      }
+    },
+    "constraints": []
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}

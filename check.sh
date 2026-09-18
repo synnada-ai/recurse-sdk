@@ -20,3 +20,7 @@ uv run --directory examples/tiny-tuner/tests --locked \
   pytest -n auto --maxprocesses=2 --cov --cov-branch --cov-report=term-missing -q
 MYPYPATH=../../../src uv run --directory examples/tiny-tuner/tests --locked \
   mypy --config-file pyproject.toml ../tools.py test_tiny_tuner.py
+uv run --directory examples/predictive-modeler/tests --locked \
+  pytest --cov --cov-branch --cov-report=term-missing -q
+MYPYPATH=../../../src uv run --directory examples/predictive-modeler/tests --locked \
+  mypy --config-file pyproject.toml ../modeler ../tools.py ../benchmarks .

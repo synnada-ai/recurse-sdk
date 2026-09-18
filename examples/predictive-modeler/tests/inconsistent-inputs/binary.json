@@ -1,0 +1,27 @@
+{
+  "dataset": "example:bank-marketing",
+  "task": "Predict whether a customer will subscribe to a term deposit (y=yes), before the call. Exclude duration. Maximize precision; require recall of at least 0.5. Use a reproducible stratified split to demonstrate classification, not future-campaign performance.",
+  "quality": {
+    "objective": {
+      "metric": "recall",
+      "direction": "maximize",
+      "parameters": {
+        "positive_label": "yes"
+      }
+    },
+    "constraints": [
+      {
+        "metric": "recall",
+        "parameters": {
+          "positive_label": "yes"
+        },
+        "operator": ">=",
+        "value": 0.5
+      }
+    ]
+  },
+  "budget": {
+    "max_trials": 8,
+    "max_training_seconds": 600
+  }
+}

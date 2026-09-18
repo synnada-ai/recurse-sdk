@@ -1,0 +1,24 @@
+{
+  "dataset": "example:dry-bean",
+  "task": "Predict Class (one of seven bean varieties). All 16 measured features are eligible, but the saved prediction pipeline may require at most four raw feature columns. Maximize macro F1 subject to this input-feature constraint.",
+  "quality": {
+    "objective": {
+      "metric": "f1",
+      "direction": "maximize",
+      "parameters": {
+        "average": "macro"
+      }
+    },
+    "constraints": [
+      {
+        "metric": "input_feature_count",
+        "operator": "<=",
+        "value": 4
+      }
+    ]
+  },
+  "budget": {
+    "max_trials": 3,
+    "max_training_seconds": 120
+  }
+}
