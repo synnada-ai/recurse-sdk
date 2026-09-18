@@ -9,6 +9,7 @@ runtime:
   lockfile: uv.lock
 agent:
   prompt: prompt.md
+  timeout_tools: 660
 inputs:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object

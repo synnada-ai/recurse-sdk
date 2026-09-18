@@ -321,6 +321,7 @@ def test_manifest_defaults_match_requested_search_contract() -> None:
     Draft202012Validator(inputs).validate(defaults)
     assert defaults["target_accuracy"] == 0.99
     assert defaults["max_seconds"] == 300
+    assert manifest["agent"]["timeout_tools"] > inputs["properties"]["max_seconds"]["maximum"]
     assert defaults["samples"] == 60000
     assert set(manifest["tools"]["register"]) == {
         "design_network",

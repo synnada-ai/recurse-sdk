@@ -50,6 +50,8 @@ cooperative search deadline, not a hard process timeout or a guarantee on total 
 There is also a default cap of 30 attempted recipes and 10 epochs per fold. Failed and timed-out
 attempts consume trials; partial CV results cannot qualify. Repeating a recipe returns its cached
 status without training again. Evaluation calls serialize and use one intra-op CPU thread.
+The harness tool timeout is 660 seconds, above the maximum configurable 600-second search
+allowance, so its default 30-second timeout cannot truncate a CV trial.
 Completion does no additional training. Earlier completion requires the agent to justify
 diminishing returns; merely reaching the target is not a stopping condition.
 
