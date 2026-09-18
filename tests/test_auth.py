@@ -169,7 +169,7 @@ def test_preparation_authentication_retry_is_bounded(
     service.token_responses = ["access-old", "access-new"]
     service.fail_detail["/v1/agent-versions"] = (status, "denied")
 
-    assert cli.main(["deploy", str(write_app(tmp_path / "app")), "--as", "mcp"]) == 1
+    assert cli.main(["deploy", str(write_app(tmp_path / "app")), "--as", "mcp"]) == 2
     attempts = [request for request in service.requests if request[1] == "/v1/agent-versions"]
     assert len(attempts) == expected_requests
     assert len(service.device_grants) == expected_grants
@@ -432,7 +432,7 @@ def test_cache_write_failure_keeps_fresh_token_without_hiding_degraded_reuse(
     assert service.device_grants == ["device-1"] * (3 if cached else 2)
 
 
-@pytest.mark.parametrize("arguments,exit_code", [(["--help"], 0), (["billing", "balance"], 1)])
+@pytest.mark.parametrize("arguments,exit_code", [(["--help"], 0), (["billing", "balance"], 2)])
 def test_missing_home_only_blocks_commands_requiring_authentication(
     service: FakeService, tmp_path: Path, arguments: list[str], exit_code: int
 ) -> None:
