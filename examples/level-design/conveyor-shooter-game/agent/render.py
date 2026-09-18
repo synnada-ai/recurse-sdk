@@ -76,6 +76,10 @@ CONFIRMED_HEX: dict[int, str] = {
 }
 
 
+#: The game defines this many colour families.
+_PALETTE_SIZE = 34
+
+
 def palette() -> list[str]:
     """The 34 colour families as ``#rrggbb``.
 
@@ -87,7 +91,7 @@ def palette() -> list[str]:
     colours: list[str] = []
     if PALETTE_PATH.is_file():
         loaded = json.loads(PALETTE_PATH.read_text())
-        if isinstance(loaded, list) and len(loaded) >= 34:
+        if isinstance(loaded, list) and len(loaded) >= _PALETTE_SIZE:
             colours = [str(entry["hex_srgb"]) for entry in loaded[:34]]
     if not colours:
         for index in range(34):
@@ -359,6 +363,7 @@ def _png(rows: list[list[tuple[int, int, int]]]) -> bytes:
     raw = b"".join(b"\x00" + b"".join(struct.pack("BBB", *px) for px in row) for row in rows)
 
     def chunk(kind: bytes, payload: bytes) -> bytes:
+        """Encode one PNG chunk with its length and CRC."""
         body = kind + payload
         return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body))
 
@@ -371,7 +376,9 @@ def _png(rows: list[list[tuple[int, int, int]]]) -> bytes:
     )
 
 
-def board_image_uri(raw: dict[str, Any], scale: int = 4) -> str:
+def board_image_uri(  # noqa: PLR0912 - one drawing pass over every board layer
+    raw: dict[str, Any], scale: int = 4
+) -> str:
     """The board as a base64 PNG data URI — what `look()` hands to the model.
 
     This is the vision path: agentia's image content parts (spike 993c3749) turn a tool

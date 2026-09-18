@@ -12,6 +12,10 @@ from heapq import heappop, heappush
 from .engine import Engine, GameRules, GameState, Outcome, ShooterState
 from .model import Level, RayObjectKind, Shooter, queue_scheduling_profile
 
+#: Strategy selection treats levels and connected groups of at least this size as large.
+_LARGE_LEVEL_TARGETS = 900
+_LARGE_GROUP_SIZE = 3
+
 
 class SolveStatus(StrEnum):
     """What the bounded state-graph search established."""
@@ -146,7 +150,9 @@ def solve_experimental_portfolio(
                 unsupported=pipe_result.unsupported,
                 strategy="connected_pipe_beam",
             )
-    if len(level.targets) >= 900 and any(len(group) >= 3 for group in level.connections):
+    if len(level.targets) >= _LARGE_LEVEL_TARGETS and any(
+        len(group) >= _LARGE_GROUP_SIZE for group in level.connections
+    ):
         large_train_result = solve_beam(
             level,
             rules,
@@ -163,7 +169,9 @@ def solve_experimental_portfolio(
                 strategy="large_train_spacing_2",
             )
     has_retracting_target = any(target.retraction_length is not None for target in level.targets)
-    if has_retracting_target and any(len(group) >= 3 for group in level.connections):
+    if has_retracting_target and any(
+        len(group) >= _LARGE_GROUP_SIZE for group in level.connections
+    ):
         retracting_result = solve_multi_queue(level, rules, max_states=max_states)
         if retracting_result.status is not SolveStatus.INCOMPLETE:
             return SolveResult(
@@ -243,7 +251,8 @@ def solve_experimental_portfolio(
                 strategy=name,
             )
         last = result
-    assert last is not None
+    if last is None:  # pragma: no cover - the portfolio always holds at least one strategy
+        raise ValueError("no solver strategy ran")
     return SolveResult(
         status=last.status,
         explored_states=explored,
@@ -319,7 +328,7 @@ def solve(
     )
 
 
-def solve_multi_queue(
+def solve_multi_queue(  # noqa: PLR0912 - one explicit best-first search loop
     level: Level,
     rules: GameRules,
     *,
@@ -402,7 +411,7 @@ def solve_multi_queue(
     )
 
 
-def solve_beam(
+def solve_beam(  # noqa: PLR0912, PLR0913 - one explicit beam search with its knobs
     level: Level,
     rules: GameRules,
     *,
@@ -654,7 +663,9 @@ def _priority(
         has_shared_target = any(
             target.health > 1 or len(target.cells) > 1 for target in engine.level.targets
         )
-        has_large_connected_group = any(len(group) >= 3 for group in engine.level.connections)
+        has_large_connected_group = any(
+            len(group) >= _LARGE_GROUP_SIZE for group in engine.level.connections
+        )
         if not has_shared_target and not has_large_connected_group:
             return _prefer_pipe_progress(
                 engine,
@@ -768,9 +779,9 @@ def _prefer_pipe_progress(
 def _is_large_plain_board(level: Level) -> bool:
     """Identify boards where frontier-ray ranking costs more than its late tie-break value."""
     return (
-        len(level.targets) >= 900
+        len(level.targets) >= _LARGE_LEVEL_TARGETS
         and not level.keys
-        and not any(len(group) >= 3 for group in level.connections)
+        and not any(len(group) >= _LARGE_GROUP_SIZE for group in level.connections)
         and all(target.health == 1 and len(target.cells) == 1 for target in level.targets)
     )
 

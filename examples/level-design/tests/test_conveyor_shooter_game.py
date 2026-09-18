@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """End-to-end checks for the minimal conveyor shooter design loop (no cloud run needed).
 
-Run with: uv run --directory tests --locked pytest
+Run with: uv run --directory examples/level-design/tests --locked pytest
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from typing import Any
 
 import pytest
 import yaml
+from conftest import use_agent
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1] / "conveyor-shooter-game"
 AGENT = ROOT / "agent"
 SUBJECT = "a pixel dragon"
 REVIEW = (SUBJECT, '["horned head", "spread wings"]', "keys sit as jewels on the body")
@@ -25,19 +26,18 @@ REVIEW = (SUBJECT, '["horned head", "spread wings"]', "keys sit as jewels on the
 @pytest.fixture
 def tools(tmp_path: Path) -> Any:
     """Load the adapter against a stubbed Recurse run context holding the dragon input."""
-    sys.path.insert(0, str(AGENT))
+    use_agent(AGENT)
     inputs = json.loads((ROOT / "inputs" / "dragon.json").read_text())
     sys.modules["recurse"] = SimpleNamespace(  # type: ignore[assignment]
         context=lambda: SimpleNamespace(inputs=inputs, workspace=tmp_path)
     )
-    for name in ("tools", "toolkit"):
-        sys.modules.pop(name, None)
     import tools as module  # noqa: PLC0415 - imported after the recurse stub is installed
 
     return module
 
 
 def _composed(tools: Any, keys: list[tuple[int, int]]) -> Any:
+    """Build a composed, reviewed candidate with keys at the given cells."""
     session = tools.begin_design()
     variant = json.loads(tools.extract_image_variants(session))[0]
     tools.freeze_image_baseline(session, variant, SUBJECT)

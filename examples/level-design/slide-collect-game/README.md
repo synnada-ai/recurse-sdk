@@ -143,8 +143,8 @@ certified level is not guaranteed to match the original game in every detail. Ra
 scatters on crowded boards are often unsolvable under the sliding rules, so a run may need several
 validator rounds. Visual clarity and enjoyment still require human review.
 
-For local checks, run from this folder:
+For local checks, run from the repository root:
 
 ```sh
-uv run --directory tests --locked pytest
+uv run --directory examples/level-design/tests --locked pytest -k slide_collect
 ```
