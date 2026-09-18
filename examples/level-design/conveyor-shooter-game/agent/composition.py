@@ -20,6 +20,14 @@ SCHOOLS = (
 )
 
 
+#: Scenic clouds span this many cells either side of their centre.
+_CLOUD_HALF_WIDTH = 3
+#: Cells this close to the board edge belong to the outer band.
+_EDGE_BAND = 2
+#: A surrounding field needs at least this many materials.
+MIN_PALETTE_SIZE = 4
+
+
 @dataclass(frozen=True)
 class MechanicAnchor:
     """One source-safe rectangular region proposed for a later mechanic."""
@@ -43,6 +51,7 @@ class CompositionResult:
 
 
 def _distance_to_edge(cell: Cell, width: int, height: int) -> int:
+    """Distance in cells from a cell to the nearest board edge."""
     x, y = cell
     return min(x, y, width - 1 - x, height - 1 - y)
 
@@ -53,7 +62,7 @@ def _paint_free(design: Design, source: set[Cell], cell: Cell, material: int) ->
         design.picture[cell] = material
 
 
-def _candidate_anchors(
+def _candidate_anchors(  # noqa: PLR0913, PLR0917 - geometry inputs of one placement search
     width: int,
     height: int,
     footprint_width: int,
@@ -69,6 +78,7 @@ def _candidate_anchors(
     ]
 
     def edge_distance(cell: Cell) -> int:
+        """Distance in cells from a cell to the nearest board edge."""
         x, y = cell
         return min(
             x,
@@ -88,7 +98,7 @@ def _candidate_anchors(
     return candidates
 
 
-def _source_safe_anchors(
+def _source_safe_anchors(  # noqa: PLR0913 - geometry inputs of one placement search
     source: set[Cell],
     width: int,
     height: int,
@@ -184,7 +194,9 @@ def _scenic_field(design: Design, source: set[Cell], palette: list[int], seed: i
         for y in range(height):
             if y <= horizon + ((x + seed) % 7 in {0, 1}):
                 material = palette[3]
-            elif any(abs(x - cx) <= 3 and abs(y - cy) <= 1 for cx, cy in cloud_centres):
+            elif any(
+                abs(x - cx) <= _CLOUD_HALF_WIDTH and abs(y - cy) <= 1 for cx, cy in cloud_centres
+            ):
                 material = palette[2]
             elif (x // 5 + y // 6 + seed) % 7 == 0:
                 material = palette[1]
@@ -207,7 +219,7 @@ def _layered_inset_frame(design: Design, source: set[Cell], palette: list[int], 
                 abs(y - (height - 1 - inset)),
             )
             inside_inner_box = inset <= x <= width - 1 - inset and inset <= y <= height - 1 - inset
-            if edge_distance < 2:
+            if edge_distance < _EDGE_BAND:
                 material = palette[edge_distance]
             elif inside_inner_box and inner_distance == 0:
                 material = palette[2 + (x // 6 + y // 6 + seed) % (len(palette) - 2)]
@@ -253,7 +265,7 @@ def apply(design: Design, school: str, palette: list[int], *, seed: int = 151) -
     """
     if school not in SCHOOLS:
         raise BuildError(f"unknown composition school {school!r}; expected one of {SCHOOLS}")
-    if len(palette) < 4:
+    if len(palette) < MIN_PALETTE_SIZE:
         raise BuildError("a composition palette needs at least four materials")
     invalid = [material for material in palette if material not in COLOUR_IDS]
     if invalid:
@@ -263,7 +275,7 @@ def apply(design: Design, school: str, palette: list[int], *, seed: int = 151) -
     source = set(source_picture)
     source_materials = set(source_picture.values())
     reused_palette = [material for material in palette if material in source_materials]
-    treatment_palette = reused_palette if len(reused_palette) >= 4 else palette
+    treatment_palette = reused_palette if len(reused_palette) >= MIN_PALETTE_SIZE else palette
     if school == "segmented-squeeze":
         anchors = _source_safe_anchors(
             source,

@@ -39,17 +39,17 @@ def _outline(
     xy: Callable[[Coord], tuple[float, float]],
 ) -> str:
     """Closed path(s) around the union of cells (rectilinear edge tracing)."""
-    S = set(cells)
+    cell_set = set(cells)
     nxt = defaultdict(list)
-    for x, y in S:
+    for x, y in cell_set:
         px, py = xy((x, y))
-        if (x, y + 1) not in S:
+        if (x, y + 1) not in cell_set:
             nxt[(px, py)].append((px + cell, py))
-        if (x, y - 1) not in S:
+        if (x, y - 1) not in cell_set:
             nxt[(px + cell, py + cell)].append((px, py + cell))
-        if (x - 1, y) not in S:
+        if (x - 1, y) not in cell_set:
             nxt[(px, py + cell)].append((px, py))
-        if (x + 1, y) not in S:
+        if (x + 1, y) not in cell_set:
             nxt[(px + cell, py)].append((px + cell, py + cell))
     paths = []
     while nxt:
@@ -70,6 +70,7 @@ def _outline(
 
 
 def _shade(hexcolor: str, f: float) -> str:
+    """Scale a hex color's brightness by a factor."""
     r, g, b = (int(hexcolor[i : i + 2], 16) for i in (1, 3, 5))
     r, g, b = (max(0, min(255, round(v * f))) for v in (r, g, b))
     return f"#{r:02x}{g:02x}{b:02x}"
@@ -80,11 +81,13 @@ def _shade(hexcolor: str, f: float) -> str:
 _SVG_UID = count()
 
 
-def render_svg(level: Level, cell: int = 26, mini: bool = False) -> str:
-    """Board snapshot as the game reads: floor with cut-out obstacles, sunken 'hole' seats with a
-    bright rim and corner capacity chip, settlers as little figures, elevator
-    tabs outside the silhouette (mirrors the live game's read, per the studio's
-    level-20 screenshot).
+def render_svg(  # noqa: PLR0915 - one linear drawing pass over the board layers
+    level: Level, cell: int = 26, mini: bool = False
+) -> str:
+    """Draw a board snapshot the way the game reads.
+
+    The floor has cut-out obstacles, seats are sunken holes with a bright rim and a corner
+    capacity chip, settlers are little figures, and elevator tabs sit outside the silhouette.
 
     The markup relies on the report page's CSS classes (``board``, ``fig``,
     ``chip``...) — embed it in a page that defines them (``write_report``);
@@ -96,6 +99,7 @@ def render_svg(level: Level, cell: int = 26, mini: bool = False) -> str:
     p = [f'<svg class="board" role="img" viewBox="{-m} {-m} {w + 2 * m} {h + 2 * m}">']
 
     def xy(c: Coord) -> tuple[float, float]:
+        """Map a cell to its top-left SVG coordinate; row 0 draws at the bottom."""
         return c[0] * cell, (level.height - 1 - c[1]) * cell
 
     floor_cells = [

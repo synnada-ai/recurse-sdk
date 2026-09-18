@@ -28,6 +28,19 @@ Cell = tuple[int, int]
 _SOLVER_LOCK = threading.Lock()
 
 
+#: Authoring limits enforced by the tools.
+_MIN_DESCRIPTION_LENGTH = 3
+_MAX_FRAME_MATERIALS = 3
+_MAX_EGG_BOXES = 2
+_EGGS_PER_BOX = 4
+_MAX_KEYS = 6
+_MAX_CONNECTED_GROUPS = 18
+_MAX_SURPRISES = 30
+_MIN_PRESERVED_FEATURES = 2
+_MAX_PATCH_CALLS = 2
+_MAX_PATCH_CELLS = 16
+
+
 def _serialized_certify(
     raw: dict[str, Any], context: CampaignContext
 ) -> certification.CertificationResult:
@@ -91,7 +104,7 @@ def _art_feedback(raw: dict[str, Any], context: CampaignContext) -> dict[str, An
     return {
         "richness_inside": inside_count,
         "richness_total": len(certification.RICHNESS_DIMENSIONS),
-        "richness_ready": inside_count >= 5,
+        "richness_ready": inside_count >= certification.MIN_RICHNESS_INSIDE,
         "comparisons": comparisons,
         "advice": advice,
     }
@@ -120,8 +133,8 @@ def _art_raw(width: int, height: int, picture: dict[Cell, int]) -> dict[str, Any
 
 def _source_comparison_html(ws: Any, comparison: dict[str, Any]) -> str:
     """Render source and playable board side by side for human judgment."""
-    assert ws.source_art is not None
-    assert ws.source_width is not None and ws.source_height is not None
+    if ws.source_art is None or ws.source_width is None or ws.source_height is None:
+        raise ValueError("a source comparison needs a frozen source image")
     review = ws.visual_review or {}
     preserved = "".join(
         f"<li>{html.escape(str(feature))}</li>" for feature in review.get("preserved_features", [])
@@ -150,7 +163,7 @@ def _source_comparison_html(ws: Any, comparison: dict[str, Any]) -> str:
 class Workspace:
     """One run-private candidate and the evidence used to judge it."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one argument per run input
         self,
         out_dir: Path,
         context_loader: Callable[[], CampaignContext],
@@ -235,7 +248,7 @@ class Workspace:
         )
 
 
-def make_tools(ws: Workspace) -> list[Any]:
+def make_tools(ws: Workspace) -> list[Any]:  # noqa: PLR0915 - one closure per design tool
     """Build the stateful L151 design tools in workflow order."""
     conversion_cache: dict[str, image_baseline.Conversion] | None = None
 
@@ -321,7 +334,7 @@ def make_tools(ws: Workspace) -> list[Any]:
         if converted is None:
             raise ValueError(f"unknown candidate {candidate!r}; extract variants first")
         description = observed_description.strip()
-        if len(description) < 3:
+        if len(description) < _MIN_DESCRIPTION_LENGTH:
             raise ValueError("observed_description must identify what the chosen grid depicts")
         frozen = converted.frozen_artifact()
         frozen["candidate"] = normalized
@@ -561,7 +574,7 @@ def make_tools(ws: Workspace) -> list[Any]:
             Added cells, frame depth and resulting physical occupancy.
         """
         design = ws.need()
-        if not 1 <= len(materials) <= 3:
+        if not 1 <= len(materials) <= _MAX_FRAME_MATERIALS:
             raise ValueError("an ornamental frame needs one to three material rings")
         if any(material not in render.CONFIRMED_HEX for material in materials):
             raise ValueError("every frame material must have a screenshot-confirmed colour")
@@ -757,9 +770,9 @@ def make_tools(ws: Workspace) -> list[Any]:
             Footprint, removed art count, egg colours and total egg-box count.
         """
         design = ws.need()
-        if len(design.board.get("eggBoxes", [])) >= 2:
+        if len(design.board.get("eggBoxes", [])) >= _MAX_EGG_BOXES:
             raise ValueError("the L151 slice permits at most two compact egg boxes")
-        if len(materials) != 4:
+        if len(materials) != _EGGS_PER_BOX:
             raise ValueError("a compact 2x2 egg box needs exactly four materials")
         if any(material not in render.CONFIRMED_HEX for material in materials):
             raise ValueError("every egg material must have a screenshot-confirmed colour")
@@ -822,7 +835,7 @@ def make_tools(ws: Workspace) -> list[Any]:
             Footprint, removed art count and the total key count.
         """
         design = ws.need()
-        if len(design.board.get("keys", [])) >= 6:
+        if len(design.board.get("keys", [])) >= _MAX_KEYS:
             raise ValueError("the admitted L151 recipe permits at most six keys")
         footprint = {(px, py) for px in range(x, x + 2) for py in range(y, y + 2)}
         covered = footprint & set(design.picture)
@@ -879,9 +892,9 @@ def make_tools(ws: Workspace) -> list[Any]:
             raise ValueError(
                 f"every key needs one queue lock: {key_count} keys, {lock_count} locks"
             )
-        if not 1 <= connected_groups <= 18:
+        if not 1 <= connected_groups <= _MAX_CONNECTED_GROUPS:
             raise ValueError(f"connected_groups must be 1..18, got {connected_groups}")
-        if not 0 <= surprise_count <= 30:
+        if not 0 <= surprise_count <= _MAX_SURPRISES:
             raise ValueError(f"surprise_count must be 0..30, got {surprise_count}")
 
         for container in ("Locks", "ConnectedShooters", "SurpriseShooters"):
@@ -986,7 +999,7 @@ def make_tools(ws: Workspace) -> list[Any]:
         if ws.looked_at_revision != ws.revision:
             raise ValueError("call look on the current playable board before reviewing it")
         clean_features = [feature.strip() for feature in preserved_features if feature.strip()]
-        if len(clean_features) < 2:
+        if len(clean_features) < _MIN_PRESERVED_FEATURES:
             raise ValueError("name at least two concrete preserved visual features")
         if not observed_description.strip() or not mechanic_role.strip():
             raise ValueError("observed description and mechanic role must be explicit")
@@ -1141,7 +1154,7 @@ def make_tools(ws: Workspace) -> list[Any]:
         """
         design = ws.need()
         patch = {(int(cell[0]), int(cell[1])) for cell in cells}
-        if ws.patch_calls >= 2 or ws.patch_cells + len(patch) > 16:
+        if ws.patch_calls >= _MAX_PATCH_CALLS or ws.patch_cells + len(patch) > _MAX_PATCH_CELLS:
             raise ValueError(
                 "paint_cells is limited to two calls and 16 cells per authored revision; "
                 "reject the source conversion instead of metric-patching the board"
@@ -1240,7 +1253,8 @@ def make_tools(ws: Workspace) -> list[Any]:
         )
         if activity_violations:
             raise ValueError("refusing to save inert mechanics: " + "; ".join(activity_violations))
-        assert result.campaign is not None
+        if result.campaign is None:
+            raise ValueError("refusing to save: the candidate has no campaign measurements")
         if not _meets_save_gate(ws, result.campaign):
             if ws.source_art is not None:
                 raise ValueError(

@@ -50,6 +50,16 @@ from sim import (
 
 _STEPS4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
+#: A window widens until it holds this many levels, or spans the whole corpus.
+_MIN_WINDOW_LEVELS = 8
+_MAX_WINDOW_SPAN = 100
+#: Seats of at least this many cells count as the "multi_cell" mechanic.
+_MULTI_CELL_SIZE = 4
+#: The studio uses at most this many extra mechanic types in one level.
+MAX_MECHANIC_TYPES = 3
+#: This many admitted features outside their bands turn a warning into a failure.
+_FAILING_BAND_BREACHES = 2
+
 #: Corpus slot at which each mechanic first appears; a candidate for slot N must
 #: not use a mechanic introduced later than N.
 MECHANIC_INTRODUCED = {
@@ -129,8 +139,9 @@ def level_features(level: Level) -> dict[str, float]:
 
 
 def _central_obstacles(level: Level) -> int:
-    """Obstacles in the middle half of the board; the studio keeps blockers
-    near edges (13/94 corpus levels have any central one — a round-2 tell).
+    """Count obstacles in the middle half of the board.
+
+    The studio keeps blockers near edges: 13/94 corpus levels have any central one.
     """
     cx, cy = (level.width - 1) / 2, (level.height - 1) / 2
     return sum(
@@ -141,8 +152,9 @@ def _central_obstacles(level: Level) -> int:
 
 
 def _far_served_seats(level: Level) -> int:
-    """Seats whose same-color settlers sit far away (the studio's
-    opposite-corner strategy; used increasingly in later levels).
+    """Count seats whose same-color settlers sit far away.
+
+    This is the studio's opposite-corner strategy, used increasingly in later levels.
     """
     per_color: dict[int, list[Coord]] = {}
     for pos, s in level.settlers:
@@ -162,9 +174,10 @@ def _far_served_seats(level: Level) -> int:
 
 
 def _mechanic_types(level: Level) -> int:
-    """Distinct extra mechanics in play; the studio caps this at three per
-    level, and elevators deliberately do not count (they call them a
-    production helper, not a mechanic).
+    """Count the distinct extra mechanics in play.
+
+    The studio caps this at three per level, and elevators deliberately do not count
+    (they call them a production helper, not a mechanic).
     """
     return sum(
         [
@@ -198,7 +211,7 @@ def corpus_window(
     width = span
     while True:
         rows = [dict(feats) for s, feats in _corpus_features() if abs(s - slot) <= width]
-        if len(rows) >= 8 or width > 100:
+        if len(rows) >= _MIN_WINDOW_LEVELS or width > _MAX_WINDOW_SPAN:
             break
         width += 5
     bands: dict[str, tuple[float, float]] = {}
@@ -220,9 +233,10 @@ class Finding:
 
 
 def _schedule_findings(feats: dict[str, float], level: Level, slot: int) -> list[Finding]:
+    """Flag mechanics used before the slot at which the reference levels introduce them."""
     used = {
         "rotation": any(s.rotation != 0 for s in level.seats),
-        "multi_cell": any(len(s.cells) >= 4 for s in level.seats),
+        "multi_cell": any(len(s.cells) >= _MULTI_CELL_SIZE for s in level.seats),
         "mirrored": any(s.mirrored for s in level.seats),
         "obstacles": feats["n_obstacles"] > 0,
         "elevators": feats["n_elevators"] > 0,
@@ -245,7 +259,7 @@ def _schedule_findings(feats: dict[str, float], level: Level, slot: int) -> list
     return out
 
 
-def critique(
+def critique(  # noqa: PLR0912 - one flat list of independent acceptance checks
     level: Level,
     slot: int,
     *,
@@ -280,7 +294,7 @@ def critique(
                 "tell)",
             )
         )
-    if feats["n_mechanic_types"] > 3:
+    if feats["n_mechanic_types"] > MAX_MECHANIC_TYPES:
         findings.append(
             Finding(
                 "FAIL",
@@ -388,7 +402,7 @@ def critique(
     breached = [key for key in ADMITTED if not bands[key][0] <= feats[key] <= bands[key][1]]
     # One breached band is within real levels' natural variation; two or more is
     # the counterfeit signature (level-granularity FA 0.11 / DET 0.49).
-    band_severity = "FAIL" if len(breached) >= 2 else "WARN"
+    band_severity = "FAIL" if len(breached) >= _FAILING_BAND_BREACHES else "WARN"
     for key in breached:
         lo, hi = bands[key]
         findings.append(
@@ -502,7 +516,7 @@ def run_study(seed: int = 7) -> dict[str, dict[str, float]]:
     Returns:
         ``{feature: {"fa": ..., "det": ...}}``.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 - reproducible study sampling, not security
     rows = [(slot, dict(feats)) for slot, feats in _corpus_features()]
     holdout = rows[1::4]
 

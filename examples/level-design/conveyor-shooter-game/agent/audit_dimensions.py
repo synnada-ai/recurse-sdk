@@ -20,6 +20,16 @@ Cell = tuple[int, int]
 STAGE_PROGRESS = (0.0, 0.25, 0.5, 0.75)
 
 
+#: Spread and axis measures need at least two samples.
+_MIN_SAMPLES = 2
+#: A border ring counts as a frame when this share of it is occupied.
+_FRAME_RING_FILL = 0.85
+#: Same-colour regions of this size read as structured detail; smaller ones as speckle.
+_DETAIL_REGION_MIN = 2
+_DETAIL_REGION_MAX = 12
+_SMALL_REGION_MAX = 4
+
+
 @dataclass(frozen=True)
 class Region:
     """One four-connected, same-material region in the opening artwork."""
@@ -78,6 +88,7 @@ def physical_opening_cells(raw: dict[str, Any]) -> set[Cell]:
     cells = set(opening_picture(raw))
 
     def visit(value: Any) -> None:
+        """Walk nested containers and collect every grid-point cell."""
         if isinstance(value, dict):
             for name, child in value.items():
                 if name in {"GridPoints", "MainGridPoints"} and isinstance(child, list):
@@ -157,7 +168,7 @@ def _mirror_score(picture: dict[Cell, int], width: int, height: int, *, vertical
 def _entropy(counts: Counter[int]) -> float:
     """Return normalized material entropy in the closed interval zero to one."""
     total = sum(counts.values())
-    if total == 0 or len(counts) < 2:
+    if total == 0 or len(counts) < _MIN_SAMPLES:
         return 0.0
     entropy = -sum((count / total) * math.log(count / total) for count in counts.values())
     return entropy / math.log(len(counts))
@@ -179,7 +190,7 @@ def _local_colour_diversity(picture: dict[Cell, int], radius: int = 1) -> float:
 
 def _pearson(xs: list[float], ys: list[float]) -> float:
     """Return Pearson correlation, preserving constant observations as zero."""
-    if len(xs) < 2:
+    if len(xs) < _MIN_SAMPLES:
         return 0.0
     mean_x = statistics.fmean(xs)
     mean_y = statistics.fmean(ys)
@@ -213,7 +224,7 @@ def _ring_cells(width: int, height: int, depth: int) -> tuple[Cell, ...]:
 
 def _principal_axis(cells: set[Cell]) -> tuple[float, float]:
     """Return inferred axis anisotropy and displacement from the nearest grid axis."""
-    if len(cells) < 2:
+    if len(cells) < _MIN_SAMPLES:
         return 0.0, 0.0
     xs = [float(x) for x, _y in cells]
     ys = [float(y) for _x, y in cells]
@@ -262,7 +273,7 @@ def composition_metrics(
     complete_rings = 0
     for depth in range((min(width, height) + 1) // 2):
         ring = _ring_cells(width, height, depth)
-        if not ring or len(occupied & set(ring)) / len(ring) < 0.85:
+        if not ring or len(occupied & set(ring)) / len(ring) < _FRAME_RING_FILL:
             break
         complete_rings += 1
 
@@ -357,7 +368,9 @@ def artwork_metrics(raw: dict[str, Any]) -> dict[str, float]:
 
     total = len(picture)
     singleton_cells = sum(size for size in sizes if size == 1)
-    structured_detail_cells = sum(size for size in sizes if 2 <= size <= 12)
+    structured_detail_cells = sum(
+        size for size in sizes if _DETAIL_REGION_MIN <= size <= _DETAIL_REGION_MAX
+    )
     return {
         "cells": float(total),
         "width": float(width),
@@ -372,7 +385,7 @@ def artwork_metrics(raw: dict[str, Any]) -> dict[str, float]:
         "largest_region_share": sizes[0] / total,
         "median_region_cells": float(statistics.median(sizes)),
         "singleton_cell_share": singleton_cells / total,
-        "small_region_cell_share": sum(size for size in sizes if size <= 4) / total,
+        "small_region_cell_share": sum(size for size in sizes if size <= _SMALL_REGION_MAX) / total,
         "structured_detail_share": structured_detail_cells / total,
         "local_colour_diversity_3x3": _local_colour_diversity(picture),
         "horizontal_run_median": float(statistics.median(horizontal_runs)),
@@ -469,7 +482,7 @@ def live_artwork(raw: dict[str, Any], level: Level, state: GameState) -> dict[Ce
     return {cell: material for cell, material in picture.items() if state.health[targets[cell]] > 0}
 
 
-def _stage(
+def _stage(  # noqa: PLR0913, PLR0917 - one argument per measured series
     requested: float,
     progress: float,
     action_index: int,
@@ -534,7 +547,7 @@ def _destruction_metrics(
     }
 
 
-def replay_profile(
+def replay_profile(  # noqa: PLR0915 - one linear pass over the winning replay
     raw: dict[str, Any],
     certificate: dict[str, Any],
     *,

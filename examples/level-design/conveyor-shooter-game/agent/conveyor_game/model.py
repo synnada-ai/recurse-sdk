@@ -55,6 +55,10 @@ FIRST_APPEARANCE: dict[str, int] = {
 }
 
 
+#: A connection joins at least two shooters.
+_MIN_CONNECTED_SHOOTERS = 2
+
+
 def grid_cells(points: list[dict[str, Any]]) -> list[Cell]:
     """Flatten a flat or grouped native ``GridPoints`` value into cells."""
     cells: list[Cell] = []
@@ -219,9 +223,11 @@ def demand_by_material(raw: dict[str, Any]) -> dict[int, int]:
     demand: dict[int, int] = {}
 
     def add(material: int, count: int) -> None:
+        """Add demand for one material."""
         demand[material] = demand.get(material, 0) + count
 
     def entries(container: str, field: str) -> list[dict[str, Any]]:
+        """Read the entry list of one board container."""
         value = pid.get(container, {})
         if not isinstance(value, dict):
             raise ValueError(f"{container} must be an object")
@@ -379,7 +385,7 @@ class Level:
                     connection_id, connection_order = connection_by_shooter.get(
                         record_id, (None, None)
                     )
-                    shooter = Shooter(
+                    parsed = Shooter(
                         id=record_id,
                         material=_int(record, "material"),
                         ammo=_nonnegative_int(record, "ammo"),
@@ -387,10 +393,10 @@ class Level:
                         connection_id=connection_id,
                         connection_order=connection_order,
                     )
-                    if shooter.id in shooter_ids:
-                        raise ValueError(f"duplicate shooter id {shooter.id}")
-                    shooter_ids.add(shooter.id)
-                    shooters.append(shooter)
+                    if parsed.id in shooter_ids:
+                        raise ValueError(f"duplicate shooter id {parsed.id}")
+                    shooter_ids.add(parsed.id)
+                    shooters.append(parsed)
             lanes.append(tuple(shooters))
 
         if shooter_pipes:
@@ -505,7 +511,7 @@ def queue_scheduling_profile(level: Level) -> QueueSchedulingProfile:
     )
 
 
-def _build_lap(
+def _build_lap(  # noqa: PLR0913, PLR0917 - one argument per board layer
     width: int,
     height: int,
     cell_targets: dict[Cell, int],
@@ -515,7 +521,10 @@ def _build_lap(
 ) -> tuple[Ray, ...]:
     """Compile the observed bottom-left, anticlockwise conveyor traversal."""
 
-    def ray(direction: Direction, line: int) -> Ray:
+    def ray(  # noqa: PLR0912 - every board layer on one firing line, in order
+        direction: Direction, line: int
+    ) -> Ray:
+        """Compile the ordered objects one firing line meets, edge first."""
         if direction is Direction.UP:
             cells: Iterable[Cell] = ((line, y) for y in range(height))
         elif direction is Direction.LEFT:
@@ -550,7 +559,8 @@ def _build_lap(
                     prior = objects[-1]
                     prior_rank = prior.retraction_rank
                     item_rank = item.retraction_rank
-                    assert prior_rank is not None and item_rank is not None
+                    if prior_rank is None or item_rank is None:  # pragma: no cover
+                        raise ValueError("retracting targets must carry a retraction rank")
                     objects[-1] = RayObject(
                         kind=prior.kind,
                         index=prior.index,
@@ -1007,7 +1017,7 @@ def _parse_connections(
         shooter_ids = record.get("Shooters")
         if (
             not isinstance(shooter_ids, list)
-            or len(shooter_ids) < 2
+            or len(shooter_ids) < _MIN_CONNECTED_SHOOTERS
             or not all(isinstance(shooter_id, int) for shooter_id in shooter_ids)
         ):
             raise ValueError("connected Shooters must contain at least two integer ids")
@@ -1022,11 +1032,13 @@ def _parse_connections(
 
 
 def _nested_entries(data: dict[str, Any], container: str, entries: str) -> bool:
+    """Whether a nested container holds any entries."""
     value = data.get(container, {})
     return isinstance(value, dict) and bool(value.get(entries, []))
 
 
 def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
+    """Read a required object field."""
     value = data.get(key)
     if not isinstance(value, dict):
         raise ValueError(f"{key} must be an object")
@@ -1034,6 +1046,7 @@ def _mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def _list(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    """Read a list-of-objects field."""
     value = data.get(key, [])
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise ValueError(f"{key} must be a list of objects")
@@ -1041,6 +1054,7 @@ def _list(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
 
 
 def _int(data: dict[str, Any], key: str) -> int:
+    """Read a required integer field."""
     value = data.get(key)
     if not isinstance(value, int):
         raise ValueError(f"{key} must be an integer")
@@ -1048,6 +1062,7 @@ def _int(data: dict[str, Any], key: str) -> int:
 
 
 def _positive_int(data: dict[str, Any], key: str) -> int:
+    """Read a required positive integer field."""
     value = _int(data, key)
     if value < 1:
         raise ValueError(f"{key} must be positive, got {value}")
@@ -1055,6 +1070,7 @@ def _positive_int(data: dict[str, Any], key: str) -> int:
 
 
 def _nonnegative_int(data: dict[str, Any], key: str) -> int:
+    """Read a required nonnegative integer field."""
     value = _int(data, key)
     if value < 0:
         raise ValueError(f"{key} must be nonnegative, got {value}")

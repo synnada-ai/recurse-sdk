@@ -129,6 +129,7 @@ class Design:
     """
 
     def __init__(self, width: int, height: int) -> None:
+        """Start an empty design on a board of the given size."""
         if width <= 0 or height <= 0:
             raise ValueError(f"board must be positive, got {width}x{height}")
         self.width = width
@@ -405,9 +406,9 @@ class Design:
             ValueError: If there is no deficit to place, not enough free cells,
                 or the headroom target cannot be met.
         """
-        rng = random.Random(seed)
+        rng = random.Random(seed)  # noqa: S311 - reproducible design scatter, not security
         deficit = self.deficit()
-        pool = [c for c in deficit.elements()]
+        pool = list(deficit.elements())
         if not pool:
             raise ValueError("nothing to place: capacity is already met")
         rng.shuffle(pool)
@@ -592,6 +593,7 @@ def _f32_repr(v: float) -> float:
 
 
 def _vec2int(x: int, y: int, *, v2: bool) -> dict[str, Any]:
+    """Emit an integer 2D vector, with magnitudes in the newer schema."""
     out: dict[str, Any] = {"x": x, "y": y}
     if v2:
         out["magnitude"] = _f32_repr(math.sqrt(x * x + y * y))
@@ -600,6 +602,7 @@ def _vec2int(x: int, y: int, *, v2: bool) -> dict[str, Any]:
 
 
 def _vec3f(x: float, y: float, z: float, *, v2: bool) -> dict[str, Any]:
+    """Emit a float 3D vector, with magnitudes in the newer schema."""
     out: dict[str, Any] = {"x": x, "y": y, "z": z}
     if v2:
         out["magnitude"] = _f32_repr(math.sqrt(x * x + y * y + z * z))
@@ -626,12 +629,14 @@ _UNIT_SCALE = {
 
 
 def _lockcfg(type_: int, color_id: int, *, v2: bool) -> dict[str, Any] | None:
+    """Emit a lock or key config, or None where the older schema omits it."""
     if not v2 and type_ == 0:
         return None
     return {"Type": type_, "ColorId": color_id}
 
 
 def _settler_json(settler: Settler, pos: Coord, *, v2: bool) -> dict[str, Any]:
+    """Emit one settler record in the requested schema generation."""
     lock = _lockcfg(2 if settler.key_id is not None else 0, settler.key_id or -1, v2=v2)
     if v2:
         return {
@@ -650,6 +655,7 @@ def _settler_json(settler: Settler, pos: Coord, *, v2: bool) -> dict[str, Any]:
 
 
 def _seat_json(spec: SeatSpec, rotation_raw: int, *, v2: bool) -> dict[str, Any]:
+    """Emit one seat record in the requested schema generation."""
     lock = _lockcfg(1 if spec.lock_id is not None else 0, spec.lock_id or -1, v2=v2)
     out: dict[str, Any] = {
         "GridPos": _vec2int(*spec.pos, v2=v2),
@@ -695,6 +701,10 @@ def _camera_z(width: int, height: int, rng: random.Random) -> float:
     return round(rng.choice(samples) + rng.uniform(-0.5, 0.5), 2)
 
 
+#: Share of reference seats whose rotation is stored un-normalized (4 or 8 added).
+_UNNORMALIZED_ROTATION_SHARE = 0.02
+
+
 def to_game_json(
     design: Design,
     *,
@@ -722,12 +732,12 @@ def to_game_json(
     if variant not in ("v1", "v2"):
         raise ValueError(f"unknown variant {variant!r}; use 'v1' or 'v2'")
     v2 = variant == "v2"
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 - reproducible format noise, not security
 
     seats = []
     for spec in design.seats:
         raw_rotation = spec.rotation
-        if rng.random() < 0.02:
+        if rng.random() < _UNNORMALIZED_ROTATION_SHARE:
             raw_rotation += rng.choice((4, 8))
         seats.append(_seat_json(spec, raw_rotation, v2=v2))
 
