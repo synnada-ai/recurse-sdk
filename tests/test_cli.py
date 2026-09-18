@@ -1528,13 +1528,13 @@ def test_follow_up_authentication_failure_keeps_run_recovery(
     assert "may continue" in output.out
 
 
-def test_cli_syntax_error_is_not_a_confirmed_remote_timeout(
+def test_cli_syntax_error_uses_general_error_status(
     service: FakeService, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Exit 2 also covers parser rejection, which never admits a remote run."""
+    """Parser rejection is a CLI error, not a confirmed remote timeout."""
     with pytest.raises(SystemExit) as exit_info:
         main(["run"])
-    assert exit_info.value.code == 2
+    assert exit_info.value.code == 1
     output = capsys.readouterr()
     assert "usage:" in output.err
     assert "status: timed_out" not in output.out
@@ -1826,7 +1826,7 @@ def test_secret_commands_offer_no_literal_value_option(
     with pytest.raises(SystemExit) as error:
         main(["secret", "set", "github-token", "--value", "private-token"])
 
-    assert error.value.code == 2
+    assert error.value.code == 1
     assert "unrecognized arguments: --value private-token" in capsys.readouterr().err
 
 

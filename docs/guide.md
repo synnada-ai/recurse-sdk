@@ -456,9 +456,8 @@ files, verify size and SHA-256, and only then atomically move the file into plac
 
 For automation, `recurse run` exits with `0` on success, `1` on agent failure, `2` on timeout,
 `3` when it observes a remotely cancelled run, and `4` on infrastructure failure. A CLI interrupted
-by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax exits
-with `2` as well, so inspect the printed status and error rather than treating that code alone as
-proof of a remote timeout. Other reported CLI errors exit with `1`.
+by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax and
+other reported CLI errors exit with `1`, leaving `2` specific to a confirmed remote timeout.
 
 Confirmed run failures include the run ID, status, a stable public error identifier and a short
 explanation. `recurse run` and `recurse status` display the service's public failure detail when
