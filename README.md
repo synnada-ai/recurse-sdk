@@ -93,8 +93,9 @@ To publish a corrected description with the next SDK release:
 
 1. Choose an unpublished version, update `project.version` in `pyproject.toml`, and run `uv lock`.
    Update the SDK version reported in `src/_recurse_cli.py` and its matching CLI tests.
-   Also run `uv lock --directory examples/rna-fold-lab/tests` and
-   `uv lock --directory examples/backpack-3d/tests` to refresh their local SDK dependency.
+   Also run `uv lock --directory examples/rna-fold-lab/tests`,
+   `uv lock --directory examples/backpack-3d/tests`, and
+   `uv lock --directory examples/predictive-modeler/tests` to refresh their local SDK dependency.
 2. Run `./check.sh` to validate the release and build its wheel and source distribution in `dist/`.
 3. Inspect the wheel's `.dist-info/METADATA` and the source distribution's `PKG-INFO`.
    Their description must match the current README, with `pip install recurse-sdk` first and
