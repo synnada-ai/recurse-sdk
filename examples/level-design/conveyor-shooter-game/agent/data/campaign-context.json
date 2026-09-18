@@ -1,0 +1,68 @@
+{
+  "schema": "conveyor-campaign-context-v1",
+  "evidence": "replay-certified shipped levels 1-150 plus human visual review",
+  "next_level": 151,
+  "target_window": [131, 150],
+  "next_batch_position": 1,
+  "recommended_difficulty": "Easy",
+  "same_position_difficulty_counts": {"Easy": 13, "Medium": 2},
+  "supported_design_mechanics": ["SurpriseShooters", "ConnectedShooters", "Locks", "keys", "pixelPipes", "eggBoxes"],
+  "supported_mechanics_note": "The source-backed slice designs core queue pressure and admits screenshot-verified 2x2 keys with separate queue-lock blockers, lane-aligned connected shooters, surprise shooters, at most one visually integrated Pixel Pipe, and up to two compact four-egg trays using the repeated L140-145 construction. Other mechanics stay reference-only until their construction recipes are independently admitted.",
+  "mechanic_first_seen": {
+    "SurpriseShooters": 8,
+    "ConnectedShooters": 14,
+    "pixelHealths": 30,
+    "keys": 40,
+    "Locks": 40,
+    "gates": 55,
+    "pixelPipes": 70,
+    "surprisePixels": 85,
+    "snakes": 100,
+    "walls": 120,
+    "eggBoxes": 140
+  },
+  "target_band": {
+    "complete_fill": {"low": 0.6082352941, "median": 0.9098116987, "high": 0.9928},
+    "bbox_fill": {"low": 0.7388838710, "median": 0.9823498965, "high": 1.0},
+    "perimeter_per_cell": {"low": 0.1622298851, "median": 0.1888600484, "high": 0.3775481100},
+    "regions_per_100_cells": {"low": 8.4869402985, "median": 13.3425269241, "high": 20.5},
+    "colours": {"low": 6.0, "median": 7.0, "high": 8.1},
+    "local_colour_diversity_3x3": {"low": 2.0631746032, "median": 2.3325607365, "high": 2.7216186441},
+    "structured_detail_share": {"low": 0.1287615207, "median": 0.2197122978, "high": 0.3820709220},
+    "colour_boundary_share": {"low": 0.2945197131, "median": 0.3717233132, "high": 0.4658341234},
+    "palette_entropy": {"low": 0.7634451, "median": 0.8644214298, "high": 0.9334181889},
+    "dominant_colour_share": {"low": 0.2401492537, "median": 0.3294566655, "high": 0.4279522684},
+    "relaunch_share": {"low": 0.3497368421, "median": 0.5600426970, "high": 0.6412087912},
+    "mean_tray": {"low": 0.9063716873, "median": 2.1155119157, "high": 2.8192883405},
+    "mean_available_actions": {"low": 1.2117160828, "median": 1.5848342510, "high": 2.1839165203}
+  },
+  "previous_level": {
+    "number": 150,
+    "description": "A large, front-facing tiger head.",
+    "difficulty": "Hard",
+    "family": "compact silhouette",
+    "complete_fill": 0.5865546218,
+    "regions_per_100_cells": 26.9491525424,
+    "relaunch_share": 0.3653846154,
+    "mean_tray": 2.8191304348
+  },
+  "temporal_band": {
+    "delta_complete_fill": {"low": -0.2494083773, "median": 0.0, "high": 0.3649355359},
+    "delta_regions_per_100_cells": {"low": -8.6278287061, "median": 2.8323015376, "high": 17.5768284347},
+    "delta_relaunch_share": {"low": -0.1259095996, "median": 0.0493387048, "high": 0.1393192393},
+    "delta_mean_tray": {"low": -1.9014079862, "median": -0.0266211038, "high": 1.0700811498}
+  },
+  "temporal_reference": "14 shipped transitions from each batch end into position 1",
+  "recent_levels": [
+    {"number": 141, "difficulty": "Easy", "family": "full-field", "description": "A screaming or shocked emoji-like face.", "mechanics": ["Egg Boxes", "Surprise shooters"]},
+    {"number": 142, "difficulty": "Easy", "family": "compact silhouette", "description": "A rabbit wearing a hockey mask and holding a knife.", "mechanics": ["Connected shooters", "Egg Boxes", "Surprise shooters"]},
+    {"number": 143, "difficulty": "Medium", "family": "framed", "description": "A small round creature sleeping.", "mechanics": ["Egg Boxes", "Large cubes"]},
+    {"number": 144, "difficulty": "Hard", "family": "mechanic-led", "description": "A cat rolled tightly like a wrap.", "mechanics": ["Connected shooters", "Gates"]},
+    {"number": 145, "difficulty": "Hard", "family": "full-field", "description": "A front-facing reindeer with antlers.", "mechanics": ["Egg Boxes", "Gates", "Large cubes", "Surprise shooters"]},
+    {"number": 146, "difficulty": "Easy", "family": "framed", "description": "A rabbit with an unhappy expression.", "mechanics": ["Connected shooters", "Gates", "Surprise shooters"]},
+    {"number": 147, "difficulty": "Easy", "family": "mechanic-led", "description": "A blue cookie-eating monster.", "mechanics": ["Connected shooters", "Gates", "Large cubes", "Surprise shooters"]},
+    {"number": 148, "difficulty": "Medium", "family": "mechanic-led", "description": "A bear character resembling Winnie the Pooh.", "mechanics": ["Connected shooters", "Gates", "Pixel Pipes", "Walls"]},
+    {"number": 149, "difficulty": "Very Hard", "family": "mechanic-led", "description": "A panda sitting on an ice-cream dessert.", "mechanics": ["Connected shooters", "Gates", "Surprise shooters"]},
+    {"number": 150, "difficulty": "Hard", "family": "compact silhouette", "description": "A large, front-facing tiger head.", "mechanics": ["Connected shooters", "Egg Boxes"]}
+  ]
+}

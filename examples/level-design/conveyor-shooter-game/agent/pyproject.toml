@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "level-designer-conveyor-shooter"
+version = "1.0.0"
+description = "Minimal Recurse level designer for a conveyor shooter puzzle"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "agent.yaml",
+  "prompts.md",
+  "tools.py",
+  "uv.lock",
+  "toolkit.py",
+  "composition.py",
+  "image_baseline.py",
+  "builder.py",
+  "certification.py",
+  "audit_dimensions.py",
+  "render.py",
+  "conveyor_game",
+  "data/campaign-context.json",
+]
+
+[tool.hatch.build.targets.wheel]
+include = [
+  "agent.yaml",
+  "prompts.md",
+  "tools.py",
+  "toolkit.py",
+  "composition.py",
+  "image_baseline.py",
+  "builder.py",
+  "certification.py",
+  "audit_dimensions.py",
+  "render.py",
+  "conveyor_game",
+  "data/campaign-context.json",
+]

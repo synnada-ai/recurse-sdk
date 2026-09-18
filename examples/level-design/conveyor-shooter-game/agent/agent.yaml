@@ -1,0 +1,78 @@
+apiVersion: recurse.run/v1alpha1
+kind: Agent
+metadata:
+  name: level-designer-conveyor-shooter
+  title: Conveyor Shooter Level Designer
+  summary: Converts one source image into a replay-certified conveyor shooter puzzle level.
+runtime:
+  python: "3.14"
+  lockfile: uv.lock
+agent:
+  model: gpt-5.6-luna
+  prompt: prompts.md
+inputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [source_image_base64]
+  properties:
+    brief:
+      type: string
+      maxLength: 500
+      default: ""
+      description: Optional visual or experiential direction.
+    source_image_base64:
+      type: string
+      minLength: 16
+      maxLength: 12000000
+      description: Source PNG, as raw base64 or a data URI.
+    width:
+      type: integer
+      minimum: 20
+      maximum: 35
+      default: 35
+    height:
+      type: integer
+      minimum: 22
+      maximum: 40
+      default: 40
+    crop:
+      type: [array, "null"]
+      minItems: 4
+      maxItems: 4
+      items:
+        type: integer
+      default: null
+    task:
+      type: string
+      default: >-
+        Select a recognizable deterministic pixel conversion of the source image, then turn it
+        into one replay-certified conveyor shooter level with keys and locks without destroying
+        its comprehensibility. Direction from the reviewer: {{ input.brief }}
+  additionalProperties: false
+outputs:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  required: [verdict]
+  properties:
+    verdict:
+      type: string
+      enum: [SAVED, FAILED]
+      description: Whether a certified level was saved.
+  additionalProperties: false
+tools:
+  source: tools.py
+  built_in: false
+  register:
+    begin_design: ~
+    extract_image_variants: {storable: false}
+    look_image_variant: {storable: false}
+    compare_image_variants: {storable: false}
+    freeze_image_baseline: {storable: false}
+    start_from_source: {storable: false}
+    inspect_source_coordinates: {storable: false}
+    apply_composition_school: {storable: false}
+    place_key: {storable: false}
+    look: {storable: false}
+    review_visual_retention: {storable: false}
+    configure_gameplay: {storable: false}
+    save_candidate: {storable: false}
