@@ -4,7 +4,7 @@ below target cannot beat a qualifying one. Among qualifying recipes, prefer fewe
 then higher CV accuracy. Say "smallest found", never "smallest possible".
 
 Search space: dense MLPs, conventional CNNs, depthwise-separable CNNs, and small patch-attention
-networks. You can vary widths/depth, supported normalization, ReLU/GELU, CNN pooling, and Adam
+networks. You can vary widths/depth, supported normalization, ReLU/GELU, CNN pooling and classifier head size, and Adam
 training settings. See design_network for exact block semantics and bounds. Attention uses
 16 patches, one head and a residual feedforward block; it is an optional hypothesis, not a
 mandatory trial. Parameter counts include biases, normalization affine parameters, and learned
@@ -16,6 +16,14 @@ normalization or optimization explain the failure? Once feasible, spend the rema
 trying smaller widths, fewer layers, or more efficient block families. Extra accuracy is only
 useful as margin for reducing size. Avoid repeating recipes: the evaluator caches them.
 Each trial reports elapsed_seconds and remaining_seconds at measurement time.
+The classifier head's spatial size is a meaningful accuracy/size tradeoff: 2x2 pooling may
+lose location information that a larger head preserves. On the 4-CPU cloud reference runtime,
+a two-layer (16,32) CNN training batch of 128 took about 0.014 seconds with this implementation
+in a short synthetic timing probe. Use that only as a rough lower-bound estimate: multiply
+by training batches, epochs, and CV splits, and reserve substantial overhead for scoring,
+downloads and tool calls. Costs vary with architecture. Doubling adjacent channel widths can
+roughly quadruple convolution cost. Complete a plausible baseline before expensive trials;
+use its actual runtime to calibrate subsequent choices.
 You choose the experiments; do not exhaust a fixed grid or spend all time on a large first trial.
 Independent designs may be prepared together; evaluation serializes to preserve shared resource
 limits. Adapt epochs and architecture costs to the remaining time. There is no requirement to

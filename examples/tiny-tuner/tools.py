@@ -24,6 +24,7 @@ _IMAGE_WIDTH = 28
 _CLASSES = 10
 _MAX_WIDTH = 256
 _MAX_DEPTH = 3
+_MAX_HEAD_SIZE = 7
 _MAX_EPOCHS = 100
 _MIN_BATCH = 16
 _MAX_BATCH = 1024
@@ -43,6 +44,7 @@ class Candidate:
     normalization: Literal["none", "batch", "layer", "group"]
     activation: Literal["relu", "gelu"]
     pooling: Literal["max", "average"]
+    head_size: int = 2
 
 
 def _check(candidate: Candidate) -> None:
@@ -63,6 +65,12 @@ def _check(candidate: Candidate) -> None:
         raise ValueError("normalization is incompatible with family; consult design_network")
     if candidate.activation not in {"relu", "gelu"} or candidate.pooling not in {"max", "average"}:
         raise ValueError("activation must be relu/gelu and pooling must be max/average")
+    if type(candidate.head_size) is not int or not 1 <= candidate.head_size <= _MAX_HEAD_SIZE:
+        raise ValueError("head_size must be an integer between 1 and 7")
+    if candidate.family in {"cnn", "separable"} and candidate.head_size > (
+        _IMAGE_WIDTH // 2 ** len(candidate.widths)
+    ):
+        raise ValueError("head_size cannot exceed the final spatial width")
     if candidate.family == "attention" and len(candidate.widths) != 1:
         raise ValueError("attention requires exactly one embedding width")
     if not math.isfinite(candidate.learning_rate) or not 0 < candidate.learning_rate <= 1:
@@ -89,6 +97,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     normalization: Literal["none", "batch", "layer", "group"] = "none",
     activation: Literal["relu", "gelu"] = "relu",
     pooling: Literal["max", "average"] = "max",
+    head_size: int = 2,
 ) -> Candidate:
     """Construct a bounded architecture and training recipe without training it.
 
@@ -104,6 +113,9 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
             (one group, channel affine parameters). Applied before each hidden activation.
         activation: relu or gelu for hidden activations.
         pooling: max or average 2x2 spatial pooling for CNNs; ignored by other families.
+        head_size: CNN adaptive average pooling output side, 1 to 7, no larger than the
+            final spatial width. Larger values preserve spatial detail at a parameter cost.
+            Ignored by MLP and attention families.
 
     Returns:
         A recipe to pass directly to evaluate_network. All layers include trainable biases.
@@ -118,6 +130,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         normalization,
         activation,
         pooling,
+        head_size,
     )
     _check(candidate)
     return candidate
@@ -198,8 +211,10 @@ def _network(candidate: Candidate) -> nn.Module:
             pool = nn.MaxPool2d(2) if candidate.pooling == "max" else nn.AvgPool2d(2)
             layers.extend((_normalization(candidate, width, True), _activation(candidate), pool))
             features = width
-        layers.extend((nn.AdaptiveAvgPool2d((2, 2)), nn.Flatten()))
-        features *= 4
+        layers.extend(
+            (nn.AdaptiveAvgPool2d((candidate.head_size, candidate.head_size)), nn.Flatten())
+        )
+        features *= candidate.head_size**2
     layers.append(nn.Linear(features, _CLASSES))
     return nn.Sequential(*layers)
 
@@ -216,7 +231,7 @@ def _locked(path: Path) -> Iterator[None]:
 def _cpu() -> Iterator[None]:
     """Bound intra-op CPU parallelism and restore the host setting on every exit path."""
     previous = torch.get_num_threads()
-    torch.set_num_threads(1)
+    torch.set_num_threads(4)
     try:
         yield
     finally:
@@ -294,7 +309,9 @@ def _splits(labels: Tensor, settings: dict[str, Any]) -> tuple[tuple[Tensor, Ten
 
 def _pixels(images: Tensor, indices: Tensor) -> Tensor:
     """Apply fixed scaling per minibatch without statistics from held-out examples."""
-    return images[indices].unsqueeze(1).float().div_(255)
+    return (
+        images[indices].unsqueeze(1).float().div_(255).contiguous(memory_format=torch.channels_last)
+    )
 
 
 def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
@@ -308,7 +325,7 @@ def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
     """Train from scratch with local random state and bounded minibatch allocations."""
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(seed)
-        model = _network(candidate)
+        model = _network(candidate).to(memory_format=torch.channels_last)
         optimizer = torch.optim.Adam(
             model.parameters(), lr=candidate.learning_rate, weight_decay=candidate.weight_decay
         )

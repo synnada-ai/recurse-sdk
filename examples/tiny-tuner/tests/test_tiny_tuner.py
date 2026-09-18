@@ -136,6 +136,10 @@ def test_folds_are_disjoint_stratified_reproducible_and_use_all_selected_example
         ({"normalization": "group"}, "normalization"),
         ({"activation": "sigmoid"}, "activation"),
         ({"pooling": "median"}, "pooling"),
+        ({"head_size": True}, "head_size"),
+        ({"head_size": 0}, "head_size"),
+        ({"head_size": 8}, "head_size"),
+        ({"family": "cnn", "widths": (4, 4, 4), "head_size": 7}, "spatial width"),
         ({"family": "attention", "widths": (4, 4)}, "exactly one"),
     ],
 )
@@ -397,4 +401,15 @@ def test_holdout_ignores_kfold_count() -> None:
         torch.equal(a, b)
         for split_a, split_b in zip(first, second, strict=True)
         for a, b in zip(split_a, split_b, strict=True)
+    )
+
+
+def test_spatial_head_preserves_detail_at_measured_parameter_cost() -> None:
+    """Larger CNN heads expose spatial features and count every extra classifier weight."""
+    small = tools._network(tools.design_network("cnn", (4, 8), head_size=2))
+    large = tools._network(tools.design_network("cnn", (4, 8), head_size=7))
+    assert large(torch.zeros(2, 1, 28, 28)).shape == (2, 10)
+    assert (
+        sum(p.numel() for p in large.parameters()) - sum(p.numel() for p in small.parameters())
+        == (49 - 4) * 8 * 10
     )

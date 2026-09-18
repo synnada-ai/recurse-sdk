@@ -19,7 +19,7 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | Family / option | Implemented blocks |
 | --- | --- |
 | MLP | Flatten 28×28 pixels, one to three dense hidden layers, ten-class linear head |
-| CNN | One to three padded 3×3 convolutions, each followed by normalization, activation and 2×2 pooling; adaptive 2×2 average pooling and a linear head |
+| CNN | One to three padded 3×3 convolutions, each followed by normalization, activation and 2×2 pooling; configurable adaptive average pooling (side 1–7, default 2) and a linear head |
 | Separable CNN | Each convolution replaced by a depthwise 3×3 convolution and a pointwise 1×1 convolution; same pooling and head |
 | Patch attention | Non-overlapping 7×7 patch projection (16 tokens), learned positions, one attention head, residual attention and feedforward layers with 2× expansion, mean token pooling and a linear head |
 | Normalization | None; batch normalization for MLP/CNN; layer normalization for MLP/attention; one-group group normalization for CNN |
@@ -49,7 +49,7 @@ loading: an in-flight download or tensor operation can overrun the deadline. Thi
 cooperative search deadline, not a hard process timeout or a guarantee on total agent latency.
 There is also a default cap of 30 attempted recipes and 10 epochs per fold. Failed and timed-out
 attempts consume trials; partial CV results cannot qualify. Repeating a recipe returns its cached
-status without training again. Evaluation calls serialize and use one intra-op CPU thread.
+status without training again. Evaluation calls serialize and use four intra-op CPU threads and channels-last image storage.
 The harness tool timeout is 660 seconds, above the maximum configurable 600-second search
 allowance, so its default 30-second timeout cannot truncate a CV trial.
 Completion does no additional training. Earlier completion requires the agent to justify
@@ -79,8 +79,8 @@ Or create `inputs.json` with overrides:
 ```
 
 ```sh
-recurse run examples/tiny-tuner --inputs inputs.json --cpu 1 --memory-mib 2048
-recurse deploy examples/tiny-tuner --as mcp --cpu 1 --memory-mib 2048
+recurse run examples/tiny-tuner --inputs inputs.json --cpu 4 --memory-mib 4096
+recurse deploy examples/tiny-tuner --as mcp --cpu 4 --memory-mib 4096
 ```
 
 The first evaluation downloads MNIST using torchvision's checked dataset cache in the temporary
