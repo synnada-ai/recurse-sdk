@@ -68,13 +68,19 @@ _MIN_TOP_UP_CENTS = 500
 _MAX_TOP_UP_CENTS = 50_000
 
 
+# Every failure produced by the CLI itself, as opposed to a confirmed terminal run state:
+# invalid syntax or option values, local input and packaging errors, authentication and
+# request failures, malformed responses, and unconfirmed observation timeouts.
+_CLI_ERROR_STATUS = 2
+
+
 class _CliArgumentParser(argparse.ArgumentParser):
-    """Use the general CLI error status for invalid command syntax."""
+    """Use the CLI-layer error status (2) for invalid command syntax."""
 
     def error(self, message: str) -> NoReturn:
-        """Report invalid arguments without using the confirmed-timeout status."""
+        """Report invalid arguments with the shared CLI-layer error status."""
         self.print_usage(sys.stderr)
-        self.exit(1, f"{self.prog}: error: {message}\n")
+        self.exit(_CLI_ERROR_STATUS, f"{self.prog}: error: {message}\n")
 
 
 class ServiceError(Exception):
@@ -1853,7 +1859,7 @@ def _authenticated_request(
 _RUN_EXIT_STATUS = {
     "succeeded": 0,
     "failed": 1,
-    "timed_out": 2,
+    "timed_out": 5,
     "cancelled": 3,
     "infrastructure_failed": 4,
 }
@@ -2409,7 +2415,8 @@ def main(argv: list[str] | None = None) -> int:
         argv: Command-line arguments; defaults to ``sys.argv[1:]``.
 
     Returns:
-        Process exit status. Direct run failures use stable status-specific values.
+        Process exit status. Confirmed run states use stable status-specific values
+        (1 failed, 3 cancelled, 4 infrastructure, 5 timed out); every CLI-layer error exits 2.
     """
     arguments = _build_parser().parse_args(argv)
     try:
@@ -2441,7 +2448,7 @@ def main(argv: list[str] | None = None) -> int:
             _manage_billing(arguments)
     except (RecurseError, ServiceError) as error:
         _print_cli_error(error, arguments)
-        return 1
+        return _CLI_ERROR_STATUS
     except KeyboardInterrupt:
         print("Interrupted.", file=sys.stderr)
         return 130
