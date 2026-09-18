@@ -178,15 +178,15 @@ Use `tools.defaults` for shared settings and override individual registrations w
 `tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
 
-Each application tool call has a timeout, separate from the 15-minute run limit. A tool timeout
-is reported to the specialist for recovery; it does not necessarily end the run immediately.
-Design individual calls to fit that budget, breaking longer work into smaller steps where
-practical.
+Each application tool call has a timeout, separate from the 15-minute run limit. It is set by
+`agent.timeout_tools` in seconds (default 30); `0` or `null` disables it. A tool timeout is
+reported to the specialist for recovery; it does not necessarily end the run immediately. Design
+individual calls to fit that budget, breaking longer work into smaller steps where practical.
 
-Three optional `agent` settings tune reliability limits. `agent.timeout_tools` is the per-call
-timeout in seconds (default 30); `0` or `null` disables it. `agent.max_llm_errors` (default 3)
-and `agent.max_tool_errors` (default 5) are the consecutive model and tool errors tolerated
-before the run stops; `0` disables either limit. Omit a setting to keep its default.
+Two more optional `agent` settings bound repeated failures. `agent.max_llm_errors` (default 3) is
+the number of consecutive model errors tolerated before the run stops. `agent.max_tool_errors`
+(default 5) counts consecutive tool batches in which every call fails; any successful call resets
+the count. `0` disables either limit, and omitting a setting keeps its default.
 
 ### Input and output contracts
 

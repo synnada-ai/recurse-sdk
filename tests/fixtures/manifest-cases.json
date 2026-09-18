@@ -12,5 +12,8 @@
   {"name": "malformed-yaml", "replace": [["metadata:", "metadata: ["]], "error": "valid YAML"},
   {"name": "invalid-output-schema", "replace": [["best_f1: {type: number}", "best_f1: {type: invalid}"]], "error": "outputs"},
   {"name": "reliability-limits", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  max_llm_errors: 3\n  max_tool_errors: 0\n  timeout_tools: 30"]], "error": null},
-  {"name": "negative-reliability-limit", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  max_llm_errors: -1"]], "error": "agent\\.max_llm_errors must be at least 0"}
+  {"name": "negative-reliability-limit", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  max_llm_errors: -1"]], "error": "agent\\.max_llm_errors must be at least 0"},
+  {"name": "integral-float-limit", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  max_tool_errors: 5.0"]], "error": "agent\\.max_tool_errors must be an integer"},
+  {"name": "non-finite-timeout", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  timeout_tools: .inf"]], "error": "agent\\.timeout_tools must be a finite number"},
+  {"name": "null-timeout", "replace": [["prompt: prompt.md", "prompt: prompt.md\n  timeout_tools: null"]], "error": null}
 ]

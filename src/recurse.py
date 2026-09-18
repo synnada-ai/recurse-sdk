@@ -282,7 +282,12 @@ def _format_manifest_value_error(
 def _validate_manifest(manifest: dict[str, Any]) -> None:
     """Validate one portable manifest against the packaged public schema."""
     agent = manifest.get("agent")
-    timeout = agent.get("timeout_tools") if isinstance(agent, dict) else None
+    limits: dict[str, Any] = agent if isinstance(agent, dict) else {}
+    for name in ("max_llm_errors", "max_tool_errors"):
+        # JSON Schema treats 3.0 as an integer; the hosted service does not.
+        if isinstance(limits.get(name), float):
+            raise ManifestError(f"agent.{name} must be an integer")
+    timeout = limits.get("timeout_tools")
     if isinstance(timeout, float) and not math.isfinite(timeout):
         raise ManifestError("agent.timeout_tools must be a finite number")
     error = next(_MANIFEST_VALIDATOR.iter_errors(manifest), None)

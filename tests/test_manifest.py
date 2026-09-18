@@ -233,6 +233,14 @@ def test_surrogate_text_is_rejected_as_an_encoding_problem(app: Path) -> None:
             r"^agent\.max_tool_errors must be an integer$",
         ),
         (
+            lambda m: m["agent"].__setitem__("max_llm_errors", 3.0),
+            r"^agent\.max_llm_errors must be an integer$",
+        ),
+        (
+            lambda m: m["agent"].__setitem__("max_tool_errors", 5.0),
+            r"^agent\.max_tool_errors must be an integer$",
+        ),
+        (
             lambda m: m["agent"].__setitem__("timeout_tools", -0.5),
             r"^agent\.timeout_tools must be at least 0$",
         ),

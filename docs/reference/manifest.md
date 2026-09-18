@@ -158,7 +158,7 @@ max_llm_errors: 3
 
 *integer, optional*
 
-Consecutive tool errors tolerated before the run stops. `0` disables this limit.
+Consecutive tool batches in which every call fails, tolerated before the run stops; any successful call resets the count. `0` disables this limit.
 
 Default: `5`
 
