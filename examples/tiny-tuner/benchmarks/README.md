@@ -42,3 +42,18 @@ succeeded, and a separate execution-runtime probe successfully installed and imp
 PyTorch stack. After the backend repair and SDK 0.1.8 upgrade, the full baseline built and ran.
 The index's R2 mirror independently returned HTTP 403 while canonical wheel URLs returned 200;
 that observation alone did not establish the preparation failure's root cause.
+
+## Budget-aware prompt — 2026-09-18
+
+Run `78cae77c-5c9e-4892-a0b5-ee80aad3bd07` returned a valid receipt but no completed model.
+Its first recipe was CNN(16,32,64), batch normalization, ReLU, max pooling, learning rate 0.001,
+weight decay 0.0001, batch size 128, and eight epochs per fold. It consumed the entire
+300-second allowance and returned `timed_out`. Final accuracy and parameter count are null.
+All four diagnostic artifacts were retrieved. The baseline remains the better measured design.
+
+The revision emphasized depth and optimization alternatives but lacked a measured cost anchor
+for the first trial. It chose a deeper, longer first experiment that could not finish. This
+observation does not disprove cost-aware planning; it shows this prompt alone did not supply
+or enforce a reliable estimate. Future revisions need measurable trial-cost feedback or
+training-throughput improvements before claiming the five-minute 99% objective is attainable.
+No evidence of diminishing returns or a successful 99% agent has been established yet.
