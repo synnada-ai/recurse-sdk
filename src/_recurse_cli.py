@@ -31,7 +31,7 @@ from decimal import Decimal, DecimalException
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, BinaryIO, cast
+from typing import Any, BinaryIO, NoReturn, cast
 from uuid import UUID, uuid4
 
 import keyring
@@ -66,6 +66,15 @@ _MAX_RUNTIME_SECRET_BYTES = 32 * 1024
 _CREDIT_CODE = re.compile(r"^rc_[A-Za-z0-9_-]{24,128}$")
 _MIN_TOP_UP_CENTS = 500
 _MAX_TOP_UP_CENTS = 50_000
+
+
+class _CliArgumentParser(argparse.ArgumentParser):
+    """Use the general CLI error status for invalid command syntax."""
+
+    def error(self, message: str) -> NoReturn:
+        """Report invalid arguments without using the confirmed-timeout status."""
+        self.print_usage(sys.stderr)
+        self.exit(1, f"{self.prog}: error: {message}\n")
 
 
 class ServiceError(Exception):
@@ -2269,7 +2278,7 @@ def _open_hosted_page(url: str, *, open_browser: bool) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
-    parser = argparse.ArgumentParser(
+    parser = _CliArgumentParser(
         prog="recurse", description="Run, deploy, and manage Recurse applications."
     )
     commands = parser.add_subparsers(dest="command", required=True)
