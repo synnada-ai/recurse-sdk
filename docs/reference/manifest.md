@@ -112,7 +112,7 @@ lockfile: uv.lock
 
 *mapping, required*
 
-The agent that drives the application's tools: its system prompt and optional model selection.
+The agent that drives the application's tools: its system prompt, optional model selection, and optional reliability limits.
 
 ### `agent.model`
 
@@ -138,6 +138,48 @@ Example:
 
 ```yaml
 prompt: prompt.md
+```
+
+### `agent.max_llm_errors`
+
+*integer, optional*
+
+Consecutive model errors tolerated before the run stops. `0` disables this limit.
+
+Default: `3`
+
+Example:
+
+```yaml
+max_llm_errors: 3
+```
+
+### `agent.max_tool_errors`
+
+*integer, optional*
+
+Consecutive tool batches in which every call fails, tolerated before the run stops; any successful call resets the count. `0` disables this limit.
+
+Default: `5`
+
+Example:
+
+```yaml
+max_tool_errors: 5
+```
+
+### `agent.timeout_tools`
+
+*number or null, optional*
+
+Timeout in seconds applied to each application tool call. `0` and `null` disable the timeout.
+
+Default: `30`
+
+Example:
+
+```yaml
+timeout_tools: 30
 ```
 
 ## `inputs`
