@@ -2,10 +2,20 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. The smallest qualifying model found so far has **4,018 parameters at 99.036670% mean CV**.
-The consolidated final policy reproduced its exact scores and checkpoint. The earlier 5,698-parameter recipe reproduced the same fold scores in
-two independent Astra searches and two consolidated Luna policy runs. This is fixed-seed repeatability, not an independent generalization estimate or proof
-of a globally smallest network. Final policy repeats and compact hypotheses are still running.
+`target_reached: true`.
+
+The selected Luna policy found **4,018 parameters at 99.036670% mean CV** and reproduced the
+same fold scores and checkpoint in a second run. The recipe is CNN(8,12), two convolutions
+per stage, batch normalization, ReLU/max pooling, head 3, Adam 0.005 with cosine endpoint 0.01,
+weight decay 0.0001, batch 128, and ten epochs. It completed by 182.71 and 194.03 seconds.
+This is 54.8% fewer parameters than the 8,890-parameter near-feasible model that motivated
+compact refinement. The benchmark ledger contains 44 completed run records.
+
+The campaign stopped on diminishing returns in the tested neighborhood after completed
+smaller-width, optimizer and channel-allocation variants failed the target. This is a practical
+stopping judgment, not proof of a globally smallest network. Fixed-seed repeats demonstrate
+reproducibility; adaptive CV reuse does not establish independent generalization accuracy.
+The official MNIST test split remains untouched. The chronological evidence follows.
 
 ## Fixed comparison protocol
 
@@ -53,7 +63,7 @@ Run `78cae77c-5c9e-4892-a0b5-ee80aad3bd07` returned a valid receipt but no compl
 Its first recipe was CNN(16,32,64), batch normalization, ReLU, max pooling, learning rate 0.001,
 weight decay 0.0001, batch size 128, and eight epochs per fold. It consumed the entire
 300-second allowance and returned `timed_out`. Final accuracy and parameter count are null.
-All four diagnostic artifacts were retrieved. The baseline remains the better measured design.
+All four diagnostic artifacts were retrieved. At this stage the baseline remained the better measured design.
 
 The revision emphasized depth and optimization alternatives but lacked a measured cost anchor
 for the first trial. It chose a deeper, longer first experiment that could not finish. This
@@ -168,7 +178,7 @@ The 7,942-parameter agent repeated its exact scores in `2ea0b3b7-ca75-436f-a72b-
 A lower cosine endpoint (min_lr_ratio 0.01) in `1df6b578-cee6-4c57-9960-e35236d5211a`
 raised the otherwise unchanged 6,994-parameter CNN(8,16,24) from 0.9897167148 to 0.9901499898.
 Its smaller 6,046-parameter (8,16,20) trial scored 0.9898833573. Scores below 0.99 were not
-rounded into qualification. The 5,698-parameter result remains the smallest measured so far;
+rounded into qualification. At this stage the 5,698-parameter result was the smallest measured;
 its exact repeat is recorded below.
 
 
@@ -216,8 +226,8 @@ seconds. Other settings stayed batch norm/ReLU/max, weight decay 0.0001, batch 1
 Fold accuracies were 0.9901019796, 0.9907995400, 0.9894484173. This is a joint optimization
 change; the experiment does not isolate the individual contribution of learning rate versus
 endpoint. The checkpoint passed strict reload, parameter recount and finite-logit inference.
-A repeat and narrower-width investigations are running; the new size improvement means the
-previous neighborhood was not yet at diminishing returns.
+The next experiments repeated this result and investigated narrower widths; this size
+improvement showed that the previous neighborhood was not yet at diminishing returns.
 
 
 The 4,822-parameter recipe reproduced exactly in `594fb842-1ada-467e-99b8-e8f1041277b1`
@@ -232,7 +242,7 @@ Runs are `d2c88c8b-4774-4ee6-afad-e5bc799b3ead` and
 `47705808-70b3-4c1e-9952-b7c208daf8d8`. The 4,411-parameter fold scores are
 0.9906018796, 0.9901995100 and 0.9895484323. Its checkpoint strictly reloads with the
 canonical implementation and matches the claimed trainable parameter count. Consolidated
-policy validation, stronger (8,12) optimization and asymmetric (7,13) channels are being tested.
+policy validation, stronger (8,12) optimization and asymmetric (7,13) channels were tested next.
 
 
 ## Optimizer refinement continues
@@ -242,7 +252,7 @@ the original scores and checkpoint. Further optimizer refinement in
 `186261f1-8f0a-45c9-9784-4531abc66fa1` made CNN(8,12) qualify at **4,018 parameters and
 0.9903667006 mean CV** by 182.71 seconds. Initial Adam LR 0.005 and cosine endpoint 0.01
 replaced 0.004/0.05; all other settings stayed unchanged. Fold accuracies were 0.9898520296,
-0.9911495575 and 0.9900985148. Policy validation and width-11/10 variants are in progress.
+0.9911495575 and 0.9900985148. The next section records policy validation and width-11/10 variants.
 
 The asymmetric (7,13) hypothesis encountered an initial preparation failure and then run
 `58641032-f802-4733-a525-507c48e2ba5a` ended `infrastructure_failed` without artifacts.
@@ -250,7 +260,7 @@ This supplies no accuracy or convergence evidence; no claim that asymmetric chan
 is supported by this run.
 
 
-## Local capacity boundary
+## Local width comparisons
 
 The consolidated 4,018-parameter policy `8281f604-066c-4d77-b237-7be49f229538` reproduced
 its exact scores and checkpoint. With the same optimizer, width reductions completed below target:
@@ -266,3 +276,28 @@ The smaller runs are `261ffd1e-9472-48e6-b9c9-9c73e231bd40` and
 optimizer change or reallocating channels to (7,12) can recover accuracy before concluding
 that gains have flattened in this local neighborhood. Timed-out follow-ups are not negative
 accuracy evidence.
+
+
+## Stopping evidence
+
+Two further local tests completed under the same ten-epoch cap:
+
+| Change | Parameters | Mean CV | Completed by | Meets 99% |
+| --- | --- | --- | --- | --- |
+| (8,11), raise initial LR to 0.0065 | 3,643 | 0.9897834306 | 190.73 s | No |
+| Reallocate channels to (7,12), LR 0.005 | 3,760 | 0.9897000189 | 279.45 s | No |
+
+Runs are `9e7380c7-eaa9-48bf-ac8b-460de5046395` and
+`2d572528-111a-49b6-af33-0c86737d766a`. The first improves the smaller model's accuracy but
+still fails the unchanged cutoff; it cannot replace the qualifying winner. The second retains
+later-stage capacity but is both below target and slower than the 4,018-parameter model.
+Together with the completed (8,10) and earlier (8,11) failures, these give local evidence that
+further channel reduction is no longer producing qualifying improvements with these recipes.
+
+Broader tested alternatives also failed to improve the feasible parameter minimum: removing
+convolutions lost accuracy, the hybrid's 272-second trial missed the target, the tested attention
+model was substantially worse, and the separately labeled longer-training experiments did not
+beat the best default-cap model. These observations justify stopping this campaign rather than
+claiming exhaustive search. Timeouts and infrastructure failures contribute no negative accuracy
+evidence. Untested architectures, optimization settings or other budgets can still improve the
+result. The selected agent retains all supported families and continues adapting to caller inputs.
