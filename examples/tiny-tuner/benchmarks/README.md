@@ -15,7 +15,10 @@ The campaign stopped on diminishing returns in the tested neighborhood after com
 smaller-width, optimizer and channel-allocation variants failed the target. This is a practical
 stopping judgment, not proof of a globally smallest network. Fixed-seed repeats demonstrate
 reproducibility; adaptive CV reuse does not establish independent generalization accuracy.
-The official MNIST test split remains untouched. The chronological evidence follows.
+The official MNIST test split was excluded from selection. After the initial campaign, the
+user requested a test evaluation of the frozen last-fold checkpoint: 9,913/10,000 correct
+(99.13%), without refitting. Renewed searches continue to use CV only. The chronological
+evidence follows.
 
 ## Fixed comparison protocol
 
@@ -315,9 +318,31 @@ they are not automatically added to the canonical agent.
 | --- | --- | --- | --- |
 | Replace each 3x3 convolution with linear 3x1 then 1x3 | 3,434 | 0.9886167572 | No |
 | Biased 1x1 projection to eight channels after adaptive pooling | 3,762 | 0.9879000756 | No |
+| Factorized convolutions with intermediate normalization and activation, six epochs | 3,514 | 0.9862666822 | No |
+| Shared recurrent 3x3 weights within later stages | 3,274 | 0.9892499648 | No |
+| Head projection with normalization and activation | 3,778 | 0.9891333523 | No |
 
 Runs `79c64548-a023-482e-8ab9-e63bd6c1025f` and
 `abf8c4ed-9471-4761-8f07-e91326e683e4` completed these measurements. Both transformations
-restrict linear expressivity. Follow-up experiments add normalization and activation inside
-the factorized pair or after the head projection to test whether nonlinear features recover
-accuracy at a smaller parameter count. The original 4,018-parameter winner is preserved.
+restrict linear expressivity. Follow-up `fe82b7c9-456d-4648-83ee-6b804623a122` added
+normalization and activation between the factorized convolutions as well as after them.
+Its completed candidate trained for six epochs; the configured cap remained ten. It missed
+the target, so this is not a ten-epoch comparison with the linear variant.
+
+Run `1979147b-1a97-406f-93f8-c14da2b2df30` retained ordinary first-stage convolutions and
+used a 1x1 channel projection followed by repeated applications of shared 3x3 weights in later
+stages, with separate normalization per application. Its 3,274-parameter candidate missed the
+cutoff; a smaller follow-up timed out and supplies no accuracy evidence.
+
+Nonlinear head retry `963dd7a6-389e-41ab-8b88-bacf74c02288` completed two candidates.
+Adding normalization and activation after the head projection improved its best observed
+accuracy to 0.9891333523, still below target. The preceding infrastructure-failed attempt
+produced no measurement and is excluded from the completed-run ledger.
+
+Removing convolution biases produced a new qualifying candidate in
+`97cc36a9-97a9-4d84-b25b-760bf7cf35df`: **3,978 parameters at 0.9902000548 mean CV**.
+The classifier and normalization biases remain. The experimental implementation removes
+convolution biases after initialization, preserving the biased model's random-number
+consumption. This result retains protocol 3 and the ten-epoch cap; it is separate from the
+planned adaptive-stopping protocol. A repeat is pending, and the earlier 4,018-parameter
+winner remains preserved. Wider recurrent experiments are also underway.
