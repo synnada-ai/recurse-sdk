@@ -6,7 +6,7 @@ reaches a target mean cross-validation accuracy on MNIST. Defaults are **0.99 ac
 It keeps shrinking after it reaches the accuracy target and preserves the smallest qualifying
 recipe it actually measured. It reports the smallest **found**, not a proven global minimum.
 
-The cloud refinement campaign found a **4,018-parameter CNN at 99.0367% mean CV** under
+The cloud refinement campaign found a **3,978-parameter CNN at 99.0200% mean CV** under
 these defaults. The recipe reproduced across two independent cloud runs with fixed seeds.
 See [cloud experiments](benchmarks/README.md) for the measured comparisons and limitations.
 
@@ -24,6 +24,7 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | --- | --- |
 | MLP | Flatten 28×28 pixels, one to three dense hidden layers, ten-class linear head |
 | CNN | One to three stages of one or two padded 3×3 convolutions, normalization/activation after each, 2×2 pooling after each stage; configurable adaptive average pooling (side 1–7, default 2) and a linear head |
+| Bias-free CNN | Same conventional CNN stages, with convolution biases removed; normalization affine terms and classifier bias remain |
 | Separable CNN | Each convolution replaced by a depthwise 3×3 convolution and a pointwise 1×1 convolution; same pooling and head |
 | Patch attention | Non-overlapping 7×7 patch projection (16 tokens), learned positions, one attention head, residual attention and feedforward layers with 2× expansion, mean token pooling and a linear head |
 | Normalization | None; batch normalization for MLP/CNN; layer normalization for MLP/attention; one-group group normalization for CNN |
@@ -31,7 +32,8 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | Training | Adam learning rate, L2 weight decay, minibatch size, epoch ceiling, optional inner-validation early stopping, and constant/cosine learning-rate schedule |
 
 Widths range from 1 to 256; attention uses one embedding width. Biases, normalization affine
-parameters, and learned positions count toward size. Batch-normalization running statistics
+parameters, and learned positions count toward size. The bias-free variant removes convolution
+biases after initialization so other initial tensors match the ordinary CNN for a fixed seed. Batch-normalization running statistics
 are buffers and do not count. No pruning, quantization, augmentation, pretrained weights,
 convolutional residual blocks, or arbitrary Python architectures are included. Attention is an
 optional experiment; the agent need not spend its limited budget testing every family.

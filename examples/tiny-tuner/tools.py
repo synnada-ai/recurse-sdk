@@ -36,7 +36,7 @@ _MIN_INNER_CLASS_SIZE = 2
 class Candidate:
     """A dense or convolutional network and its complete training recipe."""
 
-    family: Literal["mlp", "cnn", "separable", "attention"]
+    family: Literal["mlp", "cnn", "separable", "biasfree", "attention"]
     widths: tuple[int, ...]
     learning_rate: float
     weight_decay: float
@@ -54,8 +54,8 @@ class Candidate:
 
 def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bounded recipe fields
     """Reject malformed or unbounded recipes before allocating resources."""
-    if candidate.family not in {"mlp", "cnn", "separable", "attention"}:
-        raise ValueError("family must be mlp, cnn, separable, or attention")
+    if candidate.family not in {"mlp", "cnn", "separable", "biasfree", "attention"}:
+        raise ValueError("family must be mlp, cnn, separable, biasfree, or attention")
     if not 1 <= len(candidate.widths) <= _MAX_DEPTH or any(
         type(width) is not int or not 1 <= width <= _MAX_WIDTH for width in candidate.widths
     ):
@@ -64,6 +64,7 @@ def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bound
         "mlp": {"none", "batch", "layer"},
         "cnn": {"none", "batch", "group"},
         "separable": {"none", "batch", "group"},
+        "biasfree": {"none", "batch", "group"},
         "attention": {"none", "layer"},
     }
     if candidate.normalization not in allowed_norms[candidate.family]:
@@ -72,7 +73,7 @@ def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bound
         raise ValueError("activation must be relu/gelu and pooling must be max/average")
     if type(candidate.head_size) is not int or not 1 <= candidate.head_size <= _MAX_HEAD_SIZE:
         raise ValueError("head_size must be an integer between 1 and 7")
-    if candidate.family in {"cnn", "separable"} and candidate.head_size > (
+    if candidate.family in {"cnn", "separable", "biasfree"} and candidate.head_size > (
         _IMAGE_WIDTH // 2 ** len(candidate.widths)
     ):
         raise ValueError("head_size cannot exceed the final spatial width")
@@ -103,7 +104,7 @@ def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bound
 
 
 def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
-    family: Literal["mlp", "cnn", "separable", "attention"],
+    family: Literal["mlp", "cnn", "separable", "biasfree", "attention"],
     widths: tuple[int, ...],
     *,
     learning_rate: float = 0.001,
@@ -122,7 +123,9 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     """Construct a bounded architecture and training recipe without training it.
 
     Args:
-        family: mlp, cnn (3x3 convolutions), separable (depthwise + pointwise), or attention
+        family: mlp, cnn (3x3 convolutions), separable (depthwise + pointwise), biasfree
+            (ordinary CNN without convolution biases; classifier and normalization keep
+            their biases), or attention
             (7x7 patches, 16 tokens, one attention head, residual feedforward block).
         widths: One to three hidden widths or convolution channel counts, each 1 to 256.
         learning_rate: Adam learning rate in (0, 1].
@@ -150,7 +153,8 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
             of 1 uses the initial rate for epoch one and the minimum thereafter.
 
     Returns:
-        A recipe to pass directly to evaluate_network. All layers include trainable biases.
+        A recipe to pass directly to evaluate_network. Layers include trainable biases
+        except convolutions in the biasfree family.
     """
     candidate = Candidate(
         family,
@@ -244,7 +248,11 @@ def _network(candidate: Candidate) -> nn.Module:
                         )
                     )
                 else:
-                    layers.append(nn.Conv2d(features, width, 3, padding=1))
+                    convolution = nn.Conv2d(features, width, 3, padding=1)
+                    if candidate.family == "biasfree":
+                        # Preserve ordinary-CNN RNG draws for subsequent weight initialization.
+                        convolution.register_parameter("bias", None)
+                    layers.append(convolution)
                 layers.extend((_normalization(candidate, width, True), _activation(candidate)))
                 features = width
             pool = nn.MaxPool2d(2) if candidate.pooling == "max" else nn.AvgPool2d(2)
