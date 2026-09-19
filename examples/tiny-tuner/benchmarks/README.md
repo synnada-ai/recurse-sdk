@@ -349,6 +349,13 @@ exactly the 3,978-parameter score and checkpoint SHA-256. The earlier 4,018-para
 remains preserved. Wider recurrent run `4914328a-c949-4aba-afac-8a1ae5716958` completed
 at 3,605 parameters and 0.9887999731 mean CV in 233.73 seconds, below target.
 
+Residual recurrent run `4dbc5c5c-fed7-45ed-a742-40fb601bec12` tested whether identity
+paths improve optimization of shared weights. Each repeated application becomes
+`x = activation(x + norm(shared_conv(x)))`, retaining the same initial tensors and 3,274
+parameters as the original recurrent candidate. Its completed mean CV was 0.9875833764,
+below both the 99% cutoff and the non-residual result. This tested residual recipe supplies
+no improvement; it does not rule out other recurrent training settings.
+
 Protocol 4 adaptive-stopping experiments are now running. They reserve an inner holdout
 within each outer-training fold, restore the best inner-loss checkpoint, and use a separately
 configured epoch ceiling and learning-rate horizon. Their results must be compared separately

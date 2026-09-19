@@ -6753,5 +6753,122 @@
         "sample_seconds": 0.16187722300000473
       }
     ]
+  },
+  {
+    "revision": "residual-recurrent",
+    "run_id": "4dbc5c5c-fed7-45ed-a742-40fb601bec12",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.98758337638202,
+      "parameter_count": 3274,
+      "stop_reason": "wall_clock",
+      "target_reached": false,
+      "trials_attempted": 2
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "experimental_blocks": "recurrent: ordinary first-stage convolutions; later stages use 1x1 projection, normalization and activation, then x=activation(x+norm(shared_conv(x))) for each repeated shared 3x3 convolution application. Normalization is separate per application. Residual additions introduce no parameters; initial tensors match recurrent-stage. Not included in canonical tools.",
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "recurrent",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.98758337638202,
+        "cv_std": 0.001142893767090053,
+        "elapsed_seconds": 211.390049649,
+        "fold_accuracies": [
+          0.986752649470106,
+          0.9891994599729986,
+          0.9867980197029554
+        ],
+        "parameter_count": 3274,
+        "remaining_seconds": 88.60995035100001,
+        "status": "completed",
+        "target_reached": false,
+        "training_examples": 40003,
+        "trial": 1
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "recurrent",
+          "head_size": 3,
+          "learning_rate": 0.01,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "elapsed_seconds": 300.0,
+        "remaining_seconds": 0.0,
+        "status": "timed_out",
+        "trial": 2
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "recurrent",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 150.76569914999803,
+        "parameter_count": 3274,
+        "remaining_seconds": 298.89569727500003,
+        "sample_seconds": 0.1926718199999975
+      }
+    ]
   }
 ]
