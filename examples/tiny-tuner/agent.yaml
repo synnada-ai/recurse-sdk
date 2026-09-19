@@ -2,62 +2,157 @@ apiVersion: recurse.run/v1alpha1
 kind: Agent
 metadata:
   name: tiny-tuner
-  title: Tiny Model Tuner
-  summary: Tunes a tiny classifier across feature and training configurations.
+  title: Tiny MNIST Network Search
+  summary: Finds smaller neural networks meeting a target MNIST cross-validation accuracy.
 runtime:
   python: "3.14"
   lockfile: uv.lock
 agent:
+  model: gpt-5.6-luna
   prompt: prompt.md
+  timeout_tools: 660
 inputs:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object
-  required: [target_f1, max_trials]
   properties:
-    target_f1:
+    target_accuracy:
       type: number
       minimum: 0
       maximum: 1
-      description: Validation F1 score that ends the search once reached.
+      default: 0.99
+      description: Required arithmetic mean accuracy across the configured CV splits.
+    max_seconds:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 600
+      default: 300
+      description: Shared wall-clock allowance starting with the first profile or evaluation.
     max_trials:
       type: integer
       minimum: 1
-      description: Maximum number of distinct trials to run.
-    optimizer_momentum:
+      maximum: 100
+      default: 30
+      description: Additional cap on attempted recipes, including failures and timeouts.
+    max_epochs:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      description: Maximum training epochs per fold of a candidate.
+    stopping_method:
+      type: string
+      enum: [fixed, early_stopping]
+      default: fixed
+      description: Fixed epoch training or inner-validation early stopping, never outer-fold stopping.
+    patience:
+      type: integer
+      minimum: 1
+      maximum: 20
+      default: 3
+      description: Consecutive epochs without a min_delta inner-loss improvement before stopping.
+    min_delta:
       type: number
       minimum: 0
       maximum: 1
-      default: 0.8
-      description: Momentum applied by the training optimizer.
+      default: 0.0001
+      description: Absolute inner cross-entropy improvement required to reset patience.
+    min_epochs:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 3
+      description: Earliest patience stop; candidate epochs and max_epochs still cap training.
+    stopping_validation_fraction:
+      type: number
+      minimum: 0.05
+      maximum: 0.5
+      default: 0.1
+      description: Stratified inner holdout fraction taken only from each outer training partition.
+    cv_folds:
+      type: integer
+      minimum: 2
+      maximum: 5
+      default: 3
+      description: Folds per K-fold repetition within MNIST's training split; ignored for holdout.
+    cv_method:
+      type: string
+      enum: [stratified_kfold, kfold, stratified_holdout]
+      default: stratified_kfold
+      description: Evaluation method, fixed for the entire run.
+    cv_repeats:
+      type: integer
+      minimum: 1
+      maximum: 5
+      default: 1
+      description: Independent deterministic split repetitions on the same selected examples.
+    validation_fraction:
+      type: number
+      minimum: 0.05
+      maximum: 0.5
+      default: 0.2
+      description: Per-class validation fraction for stratified_holdout; ignored for K-fold.
+    cv_seed:
+      type: integer
+      minimum: 0
+      maximum: 2147483647
+      default: 7
+      description: Seed for selecting examples and splitting folds, separate from training seed.
+    samples:
+      type: integer
+      minimum: 100
+      maximum: 60000
+      multipleOf: 10
+      default: 60000
+      description: Training examples used for CV; smaller values balance classes subject to available counts.
+    seed:
+      type: integer
+      minimum: 0
+      maximum: 2147483647
+      default: 7
+      description: Model initialization and minibatch seed shared by every candidate.
     task:
       type: string
       default: |
-        Search the multidimensional configuration space for a model with validation F1 >=
-        {{ input.target_f1 }}. Run no more than {{ input.max_trials }} distinct trials. Compare
-        every candidate with the accumulated validated models, revise your theory after each
-        validation, and save the best model when you finish.
+        Find the smallest network by trainable parameter count with mean MNIST CV accuracy
+        >= {{ input.target_accuracy }}. Search for up to {{ input.max_seconds }} seconds,
+        at most {{ input.max_trials }} recipes, and at most {{ input.max_epochs }} epochs per fold.
+        Every recipe uses {{ input.cv_method }} with {{ input.cv_folds }} folds or holdout
+        fraction {{ input.validation_fraction }}, repeated {{ input.cv_repeats }} times on
+        {{ input.samples }} examples. Split seed is {{ input.cv_seed }}; training seed is
+        {{ input.seed }}. Stopping method is {{ input.stopping_method }}: inner validation
+        fraction {{ input.stopping_validation_fraction }}, patience {{ input.patience }},
+        minimum improvement {{ input.min_delta }}, and minimum epochs {{ input.min_epochs }}.
+        These stopping controls apply only to early_stopping; fixed uses the recipe's epoch count.
+        Keep shrinking after reaching the target.
   additionalProperties: false
 outputs:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object
-  required: [best_f1, target_reached]
+  required: [target_reached, cv_accuracy, parameter_count, trials_attempted, stop_reason]
   properties:
-    best_f1:
-      type: number
-      minimum: 0
-      maximum: 1
-      description: Highest validation F1 measured during the run.
     target_reached:
       type: boolean
-      description: Whether the best validation F1 met the requested target.
+    cv_accuracy:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+    parameter_count:
+      type: [integer, "null"]
+      minimum: 1
+    trials_attempted:
+      type: integer
+      minimum: 0
+    stop_reason:
+      enum: [wall_clock, trial_budget, diminishing_returns]
   additionalProperties: false
 tools:
   source: tools.py
   built_in: true
   register:
-    extract_features: ~
-    train_model:
+    design_network: ~
+    profile_network:
       volatile: true
-    validate_model: ~
-    save_best_model:
+    evaluate_network:
+      volatile: true
+    finish_search:
       storable: false
