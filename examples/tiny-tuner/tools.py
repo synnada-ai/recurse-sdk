@@ -47,6 +47,7 @@ class Candidate:
     head_size: int = 2
     schedule: Literal["constant", "cosine"] = "constant"
     convs_per_stage: int = 1
+    min_lr_ratio: float = 0.1
 
 
 def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bounded recipe fields
@@ -79,6 +80,8 @@ def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bound
         raise ValueError("learning_rate must be finite and in (0, 1]")
     if candidate.schedule not in {"constant", "cosine"}:
         raise ValueError("schedule must be constant or cosine")
+    if not math.isfinite(candidate.min_lr_ratio) or not 0 <= candidate.min_lr_ratio <= 1:
+        raise ValueError("min_lr_ratio must be finite and in [0, 1]")
     if type(candidate.convs_per_stage) is not int or candidate.convs_per_stage not in {1, 2}:
         raise ValueError("convs_per_stage must be an integer, 1 or 2")
     if not math.isfinite(candidate.weight_decay) or not 0 <= candidate.weight_decay <= 1:
@@ -106,6 +109,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     head_size: int = 2,
     schedule: Literal["constant", "cosine"] = "constant",
     convs_per_stage: int = 1,
+    min_lr_ratio: float = 0.1,
 ) -> Candidate:
     """Construct a bounded architecture and training recipe without training it.
 
@@ -125,10 +129,13 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
             final spatial width. Larger values preserve spatial detail at a parameter cost.
             Ignored by MLP and attention families.
         schedule: constant or cosine learning rate across epochs. Cosine starts at
-            learning_rate and ends at 10% of it; one epoch uses learning_rate unchanged.
+            learning_rate and ends at min_lr_ratio times it; one epoch uses learning_rate
+            unchanged.
         convs_per_stage: One or two convolution blocks per CNN/separable stage, each
             followed by normalization and activation. Pool once per stage. Ignored by
             MLP and attention. A separable block is depthwise followed by pointwise.
+        min_lr_ratio: Final cosine learning rate divided by initial learning_rate, in
+            [0, 1], default 0.1. Ignored by constant schedules and one-epoch training.
 
     Returns:
         A recipe to pass directly to evaluate_network. All layers include trainable biases.
@@ -146,6 +153,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         head_size,
         schedule,
         convs_per_stage,
+        min_lr_ratio,
     )
     _check(candidate)
     return candidate
@@ -359,7 +367,11 @@ def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
         generator = torch.Generator().manual_seed(seed)
         for epoch in range(candidate.epochs):
             if candidate.schedule == "cosine":
-                factor = 0.55 + 0.45 * math.cos(math.pi * epoch / max(1, candidate.epochs - 1))
+                factor = (1 + candidate.min_lr_ratio) / 2 + (
+                    (1 - candidate.min_lr_ratio)
+                    / 2
+                    * math.cos(math.pi * epoch / max(1, candidate.epochs - 1))
+                )
                 for group in optimizer.param_groups:
                     group["lr"] = candidate.learning_rate * factor
             shuffled = indices[torch.randperm(len(indices), generator=generator)]

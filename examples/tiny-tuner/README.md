@@ -31,8 +31,8 @@ parameters, and learned positions count toward size. Batch-normalization running
 are buffers and do not count. No pruning, quantization, augmentation, pretrained weights,
 convolutional residual blocks, or arbitrary Python architectures are included. Attention is an
 optional experiment; the agent need not spend its limited budget testing every family.
-Cosine scheduling decreases the initial learning rate to 10% across epochs, resetting for
-each fold. A one-epoch recipe uses its initial learning rate.
+Cosine scheduling decreases the initial learning rate to a configurable final fraction
+(default 10%) across epochs, resetting for each fold. A one-epoch recipe uses its initial learning rate.
 
 ## How the loop works
 
