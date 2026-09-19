@@ -2,9 +2,9 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. The smallest qualifying model found so far has **5,698 parameters at 99.048325% mean CV**.
-It reproduced the same fold scores in two independent Astra searches and the consolidated Luna
-policy. This is fixed-seed repeatability, not an independent generalization estimate or proof
+`target_reached: true`. The smallest qualifying model found so far has **4,822 parameters at 99.011665% mean CV**.
+Its repeat is running. The earlier 5,698-parameter recipe reproduced the same fold scores in
+two independent Astra searches and two consolidated Luna policy runs. This is fixed-seed repeatability, not an independent generalization estimate or proof
 of a globally smallest network. Final policy repeats and compact hypotheses are still running.
 
 ## Fixed comparison protocol
@@ -198,3 +198,23 @@ and leaves architecture and training choices adaptive. Under identical inputs, L
 recipe at 304.78 estimated training seconds and instead chose eight epochs, batch 256,
 and LR 0.004. That completed below target. Host variability and short profiling samples limit
 this comparison; it does not establish a general ranking of the language models.
+
+
+The consolidated Luna repeat `8d46348e-7e98-4f0a-8a0a-41a72aa89c85` reproduced the same
+5,698-parameter checkpoint and scores by 148.44 seconds. An exploratory hybrid with a regular
+first convolution and depthwise-separable subsequent blocks scored 0.9855834288 at 2,434
+parameters in `fc1c1cf8-3076-4cb7-9042-74a0433d0050`. It needed 272.46 seconds, leaving little
+headroom for widening. This measured tradeoff did not justify adding the block to the shipped
+agent; it does not disprove hybrid architectures under other budgets.
+
+## Further gain from optimization
+
+Run `2a281950-498b-40b0-b827-585b6425641f` revisited the 4,822-parameter CNN(8,14), two
+convolutions per stage, head 3. Raising Adam's initial learning rate from 0.003 to 0.004 and
+lowering the cosine endpoint from 0.1 to 0.05 produced **0.9901166456 mean CV** by 186.22
+seconds. Other settings stayed batch norm/ReLU/max, weight decay 0.0001, batch 128, ten epochs.
+Fold accuracies were 0.9901019796, 0.9907995400, 0.9894484173. This is a joint optimization
+change; the experiment does not isolate the individual contribution of learning rate versus
+endpoint. The checkpoint passed strict reload, parameter recount and finite-logit inference.
+A repeat and narrower-width investigations are running; the new size improvement means the
+previous neighborhood was not yet at diminishing returns.
