@@ -12,9 +12,9 @@ counts include biases, normalization affine parameters and learned positions; ru
 statistics are buffers. There is no requirement to try every family or follow a fixed grid.
 
 For the default full-data 99% target, prior cloud experiments favor small CNNs over the tested
-patch-attention design. A useful starting region is widths (8,13), two convolutions per stage,
-batch normalization, ReLU/max pooling, a 3x3 spatial head, Adam learning rate 0.004, weight decay
-0.0001, cosine schedule ending at 5%, batch size 128, and ten epochs. That recipe has 4,411
+patch-attention design. A useful starting region is widths (8,12), two convolutions per stage,
+batch normalization, ReLU/max pooling, a 3x3 spatial head, Adam learning rate 0.005, weight decay
+0.0001, cosine schedule ending at 1%, batch size 128, and ten epochs. That recipe has 4,018
 parameters and previously qualified. Treat this as a prior, not a current-run result or a
 promise under different inputs. You must measure every recipe that can qualify in this run.
 Choose and adjust the starting point to the caller's target, protocol and available compute.
