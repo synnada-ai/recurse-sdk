@@ -356,7 +356,50 @@ parameters as the original recurrent candidate. Its completed mean CV was 0.9875
 below both the 99% cutoff and the non-residual result. This tested residual recipe supplies
 no improvement; it does not rule out other recurrent training settings.
 
-Protocol 4 adaptive-stopping experiments are now running. They reserve an inner holdout
-within each outer-training fold, restore the best inner-loss checkpoint, and use a separately
-configured epoch ceiling and learning-rate horizon. Their results must be compared separately
-from these protocol 3 fixed-training measurements.
+## Adaptive stopping: separate protocol 4 results
+
+These experiments reserve a stratified 10% inner holdout within each outer-training fold,
+restore the absolute minimum inner-loss checkpoint, and score the outer fold once. The epoch
+ceiling is 30; cosine decay reaches its floor at epoch ten and then holds it. Patience is three,
+minimum training is three epochs, and the significant-improvement threshold is 0.0001.
+
+| Candidate | Parameters | Mean CV | Executed epochs by fold | Selected epochs by fold | Completed by | Meets 99% |
+| --- | --- | --- | --- | --- | --- | --- |
+| CNN(8,11), two convolutions per stage | 3,643 | 0.9892500406 | 14 / 14 / 16 | 11 / 11 / 13 | 267.21 s | No |
+| CNN(8,12), two convolutions per stage | 4,018 | 0.9895334039 | 15 / 15 / 13 | 12 / 12 / 13 | 216.23 s | No |
+
+Runs are `362ffdb6-2f08-4d37-9431-2170b475fbef` and
+`eabd8077-56dc-4e12-8d70-f7569ac1f9aa`. Every completed fold stopped by patience. Audit
+of the recorded curves confirms that each selected epoch minimizes inner loss, and that
+patience follows the significant-improvement threshold. A small loss improvement can select
+a new checkpoint without resetting patience; this explains the baseline's third fold selecting
+its final executed epoch. Fit/inner-validation counts are 35,997/3,999, 36,000/4,001 and
+36,001/4,002 across the three folds.
+
+Neither adaptive candidate met 99%. These results do not isolate the causal effect of early
+stopping: reserving the inner holdout also reduces fitting data compared with protocol 3,
+and the epoch ceiling changes. The configurable method works and records inspectable learning
+curves, but current evidence supports retaining fixed training as the default. Protocol 4
+measurements remain separate from the fixed-training ranking.
+
+## Final canonical policy and local stopping evidence
+
+Canonical policy run `513dfd7e-45fe-4b57-bac3-0a1799ec1f5d` reproduced the
+**3,978-parameter, 0.9902000548 mean-CV** result by **177.26 seconds**. This is the third
+identical measurement of the recipe, including the original structural experiment and its
+repeat. All three checkpoint SHA-256 values match. The final checkpoint strictly reloads
+through the canonical implementation, contains exactly 3,978 trainable parameters, and
+produces finite ten-class outputs. Its smaller follow-up timed out and contributes no
+negative accuracy evidence.
+
+The renewed campaign stops on diminishing returns within the tested neighborhood. Completed
+factorized, compressed-head, recurrent and residual-recurrent recipes did not improve the
+qualifying minimum; removing convolution biases produced the one verified reduction, from
+4,018 to 3,978 parameters. This supports retaining the measured winner, not claiming a global
+minimum or ruling out untested architectures and optimizer settings. Infrastructure failures
+and timed-out trials provide no evidence that a candidate cannot reach the target.
+
+Fixed training remains the default based on its replicated qualifying result. Inner-validation
+early stopping and an independent cosine horizon remain configurable, with their measurements
+reported separately under protocol 4. The final ledger contains 56 runs and 117 attempted
+recipes, including 54 runs under earlier fixed-training protocols and two protocol 4 runs.
