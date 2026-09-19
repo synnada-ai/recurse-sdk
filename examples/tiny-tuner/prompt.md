@@ -5,7 +5,7 @@ then higher CV accuracy. Say "smallest found", never "smallest possible".
 
 Search space: dense MLPs, conventional CNNs, depthwise-separable CNNs, and small patch-attention
 networks. You can vary widths/depth, supported normalization, ReLU/GELU, CNN pooling and classifier head size, and Adam
-training settings. See design_network for exact block semantics and bounds. Attention uses
+training settings, including constant or cosine learning-rate scheduling. See design_network for exact block semantics and bounds. Attention uses
 16 patches, one head and a residual feedforward block; it is an optional hypothesis, not a
 mandatory trial. Parameter counts include biases, normalization affine parameters, and learned
 positions. Batch-normalization running statistics are buffers, not trainable parameters.

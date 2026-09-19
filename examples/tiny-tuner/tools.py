@@ -45,6 +45,7 @@ class Candidate:
     activation: Literal["relu", "gelu"]
     pooling: Literal["max", "average"]
     head_size: int = 2
+    schedule: Literal["constant", "cosine"] = "constant"
 
 
 def _check(candidate: Candidate) -> None:
@@ -75,6 +76,8 @@ def _check(candidate: Candidate) -> None:
         raise ValueError("attention requires exactly one embedding width")
     if not math.isfinite(candidate.learning_rate) or not 0 < candidate.learning_rate <= 1:
         raise ValueError("learning_rate must be finite and in (0, 1]")
+    if candidate.schedule not in {"constant", "cosine"}:
+        raise ValueError("schedule must be constant or cosine")
     if not math.isfinite(candidate.weight_decay) or not 0 <= candidate.weight_decay <= 1:
         raise ValueError("weight_decay must be finite and in [0, 1]")
     if type(candidate.epochs) is not int or not 1 <= candidate.epochs <= _MAX_EPOCHS:
@@ -98,6 +101,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     activation: Literal["relu", "gelu"] = "relu",
     pooling: Literal["max", "average"] = "max",
     head_size: int = 2,
+    schedule: Literal["constant", "cosine"] = "constant",
 ) -> Candidate:
     """Construct a bounded architecture and training recipe without training it.
 
@@ -116,6 +120,8 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         head_size: CNN adaptive average pooling output side, 1 to 7, no larger than the
             final spatial width. Larger values preserve spatial detail at a parameter cost.
             Ignored by MLP and attention families.
+        schedule: constant or cosine learning rate across epochs. Cosine starts at
+            learning_rate and ends at 10% of it; one epoch uses learning_rate unchanged.
 
     Returns:
         A recipe to pass directly to evaluate_network. All layers include trainable biases.
@@ -131,6 +137,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         activation,
         pooling,
         head_size,
+        schedule,
     )
     _check(candidate)
     return candidate
@@ -330,7 +337,11 @@ def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
             model.parameters(), lr=candidate.learning_rate, weight_decay=candidate.weight_decay
         )
         generator = torch.Generator().manual_seed(seed)
-        for _ in range(candidate.epochs):
+        for epoch in range(candidate.epochs):
+            if candidate.schedule == "cosine":
+                factor = 0.55 + 0.45 * math.cos(math.pi * epoch / max(1, candidate.epochs - 1))
+                for group in optimizer.param_groups:
+                    group["lr"] = candidate.learning_rate * factor
             shuffled = indices[torch.randperm(len(indices), generator=generator)]
             for batch in shuffled.tensor_split(
                 max(1, math.ceil(len(shuffled) / candidate.batch_size))

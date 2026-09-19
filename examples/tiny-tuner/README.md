@@ -24,13 +24,15 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | Patch attention | Non-overlapping 7×7 patch projection (16 tokens), learned positions, one attention head, residual attention and feedforward layers with 2× expansion, mean token pooling and a linear head |
 | Normalization | None; batch normalization for MLP/CNN; layer normalization for MLP/attention; one-group group normalization for CNN |
 | Activation / pooling | ReLU or GELU; max or average 2×2 pooling in CNNs |
-| Training | Adam learning rate, L2 weight decay, minibatch size and epochs per fold |
+| Training | Adam learning rate, L2 weight decay, minibatch size, epochs per fold, and constant/cosine learning-rate schedule |
 
 Widths range from 1 to 256; attention uses one embedding width. Biases, normalization affine
 parameters, and learned positions count toward size. Batch-normalization running statistics
 are buffers and do not count. No pruning, quantization, augmentation, pretrained weights,
 convolutional residual blocks, or arbitrary Python architectures are included. Attention is an
 optional experiment; the agent need not spend its limited budget testing every family.
+Cosine scheduling decreases the initial learning rate to 10% across epochs, resetting for
+each fold. A one-epoch recipe uses its initial learning rate.
 
 ## How the loop works
 
