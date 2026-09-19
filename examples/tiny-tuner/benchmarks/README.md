@@ -344,5 +344,12 @@ Removing convolution biases produced a new qualifying candidate in
 The classifier and normalization biases remain. The experimental implementation removes
 convolution biases after initialization, preserving the biased model's random-number
 consumption. This result retains protocol 3 and the ten-epoch cap; it is separate from the
-planned adaptive-stopping protocol. A repeat is pending, and the earlier 4,018-parameter
-winner remains preserved. Wider recurrent experiments are also underway.
+adaptive-stopping protocol. Repeat `46df0aff-42fc-4048-a3c4-6b4dde2eccb4` reproduced
+exactly the 3,978-parameter score and checkpoint SHA-256. The earlier 4,018-parameter winner
+remains preserved. Wider recurrent run `4914328a-c949-4aba-afac-8a1ae5716958` completed
+at 3,605 parameters and 0.9887999731 mean CV in 233.73 seconds, below target.
+
+Protocol 4 adaptive-stopping experiments are now running. They reserve an inner holdout
+within each outer-training fold, restore the best inner-loss checkpoint, and use a separately
+configured epoch ceiling and learning-rate horizon. Their results must be compared separately
+from these protocol 3 fixed-training measurements.
