@@ -71,10 +71,10 @@ final generalization. CPU reproducibility is scoped to the same software/platfor
 
 ## Run it
 
-Run with defaults:
+Run the default search with the cloud benchmark resource ceiling:
 
 ```sh
-recurse run examples/tiny-tuner
+recurse run examples/tiny-tuner --cpu 4 --memory-mib 4096
 ```
 
 Or create `inputs.json` with overrides:

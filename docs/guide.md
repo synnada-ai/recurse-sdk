@@ -594,9 +594,11 @@ CV method, fold count, repetitions, holdout fraction and split seed are configur
 
 1. `design_network` proposes an MLP, CNN, depthwise-separable CNN, or small patch-attention
    recipe, with supported normalization, activation, pooling and training choices.
-2. `evaluate_network` trains fresh models for the fixed folds, measures held-out accuracy,
+2. `profile_network` measures a discarded training sample to estimate full-CV training cost
+   within the shared time allowance; it produces no qualifying score.
+3. `evaluate_network` trains fresh models for the fixed folds, measures held-out accuracy,
    counts parameters, and records trials and fold checkpoints. Incomplete trials cannot qualify.
-3. `finish_search` selects the smallest qualifying measured network, saves its last-fold
+4. `finish_search` selects the smallest qualifying measured network, saves its last-fold
    checkpoint and metadata, and returns an authoritative receipt. If none qualifies, it
    reports that explicitly and retains the most accurate completed diagnostic when available.
 
@@ -613,8 +615,12 @@ artifacts, record = recurse.build_bundle("examples/tiny-tuner")
 print(record["apiVersion"], record["source"]["sha256"], len(artifacts["source"]))
 ```
 
-Run it directly with `recurse run examples/tiny-tuner --inputs inputs.json`, or deploy it with
-`recurse deploy examples/tiny-tuner --as mcp`.
+Use the benchmark resource ceiling for comparable timing:
+
+```sh
+recurse run examples/tiny-tuner --inputs inputs.json --cpu 4 --memory-mib 4096
+recurse deploy examples/tiny-tuner --as mcp --cpu 4 --memory-mib 4096
+```
 
 ## Predictive Modeler walkthrough
 

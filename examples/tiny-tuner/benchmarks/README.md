@@ -121,3 +121,48 @@ Adam 0.001 with cosine decay, and weight decay 0.0001. Fold accuracies were 0.99
 as trial 2 by 195.43 seconds. Its otherwise identical one-convolution-per-stage control scored
 0.9747499828. The attempted shrink to (12,24) exhausted the remaining budget without a score.
 The checkpoint is preserved, and repeat/size-reduction experiments are ongoing.
+
+## Compact refinement and repeat evidence
+
+The 17,850-parameter recipe reproduced the same fold scores in runs
+`f1aa4c3b-2afb-46b7-abb5-cd5a031144a8`, `71b940a3-85f3-466a-a1de-8d175c777d14`,
+and `b98cd508-b4dd-4cf4-ba4f-cd6a66bfccc3`. Their smaller follow-ups timed out, so these
+runs establish repeatability but do not establish a size floor. A spatial-shrink attempt
+`bda1efdf-f1d2-42ec-bbb0-bae27f4925e6` failed in infrastructure with no retained measurements;
+the successful isolated retry is the third run above.
+
+Astra run `cf54b303-5639-48b8-9e9e-f2f377b5668b` found CNN(8,16,32), head 3,
+Adam 0.003/cosine, batch norm/ReLU/max, weight decay 0.0001, batch 128, ten epochs:
+8,890 parameters and 0.9899666573 mean CV. It remained below the exact cutoff.
+
+The follow-up `e036cb3f-73da-4243-aa9d-571e0720adb6` raised initial LR to 0.004:
+
+| Channels | Parameters | Mean CV | Qualifies |
+| --- | --- | --- | --- |
+| (8,16,32) | 8,890 | 0.9903833406 | Yes |
+| (8,16,24) | 6,994 | 0.9897167148 | No |
+| (8,16,28) | **7,942** | **0.9903833781** | **Yes** |
+
+The final recipe has one convolution per stage and head 3; all other settings above are
+unchanged. It completed by 262.12 seconds, with fold scores 0.9897520496/0.9912495625/0.9901485223.
+This is the smallest qualifying model measured at this point, not a global minimum.
+An identical-agent repeat and further compact refinements are running. A separately labeled
+experiment permits 30 epochs under the same 300-second wall limit; those results must be
+identified as an expanded training search space rather than silently mixed with the 10-epoch cap.
+
+## Smaller-first search and cosine endpoint
+
+`92d4c52c-a0aa-44fc-be0f-7d0c920633dc` (Astra) found **5,698 parameters at 0.9904832523**:
+CNN(8,16), two convolutions per stage, head 3, batch norm/ReLU/max, Adam 0.003/cosine,
+weight decay 0.0001, batch 128 and ten epochs. Fold scores were 0.9910017996,0.9910995550,
+0.9893484023. It completed by 140.88 seconds. A 4,018-parameter (8,12) follow-up trained for
+seven epochs scored 0.9879167197. It is not a full 10-epoch result for that smaller recipe.
+The Luna smaller-first run attempted (12,24), profiled 252.72 seconds of training, and timed
+out before full CV. Narrowing channels did not guarantee cheaper CPU execution.
+
+The 7,942-parameter agent repeated its exact scores in `2ea0b3b7-ca75-436f-a72b-39b22f1d2d8b`.
+A lower cosine endpoint (min_lr_ratio 0.01) in `1df6b578-cee6-4c57-9960-e35236d5211a`
+raised the otherwise unchanged 6,994-parameter CNN(8,16,24) from 0.9897167148 to 0.9901499898.
+Its smaller 6,046-parameter (8,16,20) trial scored 0.9898833573. Scores below 0.99 were not
+rounded into qualification. The 5,698-parameter result remains the smallest measured so far;
+its repeat and further training/size refinements are in progress.
