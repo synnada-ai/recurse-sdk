@@ -2,16 +2,20 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. The deeper-block revision below first exceeds 99%; no run proves a globally smallest network.
+`target_reached: true`. The smallest qualifying model found so far has **5,698 parameters at 99.048325% mean CV**.
+It reproduced the same fold scores in two independent Astra searches and the consolidated Luna
+policy. This is fixed-seed repeatability, not an independent generalization estimate or proof
+of a globally smallest network. Final policy repeats and compact hypotheses are still running.
 
 ## Fixed comparison protocol
 
 - Target: arithmetic mean CV accuracy >= 0.99.
 - Full 60,000-example MNIST training set; official test split unused.
 - Stratified three-fold CV, one repetition; split seed 7, training seed 7.
-- Search allowance: 300 seconds from first evaluation, 30 attempted recipes, 10 epochs/fold max.
+- Search allowance: 300 seconds from first profile or evaluation, 30 attempted recipes, 10 epochs/fold max.
 - Cloud ceiling: 4 CPU, 4096 MiB; baseline tools use one intra-op training thread; later revisions may use the full ceiling.
-- Agent model: service-resolved gpt-5.6-luna. Runtime SDK 0.1.8, PyTorch 2.14.0 CPU.
+- Agent models: gpt-5.6-luna and gpt-6-astra, recorded per run in `runs.json`.
+  Runtime SDK 0.1.8, PyTorch 2.14.0 CPU. Separately labeled experiments permit 30 epochs.
 
 ## Baseline — 2026-09-18
 
@@ -27,13 +31,13 @@ rate 0.001, weight decay 0.0001, batch size 128, and five epochs per fold.
   remaining allowance and returned `timed_out`, with no qualifying partial CV score.
 - Receipt: `stop_reason: wall_clock`, `trials_attempted: 2`, `target_reached: false`.
 
-## Next hypothesis
+## Budget-aware hypothesis
 
 Uniform widening can consume roughly four times the convolution work when adjacent channel
 counts both double. A prompt revision asks the agent to estimate full-CV cost using completed
 trial timing, retain a time margin, and consider optimization or depth before uniform widening.
 This revision changes the search policy only; evaluator, architecture tools and budget remain
-identical. It is an experiment, not yet an established improvement.
+identical. The following section records its measured outcome.
 
 ## Build diagnostics
 
@@ -56,7 +60,7 @@ for the first trial. It chose a deeper, longer first experiment that could not f
 observation does not disprove cost-aware planning; it shows this prompt alone did not supply
 or enforce a reliable estimate. Future revisions need measurable trial-cost feedback or
 training-throughput improvements before claiming the five-minute 99% objective is attainable.
-No evidence of diminishing returns or a successful 99% agent has been established yet.
+At this stage neither feasibility nor diminishing returns had been established.
 
 ## CPU layout timing probe
 
@@ -120,7 +124,7 @@ Adam 0.001 with cosine decay, and weight decay 0.0001. Fold accuracies were 0.99
 0.9916995850 and 0.9902485373; population standard deviation 0.0006328228. It completed
 as trial 2 by 195.43 seconds. Its otherwise identical one-convolution-per-stage control scored
 0.9747499828. The attempted shrink to (12,24) exhausted the remaining budget without a score.
-The checkpoint is preserved, and repeat/size-reduction experiments are ongoing.
+The checkpoint is preserved; the subsequent sections record repeat and size-reduction results.
 
 ## Compact refinement and repeat evidence
 
@@ -146,7 +150,7 @@ The follow-up `e036cb3f-73da-4243-aa9d-571e0720adb6` raised initial LR to 0.004:
 The final recipe has one convolution per stage and head 3; all other settings above are
 unchanged. It completed by 262.12 seconds, with fold scores 0.9897520496/0.9912495625/0.9901485223.
 This is the smallest qualifying model measured at this point, not a global minimum.
-An identical-agent repeat and further compact refinements are running. A separately labeled
+The identical-agent repeat reproduced this result. A separately labeled
 experiment permits 30 epochs under the same 300-second wall limit; those results must be
 identified as an expanded training search space rather than silently mixed with the 10-epoch cap.
 
@@ -165,4 +169,32 @@ A lower cosine endpoint (min_lr_ratio 0.01) in `1df6b578-cee6-4c57-9960-e35236d5
 raised the otherwise unchanged 6,994-parameter CNN(8,16,24) from 0.9897167148 to 0.9901499898.
 Its smaller 6,046-parameter (8,16,20) trial scored 0.9898833573. Scores below 0.99 were not
 rounded into qualification. The 5,698-parameter result remains the smallest measured so far;
-its repeat and further training/size refinements are in progress.
+its exact repeat is recorded below.
+
+
+## Compact neighborhood and final policy
+
+The 5,698-parameter recipe reproduced exactly in `a30cfe20-8c9c-415c-a485-6f732bcda22b`.
+Nearby completed measurements retained the 10-epoch default cap:
+
+| Revision | Parameters | Mean CV | Meets 99% |
+| --- | --- | --- | --- |
+| Two-convolution (8,12), head 3, cosine endpoint 0.03 | 4,018 | 0.9893833439 | No |
+| Two-convolution (8,14), head 3, original optimizer | 4,822 | 0.9897166298 | No |
+| Two-convolution (8,16), head 2, LR 0.004 | 4,898 | 0.9891665973 | No |
+| Consolidated policy, Luna | 5,698 | 0.9904832523 | Yes |
+| Consolidated policy, Astra | 5,698 | 0.9896665014 | No |
+
+The head-2 result came from a run allowing up to 30 epochs, but that completed trial used
+only ten; its subsequent 20-epoch trial timed out. The other expanded-cap experiment completed
+a 6,994-parameter 15-epoch recipe at 0.9902166465. These results do not show that longer training
+is universally unhelpful. A (6,16) attempt timed out with no completed score and provides no
+size-floor evidence.
+
+The consolidated prompt describes the measured starting region, requests cost profiling,
+and leaves architecture and training choices adaptive. Under identical inputs, Luna run
+`a48078e1-1715-404f-85dc-b22181a0a53d` reproduced the 5,698-parameter recipe and scores by
+136.84 seconds. Astra run `e9f42737-1482-4b51-b44a-9421c6cead37` profiled the same starting
+recipe at 304.78 estimated training seconds and instead chose eight epochs, batch 256,
+and LR 0.004. That completed below target. Host variability and short profiling samples limit
+this comparison; it does not establish a general ranking of the language models.
