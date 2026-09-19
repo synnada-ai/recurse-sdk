@@ -2,7 +2,7 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. The smallest qualifying model found so far has **4,411 parameters at 99.011661% mean CV**.
+`target_reached: true`. The smallest qualifying model found so far has **4,018 parameters at 99.036670% mean CV**.
 Its final-policy validation is running. The earlier 5,698-parameter recipe reproduced the same fold scores in
 two independent Astra searches and two consolidated Luna policy runs. This is fixed-seed repeatability, not an independent generalization estimate or proof
 of a globally smallest network. Final policy repeats and compact hypotheses are still running.
@@ -233,3 +233,18 @@ Runs are `d2c88c8b-4774-4ee6-afad-e5bc799b3ead` and
 0.9906018796, 0.9901995100 and 0.9895484323. Its checkpoint strictly reloads with the
 canonical implementation and matches the claimed trainable parameter count. Consolidated
 policy validation, stronger (8,12) optimization and asymmetric (7,13) channels are being tested.
+
+
+## Optimizer refinement continues
+
+The 4,411-parameter consolidated policy `8b2de630-e77c-409c-9faa-f0a9d1b5d540` reproduced
+the original scores and checkpoint. Further optimizer refinement in
+`186261f1-8f0a-45c9-9784-4531abc66fa1` made CNN(8,12) qualify at **4,018 parameters and
+0.9903667006 mean CV** by 182.71 seconds. Initial Adam LR 0.005 and cosine endpoint 0.01
+replaced 0.004/0.05; all other settings stayed unchanged. Fold accuracies were 0.9898520296,
+0.9911495575 and 0.9900985148. Policy validation and width-11/10 variants are in progress.
+
+The asymmetric (7,13) hypothesis encountered an initial preparation failure and then run
+`58641032-f802-4733-a525-507c48e2ba5a` ended `infrastructure_failed` without artifacts.
+This supplies no accuracy or convergence evidence; no claim that asymmetric channels fail
+is supported by this run.
