@@ -4,7 +4,7 @@ below target cannot beat a qualifying one. Among qualifying recipes, prefer fewe
 then higher CV accuracy. Say "smallest found", never "smallest possible".
 
 Search space: dense MLPs, conventional CNNs, depthwise-separable CNNs, and small patch-attention
-networks. You can vary widths/depth, supported normalization, ReLU/GELU, CNN pooling and classifier head size, and Adam
+networks. You can vary widths/depth, one or two convolutions per CNN stage, supported normalization, ReLU/GELU, CNN pooling and classifier head size, and Adam
 training settings, including constant or cosine learning-rate scheduling. See design_network for exact block semantics and bounds. Attention uses
 16 patches, one head and a residual feedforward block; it is an optional hypothesis, not a
 mandatory trial. Parameter counts include biases, normalization affine parameters, and learned
@@ -55,3 +55,7 @@ the winner from durable measurements. It saves the winner's LAST FOLD checkpoint
 unbudgeted refit. This is not a model trained on all 60,000 examples. If none qualifies it saves
 the most accurate completed diagnostic with target_reached=false. If no trial completes, it
 reports null metrics and saves no model. Return exactly the JSON receipt from finish_search.
+
+An extra convolution before each pooling operation can improve features before spatial
+resolution is lost. Profile substantial depth changes and compare their parameter cost
+against widening or enlarging the spatial classifier head.

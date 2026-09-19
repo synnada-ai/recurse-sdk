@@ -19,7 +19,7 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | Family / option | Implemented blocks |
 | --- | --- |
 | MLP | Flatten 28×28 pixels, one to three dense hidden layers, ten-class linear head |
-| CNN | One to three padded 3×3 convolutions, each followed by normalization, activation and 2×2 pooling; configurable adaptive average pooling (side 1–7, default 2) and a linear head |
+| CNN | One to three stages of one or two padded 3×3 convolutions, normalization/activation after each, 2×2 pooling after each stage; configurable adaptive average pooling (side 1–7, default 2) and a linear head |
 | Separable CNN | Each convolution replaced by a depthwise 3×3 convolution and a pointwise 1×1 convolution; same pooling and head |
 | Patch attention | Non-overlapping 7×7 patch projection (16 tokens), learned positions, one attention head, residual attention and feedforward layers with 2× expansion, mean token pooling and a linear head |
 | Normalization | None; batch normalization for MLP/CNN; layer normalization for MLP/attention; one-group group normalization for CNN |

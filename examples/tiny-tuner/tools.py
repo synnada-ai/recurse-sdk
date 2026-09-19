@@ -46,9 +46,10 @@ class Candidate:
     pooling: Literal["max", "average"]
     head_size: int = 2
     schedule: Literal["constant", "cosine"] = "constant"
+    convs_per_stage: int = 1
 
 
-def _check(candidate: Candidate) -> None:
+def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bounded recipe fields
     """Reject malformed or unbounded recipes before allocating resources."""
     if candidate.family not in {"mlp", "cnn", "separable", "attention"}:
         raise ValueError("family must be mlp, cnn, separable, or attention")
@@ -78,6 +79,8 @@ def _check(candidate: Candidate) -> None:
         raise ValueError("learning_rate must be finite and in (0, 1]")
     if candidate.schedule not in {"constant", "cosine"}:
         raise ValueError("schedule must be constant or cosine")
+    if type(candidate.convs_per_stage) is not int or candidate.convs_per_stage not in {1, 2}:
+        raise ValueError("convs_per_stage must be an integer, 1 or 2")
     if not math.isfinite(candidate.weight_decay) or not 0 <= candidate.weight_decay <= 1:
         raise ValueError("weight_decay must be finite and in [0, 1]")
     if type(candidate.epochs) is not int or not 1 <= candidate.epochs <= _MAX_EPOCHS:
@@ -102,6 +105,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     pooling: Literal["max", "average"] = "max",
     head_size: int = 2,
     schedule: Literal["constant", "cosine"] = "constant",
+    convs_per_stage: int = 1,
 ) -> Candidate:
     """Construct a bounded architecture and training recipe without training it.
 
@@ -122,6 +126,9 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
             Ignored by MLP and attention families.
         schedule: constant or cosine learning rate across epochs. Cosine starts at
             learning_rate and ends at 10% of it; one epoch uses learning_rate unchanged.
+        convs_per_stage: One or two convolution blocks per CNN/separable stage, each
+            followed by normalization and activation. Pool once per stage. Ignored by
+            MLP and attention. A separable block is depthwise followed by pointwise.
 
     Returns:
         A recipe to pass directly to evaluate_network. All layers include trainable biases.
@@ -138,6 +145,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         pooling,
         head_size,
         schedule,
+        convs_per_stage,
     )
     _check(candidate)
     return candidate
@@ -206,18 +214,20 @@ def _network(candidate: Candidate) -> nn.Module:
     else:
         features = 1
         for width in candidate.widths:
-            if candidate.family == "separable":
-                layers.extend(
-                    (
-                        nn.Conv2d(features, features, 3, padding=1, groups=features),
-                        nn.Conv2d(features, width, 1),
+            for _ in range(candidate.convs_per_stage):
+                if candidate.family == "separable":
+                    layers.extend(
+                        (
+                            nn.Conv2d(features, features, 3, padding=1, groups=features),
+                            nn.Conv2d(features, width, 1),
+                        )
                     )
-                )
-            else:
-                layers.append(nn.Conv2d(features, width, 3, padding=1))
+                else:
+                    layers.append(nn.Conv2d(features, width, 3, padding=1))
+                layers.extend((_normalization(candidate, width, True), _activation(candidate)))
+                features = width
             pool = nn.MaxPool2d(2) if candidate.pooling == "max" else nn.AvgPool2d(2)
-            layers.extend((_normalization(candidate, width, True), _activation(candidate), pool))
-            features = width
+            layers.append(pool)
         layers.extend(
             (nn.AdaptiveAvgPool2d((candidate.head_size, candidate.head_size)), nn.Flatten())
         )
