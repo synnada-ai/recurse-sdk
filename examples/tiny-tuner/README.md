@@ -7,7 +7,7 @@ It keeps shrinking after it reaches the accuracy target and preserves the smalle
 recipe it actually measured. It reports the smallest **found**, not a proven global minimum.
 
 The cloud refinement campaign found a **4,018-parameter CNN at 99.0367% mean CV** under
-these defaults. The earlier 5,698-parameter recipe reproduced across four cloud runs with fixed seeds.
+these defaults. The recipe reproduced across two independent cloud runs with fixed seeds.
 See [cloud experiments](benchmarks/README.md) for the measured comparisons and limitations.
 
 ## When to use it

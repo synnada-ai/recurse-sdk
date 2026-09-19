@@ -3,7 +3,7 @@
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
 `target_reached: true`. The smallest qualifying model found so far has **4,018 parameters at 99.036670% mean CV**.
-Its final-policy validation is running. The earlier 5,698-parameter recipe reproduced the same fold scores in
+The consolidated final policy reproduced its exact scores and checkpoint. The earlier 5,698-parameter recipe reproduced the same fold scores in
 two independent Astra searches and two consolidated Luna policy runs. This is fixed-seed repeatability, not an independent generalization estimate or proof
 of a globally smallest network. Final policy repeats and compact hypotheses are still running.
 
@@ -248,3 +248,21 @@ The asymmetric (7,13) hypothesis encountered an initial preparation failure and 
 `58641032-f802-4733-a525-507c48e2ba5a` ended `infrastructure_failed` without artifacts.
 This supplies no accuracy or convergence evidence; no claim that asymmetric channels fail
 is supported by this run.
+
+
+## Local capacity boundary
+
+The consolidated 4,018-parameter policy `8281f604-066c-4d77-b237-7be49f229538` reproduced
+its exact scores and checkpoint. With the same optimizer, width reductions completed below target:
+
+| Channels | Parameters | Mean CV | Meets 99% |
+| --- | --- | --- | --- |
+| (8,12) | 4,018 | 0.9903667006 | Yes |
+| (8,11) | 3,643 | 0.9894000473 | No |
+| (8,10) | 3,286 | 0.9880000072 | No |
+
+The smaller runs are `261ffd1e-9472-48e6-b9c9-9c73e231bd40` and
+`6e8c3759-f167-4eec-9e89-3c81855b6171`. This trend motivates checking whether another
+optimizer change or reallocating channels to (7,12) can recover accuracy before concluding
+that gains have flattened in this local neighborhood. Timed-out follow-ups are not negative
+accuracy evidence.
