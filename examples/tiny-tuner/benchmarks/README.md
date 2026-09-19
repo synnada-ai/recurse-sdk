@@ -2,8 +2,8 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. The smallest qualifying model found so far has **4,822 parameters at 99.011665% mean CV**.
-Its repeat is running. The earlier 5,698-parameter recipe reproduced the same fold scores in
+`target_reached: true`. The smallest qualifying model found so far has **4,411 parameters at 99.011661% mean CV**.
+Its final-policy validation is running. The earlier 5,698-parameter recipe reproduced the same fold scores in
 two independent Astra searches and two consolidated Luna policy runs. This is fixed-seed repeatability, not an independent generalization estimate or proof
 of a globally smallest network. Final policy repeats and compact hypotheses are still running.
 
@@ -218,3 +218,18 @@ change; the experiment does not isolate the individual contribution of learning 
 endpoint. The checkpoint passed strict reload, parameter recount and finite-logit inference.
 A repeat and narrower-width investigations are running; the new size improvement means the
 previous neighborhood was not yet at diminishing returns.
+
+
+The 4,822-parameter recipe reproduced exactly in `594fb842-1ada-467e-99b8-e8f1041277b1`
+by 182.26 seconds. Applying its optimizer to narrower second stages gave:
+
+| Channels | Parameters | Mean CV | Completed by | Meets 99% |
+| --- | --- | --- | --- | --- |
+| (8,12) | 4,018 | 0.9897167289 | 189.59 s | No |
+| (8,13) | **4,411** | **0.9901166073** | 195.14 s | Yes |
+
+Runs are `d2c88c8b-4774-4ee6-afad-e5bc799b3ead` and
+`47705808-70b3-4c1e-9952-b7c208daf8d8`. The 4,411-parameter fold scores are
+0.9906018796, 0.9901995100 and 0.9895484323. Its checkpoint strictly reloads with the
+canonical implementation and matches the claimed trainable parameter count. Consolidated
+policy validation, stronger (8,12) optimization and asymmetric (7,13) channels are being tested.

@@ -4222,5 +4222,353 @@
         "sample_seconds": 0.1986670189999984
       }
     ]
+  },
+  {
+    "revision": "optimized-width-12",
+    "run_id": "d2c88c8b-4774-4ee6-afad-e5bc799b3ead",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.9897167289325591,
+      "parameter_count": 4018,
+      "stop_reason": "diminishing_returns",
+      "target_reached": false,
+      "trials_attempted": 1
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.9897167289325591,
+        "cv_std": 0.0007433386427058339,
+        "elapsed_seconds": 189.59462915699999,
+        "fold_accuracies": [
+          0.9889022195560888,
+          0.9906995349767488,
+          0.9895484322648397
+        ],
+        "parameter_count": 4018,
+        "remaining_seconds": 110.40537084300001,
+        "status": "completed",
+        "target_reached": false,
+        "training_examples": 40003,
+        "trial": 1
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 235.3832248224992,
+        "parameter_count": 4018,
+        "remaining_seconds": 298.75149732700004,
+        "sample_seconds": 0.30080923299999895
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            10
+          ]
+        },
+        "estimated_training_seconds": 189.48895191249832,
+        "parameter_count": 3286,
+        "remaining_seconds": 88.24609316700003,
+        "sample_seconds": 0.24215840499999786
+      }
+    ]
+  },
+  {
+    "revision": "optimized-width-13",
+    "run_id": "47705808-70b3-4c1e-9952-b7c208daf8d8",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.9901166072881379,
+      "parameter_count": 4411,
+      "stop_reason": "diminishing_returns",
+      "target_reached": true,
+      "trials_attempted": 1
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            13
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.9901166072881379,
+        "cv_std": 0.0004340449103866349,
+        "elapsed_seconds": 195.140076772,
+        "fold_accuracies": [
+          0.9906018796240752,
+          0.9901995099754988,
+          0.9895484322648397
+        ],
+        "parameter_count": 4411,
+        "remaining_seconds": 104.85992322800001,
+        "status": "completed",
+        "target_reached": true,
+        "training_examples": 40003,
+        "trial": 1
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            13
+          ]
+        },
+        "estimated_training_seconds": 227.2512031224985,
+        "parameter_count": 4411,
+        "remaining_seconds": 298.092276334,
+        "sample_seconds": 0.2904168729999981
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 153.47074843999434,
+        "parameter_count": 4018,
+        "remaining_seconds": 82.05296626600003,
+        "sample_seconds": 0.1961287519999928
+      }
+    ]
+  },
+  {
+    "revision": "refine-4822-repeat",
+    "run_id": "594fb842-1ada-467e-99b8-e8f1041277b1",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.9901166456145557,
+      "parameter_count": 4822,
+      "stop_reason": "wall_clock",
+      "target_reached": true,
+      "trials_attempted": 2
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            14
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.9901166456145557,
+        "cv_std": 0.0005516910163281668,
+        "elapsed_seconds": 182.25709130299998,
+        "fold_accuracies": [
+          0.9901019796040792,
+          0.9907995399769989,
+          0.9894484172625894
+        ],
+        "parameter_count": 4822,
+        "remaining_seconds": 117.74290869700002,
+        "status": "completed",
+        "target_reached": true,
+        "training_examples": 40003,
+        "trial": 1
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            7,
+            14
+          ]
+        },
+        "elapsed_seconds": 300.0,
+        "remaining_seconds": 0.0,
+        "status": "timed_out",
+        "trial": 2
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.004,
+          "min_lr_ratio": 0.05,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            14
+          ]
+        },
+        "estimated_training_seconds": 224.60182948999957,
+        "parameter_count": 4822,
+        "remaining_seconds": 298.747250037,
+        "sample_seconds": 0.28703109199999943
+      }
+    ]
   }
 ]

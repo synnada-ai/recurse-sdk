@@ -6,7 +6,7 @@ reaches a target mean cross-validation accuracy on MNIST. Defaults are **0.99 ac
 It keeps shrinking after it reaches the accuracy target and preserves the smallest qualifying
 recipe it actually measured. It reports the smallest **found**, not a proven global minimum.
 
-The cloud refinement campaign found a **4,822-parameter CNN at 99.0117% mean CV** under
+The cloud refinement campaign found a **4,411-parameter CNN at 99.0117% mean CV** under
 these defaults. The earlier 5,698-parameter recipe reproduced across four cloud runs with fixed seeds.
 See [cloud experiments](benchmarks/README.md) for the measured comparisons and limitations.
 
