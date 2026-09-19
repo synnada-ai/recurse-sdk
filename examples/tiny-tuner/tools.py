@@ -265,11 +265,21 @@ def _folds(labels: Tensor, count: int, samples: int, seed: int) -> tuple[Tensor,
     """Select a balanced deterministic sample and partition each class across folds."""
     generator = torch.Generator().manual_seed(seed)
     folds: list[list[Tensor]] = [[] for _ in range(count)]
+    capacities = [int((labels == label).sum()) for label in range(_CLASSES)]
+    allocation = capacities.copy()
+    if samples != _MNIST_TRAIN_SIZE:
+        if samples > sum(capacities):
+            raise ValueError("MNIST must provide enough examples for the requested sample count")
+        remaining = samples
+        for offset, label in enumerate(sorted(range(_CLASSES), key=capacities.__getitem__)):
+            classes_left = _CLASSES - offset
+            allocation[label] = min(capacities[label], math.ceil(remaining / classes_left))
+            remaining -= allocation[label]
     for label in range(_CLASSES):
         indices = torch.where(labels == label)[0]
         indices = indices[torch.randperm(len(indices), generator=generator)]
-        take = len(indices) if samples == _MNIST_TRAIN_SIZE else samples // _CLASSES
-        if len(indices) < take or take < count:
+        take = allocation[label]
+        if take < count:
             raise ValueError("MNIST must provide enough examples of every class for every fold")
         for fold, partition in zip(folds, indices[:take].tensor_split(count), strict=True):
             fold.append(partition)
@@ -390,7 +400,7 @@ def _deadline(workspace: Path, seconds: float) -> float:
             {
                 "deadline": time.monotonic() + seconds,
                 "protocol": dict(recurse.context().inputs),
-                "protocol_version": 2,
+                "protocol_version": 3,
             },
         )
     return float(json.loads(path.read_text())["deadline"])
@@ -512,6 +522,7 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
                 )
                 parameter_count = sum(parameter.numel() for parameter in model.parameters())
                 scores.append(_accuracy(model, images, labels, validation, deadline))
+            _remaining(deadline)
             mean = sum(scores) / len(scores)
             checkpoint = f"trial-{trial['trial']}.pt"
             torch.save(model.state_dict(), context.workspace / checkpoint)
@@ -585,7 +596,7 @@ def finish_search(
                 {
                     **best,
                     "protocol": dict(context.inputs),
-                    "protocol_version": 2,
+                    "protocol_version": 3,
                     "torch_version": torch.__version__,
                     "note": (
                         "CV measures the recipe. Saved weights are from the last fold, "

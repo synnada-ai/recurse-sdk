@@ -64,7 +64,7 @@ diminishing returns; merely reaching the target is not a stopping condition.
 
 Splits and fold initialization seeds remain fixed across candidates. Pixel scaling is fixed at
 1/255, and normalization statistics are fit inside each training fold. Smaller `samples` values
-select a balanced subset and are useful for smoke tests; these are **subset experiments**, not
+select a subset balanced as far as class availability permits and are useful for smoke tests; these are **subset experiments**, not
 full-MNIST results. The full dataset retains its original class proportions. Reusing CV for
 adaptive selection can overfit the selection metric; the score is not an unbiased estimate of
 final generalization. CPU reproducibility is scoped to the same software/platform.
@@ -108,8 +108,11 @@ that any particular architecture will reach 99% on a given machine.
 Each K-fold repetition holds out every selected observation exactly once. Holdout repetitions
 may overlap validation observations; they do not cover each observation exactly once. The
 metric remains the arithmetic mean of all split accuracies. Batch-normalization statistics
-are always fit on training observations only. Protocol version 2 records these settings in
-model metadata; its default partitions reproduce the original baseline. Compare agent designs
+are always fit on training observations only. Protocol version 3 records these settings in
+model metadata; its default partitions reproduce the original baseline. Version 3 caps
+subset class quotas at available counts and rejects a trial if its final scoring operation
+finishes after the shared deadline. Earlier completed scores inside the deadline remain
+comparable on the full dataset. Compare agent designs
 only with identical resolved evaluation settings, and keep experiments under alternative CV
 methods separate from the primary ranking. No method uses the official MNIST test split.
 

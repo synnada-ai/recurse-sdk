@@ -73,3 +73,24 @@ measured batches per combination. Seconds per training batch:
 This is short-run throughput evidence, not an accuracy result or a guarantee of sustained
 speed. It motivates channels-last storage and four intra-op threads. Concurrent autonomous
 comparisons isolate throughput changes from a further spatial-head/prompt revision.
+
+## Throughput and spatial-head comparisons
+
+| Revision | Run | Best mean CV | Parameters | Completed / attempted |
+| --- | --- | --- | --- | --- |
+| Throughput only | `69c7d944-1875-4a85-9d85-660a91d16682` | 0.9852166222 | 26,090 | 4 / 5 |
+| Spatial head + timing guidance | `cbe3b78a-47fd-4081-978b-975693d74b54` | 0.9842666296 | 10,026 | 3 / 3 |
+
+Neither qualifies. The throughput-only winner was CNN(16,32,64), batch normalization,
+ReLU/max pooling, ten epochs, Adam 0.001, weight decay 0.0001, batch 128, fixed 2x2 head.
+Its five-epoch trial scored 0.9848499188; separable(16,32,64) with ten epochs scored 0.9760169095;
+CNN(8,16,32) with ten epochs scored 0.9842331671. The final wider attempt timed out.
+The spatial-head winner was CNN(16,32), head 4, ten epochs, batch normalization, no weight decay,
+Adam 0.001, batch 128. Widening to (32,64) for five epochs scored 0.9836332030. A head 7 trial
+with five epochs, Adam 0.003 and batch 256 scored 0.9814834763. It finished with 3.81 seconds
+remaining and stopped without another trial. This is not evidence that overall improvements
+have flattened out: optimization schedules and additional nonlinear depth remain untested.
+
+Protocol 3 subsequently fixes near-full subset quotas and rejects scoring that finishes after
+the deadline. These full-data completed records all finished inside the allowance, so their
+scores remain comparable; future repeats use the tightened verifier.

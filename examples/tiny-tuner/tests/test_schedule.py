@@ -29,6 +29,7 @@ def test_schedule_applies_expected_rate_to_every_update_and_resets_for_each_fold
     original_step = torch.optim.Adam.step
 
     def record_step(optimizer: torch.optim.Adam, *args: Any, **kwargs: Any) -> Any:
+        """Observe the rate used by each actual optimizer update."""
         rates.append(float(optimizer.param_groups[0]["lr"]))
         return original_step(optimizer, *args, **kwargs)
 

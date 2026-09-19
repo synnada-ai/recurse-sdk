@@ -73,7 +73,7 @@ inputs:
       maximum: 60000
       multipleOf: 10
       default: 60000
-      description: Training examples used for CV; smaller values are balanced subset experiments.
+      description: Training examples used for CV; smaller values balance classes subject to available counts.
     seed:
       type: integer
       minimum: 0
