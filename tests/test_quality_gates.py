@@ -46,4 +46,4 @@ def test_tiny_tuner_remains_in_coverage_and_type_checks() -> None:
     script = (REPOSITORY / "check.sh").read_text()
     assert "uv run --directory examples/tiny-tuner/tests --locked" in script
     assert "pytest -n auto --maxprocesses=2 --cov --cov-branch" in script
-    assert "mypy --config-file pyproject.toml ../tools.py test_tiny_tuner.py" in script
+    assert "mypy --config-file pyproject.toml ../tools.py ." in script

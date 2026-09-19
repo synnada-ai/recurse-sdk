@@ -459,10 +459,12 @@ run cancellation request.
 Artifacts are available for 24 hours after completion. Downloads refuse unsafe paths and existing
 files, verify size and SHA-256, and only then atomically move the file into place.
 
-For automation, `recurse run` exits with `0` on success, `1` on agent failure, `2` on timeout,
-`3` when it observes a remotely cancelled run, and `4` on infrastructure failure. A CLI interrupted
-by Ctrl-C exits with `130`, including when cancellation is confirmed. Invalid command syntax and
-other reported CLI errors exit with `1`, leaving `2` specific to a confirmed remote timeout.
+For automation, `recurse run` exits with `0` on success, `1` on confirmed agent failure, `3` when
+it observes a remotely cancelled run, `4` on confirmed infrastructure failure, and `5` on a confirmed
+run timeout. A CLI interrupted by Ctrl-C exits with `130`, including when cancellation is confirmed.
+Every failure produced by the CLI itself exits `2`: invalid command syntax or option values, local
+input and packaging errors, authentication failures, request and transport failures, malformed
+service responses, and an observation timeout where the remote state is unconfirmed.
 
 Confirmed run failures include the run ID, status, a stable public error identifier and a short
 explanation. `recurse run` and `recurse status` display the service's public failure detail when
@@ -493,7 +495,7 @@ artifacts: 0
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
 execution stopped. `observation_timeout` means local polling ended without confirmation, not that
-the service reported `timed_out`. These CLI failures exit `1`.
+the service reported `timed_out`. These CLI failures exit `2`.
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
 may continue, and prints `recurse status <run-id>` and `recurse cancel <run-id>`. Inspect the existing

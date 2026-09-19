@@ -507,7 +507,7 @@ def test_login_rejects_a_callback_with_the_wrong_state(
     )
     monkeypatch.setattr("_recurse_cli._LOGIN_WAIT_SECONDS", 1)
 
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
 
     assert keychain == {}
     assert "login was not completed" in capsys.readouterr().err
@@ -523,7 +523,7 @@ def test_login_reports_a_denied_authorization(
     monkeypatch.setattr("webbrowser.open", _browser_completing_login({"error": "access_denied"}))
     monkeypatch.setattr("_recurse_cli._LOGIN_WAIT_SECONDS", 1)
 
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
     assert keychain == {}
 
 
@@ -537,7 +537,7 @@ def test_login_times_out_without_a_callback(
     monkeypatch.setattr("webbrowser.open", lambda url: True)
     monkeypatch.setattr("_recurse_cli._LOGIN_WAIT_SECONDS", 0)
 
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
     output = capsys.readouterr()
     assert "Waiting up to 5 minutes" in output.out
     assert "login timed out" in output.err
@@ -871,7 +871,7 @@ def test_secret_binding_rejects_invalid_or_unresolved_mappings_before_preparatio
     app = write_app(tmp_path / "app")
     service.runtime_secrets = [_runtime_secret_metadata(service)]
 
-    assert main(["run", str(app), "--secret", binding]) == 1
+    assert main(["run", str(app), "--secret", binding]) == 2
     assert not any(path == "/v1/agent-versions" for _, path, _, _ in service.requests)
     assert "secret" in capsys.readouterr().err
 
@@ -898,7 +898,7 @@ def test_secret_binding_rejects_duplicate_environment_names_before_preparation(
                 "TOKEN=github-token",
             ]
         )
-        == 1
+        == 2
     )
     assert not any(path == "/v1/agent-versions" for _, path, _, _ in service.requests)
     assert "duplicate" in capsys.readouterr().err
@@ -1200,7 +1200,7 @@ def test_status_without_failure_preserves_normal_output(
     ("run_status", "expected_exit"),
     [
         ("failed", 1),
-        ("timed_out", 2),
+        ("timed_out", 5),
         ("cancelled", 3),
         ("infrastructure_failed", 4),
     ],
@@ -1240,7 +1240,7 @@ def test_run_terminal_failure_has_a_stable_exit_status(  # noqa: PLR0913, PLR091
         ("failed", "invalid_output", 1, "output schema"),
         ("failed", "execution_failed", 1, "No further public cause"),
         ("failed", "artifact_failed", 1, "collected or stored"),
-        ("timed_out", "timed_out", 2, "time limit"),
+        ("timed_out", "timed_out", 5, "time limit"),
         ("cancelled", "cancelled", 3, "service reports"),
         ("infrastructure_failed", "infrastructure_failed", 4, "service reports"),
     ],
@@ -1273,7 +1273,7 @@ def test_run_failure_explains_the_confirmed_public_reason(  # noqa: PLR0913, PLR
 @pytest.mark.parametrize("command", ["run", "status"])
 @pytest.mark.parametrize(
     ("state", "exit_status"),
-    [("failed", 1), ("timed_out", 2), ("cancelled", 3), ("infrastructure_failed", 4)],
+    [("failed", 1), ("timed_out", 5), ("cancelled", 3), ("infrastructure_failed", 4)],
 )
 def test_run_commands_display_public_failure_detail(  # noqa: PLR0913, PLR0917 - fixtures and CLI cases
     service: FakeService,
@@ -1419,7 +1419,7 @@ def test_failed_run_observation_preserves_identity_without_resubmission(
 
         monkeypatch.setattr(urllib.request, "urlopen", disconnect)
 
-    assert main(["run", "app"]) == 1
+    assert main(["run", "app"]) == 2
 
     output = capsys.readouterr()
     assert f"recurse status {service.run_id}" in output.out
@@ -1458,7 +1458,7 @@ def test_lost_admission_response_retains_reference_without_retrying(
 
     monkeypatch.setattr(cli, "request", lose_response)
 
-    assert main(["run", "app"]) == 1
+    assert main(["run", "app"]) == 2
 
     output = capsys.readouterr().out
     admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
@@ -1479,7 +1479,7 @@ def test_rejected_run_admission_does_not_report_uncertain_remote_state(
     monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
     service.fail_detail["/v1/runs"] = (422, "inputs do not match the tool schema")
 
-    assert main(["run", "app"]) == 1
+    assert main(["run", "app"]) == 2
 
     output = capsys.readouterr()
     assert "request_failed: inputs do not match the tool schema" in output.err
@@ -1499,7 +1499,7 @@ def test_login_removed_during_run_observation_preserves_recovery(
     service.fail_detail[f"/v1/runs/{service.run_id}"] = (401, "expired access token")
     logged_in.clear()
 
-    assert main(["run", "app"]) == 1
+    assert main(["run", "app"]) == 2
 
     output = capsys.readouterr()
     assert "recurse login" in output.err
@@ -1518,7 +1518,7 @@ def test_follow_up_authentication_failure_keeps_run_recovery(
     """Failed authentication cannot establish whether a previously admitted run stopped."""
     service.fail_detail["/v1/auth/token"] = (401, "private authentication detail")
 
-    assert main([command, service.run_id]) == 1
+    assert main([command, service.run_id]) == 2
 
     output = capsys.readouterr()
     assert "authentication_failed" in output.err
@@ -1528,13 +1528,13 @@ def test_follow_up_authentication_failure_keeps_run_recovery(
     assert "may continue" in output.out
 
 
-def test_cli_syntax_error_uses_general_error_status(
+def test_cli_syntax_error_uses_cli_layer_error_status(
     service: FakeService, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Parser rejection is a CLI error, not a confirmed remote timeout."""
     with pytest.raises(SystemExit) as exit_info:
         main(["run"])
-    assert exit_info.value.code == 1
+    assert exit_info.value.code == 2
     output = capsys.readouterr()
     assert "usage:" in output.err
     assert "status: timed_out" not in output.out
@@ -1551,7 +1551,7 @@ def test_run_inputs_require_one_readable_json_object(
     source = tmp_path / "inputs.json"
     source.write_text(content)
 
-    assert main(["run", str(tmp_path), "--inputs", str(source)]) == 1
+    assert main(["run", str(tmp_path), "--inputs", str(source)]) == 2
     assert "readable JSON object" in capsys.readouterr().err
 
 
@@ -1686,7 +1686,7 @@ def test_secret_set_rejects_invalid_name_or_stdin_value_before_network(  # noqa:
     del logged_in
     monkeypatch.setattr("sys.stdin", type("BinaryInput", (), {"buffer": io.BytesIO(value)})())
 
-    assert main(["secret", "set", name, "--from-stdin"]) == 1
+    assert main(["secret", "set", name, "--from-stdin"]) == 2
 
     assert message in capsys.readouterr().err
     assert not any(
@@ -1714,7 +1714,7 @@ def test_secret_set_rejects_invalid_hidden_values(
     responses = iter(answers)
     monkeypatch.setattr("getpass.getpass", lambda _prompt: next(responses))
 
-    assert main(["secret", "set", "github-token"]) == 1
+    assert main(["secret", "set", "github-token"]) == 2
 
     assert message in capsys.readouterr().err
     assert not any(
@@ -1790,7 +1790,7 @@ def test_secret_delete_can_be_declined_or_confirmed_noninteractively(
 @pytest.mark.parametrize(
     ("interruption", "expected_status", "message"),
     [
-        (EOFError(), 1, "error: secret deletion was cancelled"),
+        (EOFError(), 2, "error: secret deletion was cancelled"),
         (KeyboardInterrupt(), 130, "Interrupted"),
     ],
 )
@@ -1826,7 +1826,7 @@ def test_secret_commands_offer_no_literal_value_option(
     with pytest.raises(SystemExit) as error:
         main(["secret", "set", "github-token", "--value", "private-token"])
 
-    assert error.value.code == 1
+    assert error.value.code == 2
     assert "unrecognized arguments: --value private-token" in capsys.readouterr().err
 
 
@@ -2199,7 +2199,7 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
         raise OSError("rename failed")
 
     monkeypatch.setattr("os.replace", fail_replace)
-    assert main(["artifacts", "run-id", "--output", str(tmp_path)]) == 1
+    assert main(["artifacts", "run-id", "--output", str(tmp_path)]) == 2
     assert "error: could not save artifact result.json: rename failed" in capsys.readouterr().err
     assert list(tmp_path.iterdir()) == []
 
@@ -2278,7 +2278,7 @@ def test_deploy_rejects_malformed_resource_confirmation_before_printing_success(
     }
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
 
     captured = capsys.readouterr()
     assert captured.out.splitlines() == [
@@ -2353,7 +2353,7 @@ def test_deploy_rejects_invalid_or_unreachable_direct_transfers(  # noqa: PLR091
     app = write_app(tmp_path / "app")
     service.registration["source_upload"].update(changes)
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert message in capsys.readouterr().err
 
 
@@ -2382,7 +2382,7 @@ def test_deploy_explains_an_unsupported_model(
     app = write_app(tmp_path / "app")
     service.version_statuses = ["failed"]
     service.version_error = "unsupported_model"
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert "agent.model in agent.yaml" in capsys.readouterr().err
     assert not any(path == "/v1/deployments" for _, path, _, _ in service.requests)
 
@@ -2399,7 +2399,7 @@ def test_deploy_reports_a_failed_deployment_build(
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
     service.version_statuses = ["failed"]
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert "build_failed" in capsys.readouterr().err
 
 
@@ -2416,7 +2416,7 @@ def test_deploy_reports_how_to_resolve_an_insufficient_balance(
     service.version_statuses = ["failed"]
     service.version_error = "insufficient_balance"
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert (
         "Run recurse billing top-up 5 or recurse billing redeem CODE, then retry deployment"
         in capsys.readouterr().err
@@ -2436,7 +2436,7 @@ def test_run_reports_how_to_resolve_an_insufficient_balance(
     service.version_statuses = ["failed"]
     service.version_error = "insufficient_balance"
 
-    assert main(["run", str(app)]) == 1
+    assert main(["run", str(app)]) == 2
     message = capsys.readouterr().err
     assert (
         "Run recurse billing top-up 5 or recurse billing redeem CODE, then retry the run" in message
@@ -2457,7 +2457,7 @@ def test_deploy_gives_up_when_the_build_never_finishes(
     monkeypatch.setattr("_recurse_cli._POLL_ATTEMPTS", 2)
     service.version_statuses = ["processing"] * 3
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert "did not finish" in capsys.readouterr().err
 
 
@@ -2471,7 +2471,7 @@ def test_deploy_reports_authoring_errors_without_a_traceback(
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    assert main(["deploy", str(empty), "--as", "mcp"]) == 1
+    assert main(["deploy", str(empty), "--as", "mcp"]) == 2
     assert "agent.yaml was not found" in capsys.readouterr().err
 
 
@@ -2484,7 +2484,7 @@ def test_commands_require_login_first(
     """Without a stored credential no request is sent and login is suggested."""
     app = write_app(tmp_path / "app")
 
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert "recurse login" in capsys.readouterr().err
     assert service.requests == []
 
@@ -2658,7 +2658,7 @@ def test_service_errors_surface_their_public_detail(
     monkeypatch.setattr("webbrowser.open", lambda url: True)
     service.fail_detail["/v1/billing/checkout"] = (409, "wallet checkout already exists")
 
-    assert main(["billing", "top-up", "5"]) == 1
+    assert main(["billing", "top-up", "5"]) == 2
     assert "wallet checkout already exists" in capsys.readouterr().err
 
 
@@ -2672,7 +2672,7 @@ def test_unreachable_service_is_reported_clearly(
     monkeypatch.setenv("RECURSE_API_URL", unreachable_url)
     logged_in[_credential_key(unreachable_url)] = "device-1"
 
-    assert main(["billing", "balance"]) == 1
+    assert main(["billing", "balance"]) == 2
     assert "could not be reached" in capsys.readouterr().err
 
 
@@ -2703,7 +2703,7 @@ def test_non_json_error_bodies_fall_back_to_the_status_reason(
     monkeypatch.setenv("RECURSE_API_URL", malformed_url)
     logged_in[_credential_key(malformed_url)] = "device-1"
     try:
-        assert main(["billing", "top-up", "5"]) == 1
+        assert main(["billing", "top-up", "5"]) == 2
         assert "Bad Gateway" in capsys.readouterr().err
     finally:
         server.shutdown()
@@ -2718,7 +2718,7 @@ def test_misconfigured_api_url_is_rejected(
     """A non-HTTP RECURSE_API_URL is refused before any request."""
     monkeypatch.setenv("RECURSE_API_URL", "ftp://example.invalid")
 
-    assert main(["billing", "balance"]) == 1
+    assert main(["billing", "balance"]) == 2
     assert "RECURSE_API_URL" in capsys.readouterr().err
 
 
@@ -2857,7 +2857,7 @@ def test_keychain_failures_are_reported_without_a_traceback(
         raise keyring.errors.KeyringError("locked")
 
     monkeypatch.setattr("keyring.get_password", broken)
-    assert main(["billing", "balance"]) == 1
+    assert main(["billing", "balance"]) == 2
     assert "keychain" in capsys.readouterr().err
 
 
@@ -2875,7 +2875,7 @@ def test_keychain_write_failures_are_reported_without_a_traceback(
 
     monkeypatch.setattr("keyring.set_password", broken)
     monkeypatch.setattr("keyring.get_password", lambda system, name: None)
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
     assert "keychain" in capsys.readouterr().err
 
 
@@ -2890,7 +2890,7 @@ def test_occupied_callback_port_is_reported_without_a_traceback(
     blocker.bind(("127.0.0.1", 0))
     try:
         monkeypatch.setattr("_recurse_cli._CALLBACK_PORT", blocker.getsockname()[1])
-        assert main(["login"]) == 1
+        assert main(["login"]) == 2
         assert "login callback" in capsys.readouterr().err
     finally:
         blocker.close()
@@ -2916,7 +2916,7 @@ def test_callbacks_are_accepted_only_on_the_callback_path(
 
     monkeypatch.setattr("webbrowser.open", open_with_wrong_path)
     monkeypatch.setattr("_recurse_cli._LOGIN_WAIT_SECONDS", 1)
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
     assert keychain == {}
 
 
@@ -2949,10 +2949,10 @@ def test_malformed_service_success_bodies_are_service_errors(
     monkeypatch.setenv("RECURSE_API_URL", malformed_url)
     logged_in[_credential_key(malformed_url)] = "device-1"
     try:
-        assert main(["billing", "top-up", "5"]) == 1
+        assert main(["billing", "top-up", "5"]) == 2
         assert "invalid response" in capsys.readouterr().err
         Handler.body = b'["not", "an", "object"]'
-        assert main(["billing", "top-up", "5"]) == 1
+        assert main(["billing", "top-up", "5"]) == 2
         assert "invalid response" in capsys.readouterr().err
     finally:
         server.shutdown()
@@ -2969,7 +2969,7 @@ def test_login_rejects_a_token_response_without_a_device_credential(
     monkeypatch.setattr("webbrowser.open", _browser_completing_login())
     service.malformed["/v1/auth/token"] = {"access_token": "access-1", "token_type": "bearer"}
 
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
 
     assert keychain == {}
     assert "missing device_credential" in capsys.readouterr().err
@@ -3012,7 +3012,7 @@ def test_deploy_reports_malformed_success_responses(  # noqa: PLR0913, PLR0917 -
     app = write_app(tmp_path / "app")
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
     service.malformed[path] = body
-    assert main(["deploy", str(app), "--as", "mcp"]) == 1
+    assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert field in capsys.readouterr().err
 
 
@@ -3056,11 +3056,11 @@ def test_billing_reports_malformed_success_responses(
         "available_balance_microusd": 6_000_000,
     }
 
-    assert main(["billing", "top-up", "5"]) == 1
+    assert main(["billing", "top-up", "5"]) == 2
     assert "missing checkout_url" in capsys.readouterr().err
-    assert main(["billing", "balance"]) == 1
+    assert main(["billing", "balance"]) == 2
     assert "invalid wallet response" in capsys.readouterr().err
-    assert main(["billing", "redeem", "rc_" + "A" * 24]) == 1
+    assert main(["billing", "redeem", "rc_" + "A" * 24]) == 2
     output = capsys.readouterr()
     assert "invalid wallet response" in output.err
     assert "Credit applied" not in output.out
@@ -3076,7 +3076,7 @@ def test_login_reports_a_malformed_account_response(
     monkeypatch.setattr("webbrowser.open", _browser_completing_login())
     service.malformed["/v1/account"] = {"account_id": "a" * 32, "display_name": 7}
 
-    assert main(["login"]) == 1
+    assert main(["login"]) == 2
     assert keychain == {}
     assert "missing display_name" in capsys.readouterr().err
 
@@ -3172,7 +3172,7 @@ def test_logout_preserves_the_device_credential_when_revocation_fails(
     """A rejected revocation is reported and leaves the usable local credential intact."""
     service.fail_detail["/v1/auth/logout"] = (503, "logout is temporarily unavailable")
 
-    assert main(["logout"]) == 1
+    assert main(["logout"]) == 2
 
     assert logged_in == {_credential_key(service.url): "device-1"}
     assert "Service Unavailable (HTTP 503)" in capsys.readouterr().err
@@ -3204,7 +3204,7 @@ def test_logout_preserves_the_device_credential_after_a_transport_failure(
 
     monkeypatch.setattr("urllib.request.urlopen", malformed_logout)
 
-    assert main(["logout"]) == 1
+    assert main(["logout"]) == 2
     assert logged_in == {_credential_key(service.url): "device-1"}
     assert "could not be reached" in capsys.readouterr().err
 
@@ -3223,7 +3223,7 @@ def test_logout_reports_keychain_deletion_failure_after_revocation(
 
     monkeypatch.setattr("keyring.delete_password", fail_delete)
 
-    assert main(["logout"]) == 1
+    assert main(["logout"]) == 2
     assert logged_in == {_credential_key(service.url): "device-1"}
     assert "keychain" in capsys.readouterr().err
 
@@ -3378,7 +3378,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.1.7",
+                    "version": "0.1.8",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -3667,7 +3667,7 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     )
     assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.1.7"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.1.8"
 
 
 @pytest.mark.parametrize(

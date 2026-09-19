@@ -1,0 +1,8 @@
+[project]
+name = "slide-collect-game-tests"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = ["pytest>=8,<9", "pyyaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["."]

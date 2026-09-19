@@ -1,0 +1,4 @@
+# Licensed reference data stays local.
+/corpus/*.json
+# Future run artifacts may embed the reference data.
+/results/
