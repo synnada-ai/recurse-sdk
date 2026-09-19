@@ -2,7 +2,7 @@
 
 These are autonomous agent runs, distinct from the earlier hand-selected local smoke tests.
 A service status of `succeeded` means the agent returned a valid receipt; feasibility requires
-`target_reached: true`. No run below establishes 99% accuracy or a globally smallest network.
+`target_reached: true`. The deeper-block revision below first exceeds 99%; no run proves a globally smallest network.
 
 ## Fixed comparison protocol
 
@@ -94,3 +94,30 @@ have flattened out: optimization schedules and additional nonlinear depth remain
 Protocol 3 subsequently fixes near-full subset quotas and rejects scoring that finishes after
 the deadline. These full-data completed records all finished inside the allowance, so their
 scores remain comparable; future repeats use the tightened verifier.
+
+## Broader hypotheses and first feasible result
+
+Complete recipes, fold scores, profiles and receipts are retained in [runs.json](runs.json).
+All comparisons retain the fixed full-data protocol and resource ceiling above.
+
+| Revision | Best mean CV | Parameters | Meets 99% |
+| --- | --- | --- | --- |
+| Profile-guided prompt | 0.9769831870 | 6,186 | No |
+| Separable/spatial | 0.9802832529 | 9,172 | No |
+| Cosine/spatial | 0.9833334030 | 10,026 | No |
+| Compact depth | 0.9897667356 | 26,090 | No |
+| Attention hypothesis | 0.9711833127 | 6,186 | No |
+| Two convolutions per stage | **0.9908166740** | **17,850** | **Yes** |
+
+The profile-guided run never called the profiler. The separable run did: its 185-second
+training estimate preceded a 173-second cumulative completed measurement, useful but not a
+hard runtime guarantee. The attention recipe itself scored 0.9381668036 at 38,346 parameters;
+the table reports that run's better CNN diagnostic.
+
+The first qualifying run `9ffb0d0f-9f6e-45cb-aa52-d4c0797932f3` used CNN(16,32), two
+convolutions per stage, batch normalization, ReLU/max pooling, head 2, ten epochs, batch 128,
+Adam 0.001 with cosine decay, and weight decay 0.0001. Fold accuracies were 0.9905018996,
+0.9916995850 and 0.9902485373; population standard deviation 0.0006328228. It completed
+as trial 2 by 195.43 seconds. Its otherwise identical one-convolution-per-stage control scored
+0.9747499828. The attempted shrink to (12,24) exhausted the remaining budget without a score.
+The checkpoint is preserved, and repeat/size-reduction experiments are ongoing.
