@@ -414,7 +414,7 @@ def _remaining(deadline: float) -> None:
 
 
 def _deadline(workspace: Path, seconds: float) -> float:
-    """Persist the first evaluation's deadline so tool calls share one allowance."""
+    """Persist the first profile/evaluation deadline so calls share one allowance."""
     path = workspace / "search.json"
     if not path.exists():
         _write(
@@ -501,7 +501,7 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
     """Train fresh models on fixed folds and record independently measured CV accuracy.
 
     Duplicate recipes return cached results. Every new attempt consumes a trial, including
-    failures and timeouts. The first evaluation starts the shared wall-clock allowance.
+    failures and timeouts. The first profile or evaluation starts the wall-clock allowance.
     Calls serialize to protect history and random state. A timed-out trial has no CV score.
 
     Args:

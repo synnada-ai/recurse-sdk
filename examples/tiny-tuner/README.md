@@ -6,6 +6,10 @@ reaches a target mean cross-validation accuracy on MNIST. Defaults are **0.99 ac
 It keeps shrinking after it reaches the accuracy target and preserves the smallest qualifying
 recipe it actually measured. It reports the smallest **found**, not a proven global minimum.
 
+The cloud refinement campaign found a **5,698-parameter CNN at 99.0483% mean CV** under
+these defaults. The recipe reproduced across independent cloud runs with fixed seeds.
+See [cloud experiments](benchmarks/README.md) for the measured comparisons and limitations.
+
 ## When to use it
 
 Use this example when architecture and training decisions should respond to measured results.
@@ -40,7 +44,7 @@ Cosine scheduling decreases the initial learning rate to a configurable final fr
 - `profile_network` times a small discarded training sample and estimates full-CV training
   cost. It starts/consumes the shared allowance, produces no accuracy score, and saves timing
   evidence in `profiles.json`. Estimates exclude full validation and tool latency; reserve margin.
-- `evaluate_network` trains a fresh CPU model for each fixed, stratified fold. It measures
+- `evaluate_network` trains a fresh CPU model for each configured CV split. It measures
   held-out accuracy, records its arithmetic mean and population standard deviation, counts
   parameters, and saves a checkpoint. The official test split is never used for selection.
 - `finish_search` independently selects from durable trial records and returns the final receipt.
@@ -88,7 +92,7 @@ recurse run examples/tiny-tuner --inputs inputs.json --cpu 4 --memory-mib 4096
 recurse deploy examples/tiny-tuner --as mcp --cpu 4 --memory-mib 4096
 ```
 
-The first evaluation downloads MNIST using torchvision's checked dataset cache in the temporary
+The first profile or evaluation downloads MNIST using torchvision's checked dataset cache in the temporary
 directory. Network access is required for an uncached run. PyTorch and torchvision are isolated
 example dependencies; Linux uses CPU wheels. Five minutes is a search allowance, not a promise
 that any particular architecture will reach 99% on a given machine.
@@ -134,7 +138,9 @@ examples. Mean CV accuracy describes the training recipe across folds, not those
 weights. Keeping a fold checkpoint avoids an unbudgeted final refit. Reconstruct the network
 with the bundled `_network(Candidate(...))` helper and load the state dictionary using
 `torch.load(..., weights_only=True)`; convert JSON `widths` to a tuple first. The recipe and
-weights are both required, including batch-normalization buffers where applicable.
+weights are both required, including batch-normalization buffers where applicable. Call
+`model.eval()` before inference; use channels-last model/image storage to reproduce the
+training runtime layout.
 
 ## Local verification
 

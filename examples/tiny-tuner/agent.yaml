@@ -8,6 +8,7 @@ runtime:
   python: "3.14"
   lockfile: uv.lock
 agent:
+  model: gpt-5.6-luna
   prompt: prompt.md
   timeout_tools: 660
 inputs:
@@ -19,7 +20,7 @@ inputs:
       minimum: 0
       maximum: 1
       default: 0.99
-      description: Required arithmetic mean of fixed stratified fold accuracies.
+      description: Required arithmetic mean accuracy across the configured CV splits.
     max_seconds:
       type: number
       exclusiveMinimum: 0
@@ -43,7 +44,7 @@ inputs:
       minimum: 2
       maximum: 5
       default: 3
-      description: Fixed stratified folds within MNIST's official training split.
+      description: Folds per K-fold repetition within MNIST's training split; ignored for holdout.
     cv_method:
       type: string
       enum: [stratified_kfold, kfold, stratified_holdout]
