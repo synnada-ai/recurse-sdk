@@ -28,7 +28,7 @@ small enough. This example replaces the previous synthetic-data/F1 tuning contra
 | Patch attention | Non-overlapping 7×7 patch projection (16 tokens), learned positions, one attention head, residual attention and feedforward layers with 2× expansion, mean token pooling and a linear head |
 | Normalization | None; batch normalization for MLP/CNN; layer normalization for MLP/attention; one-group group normalization for CNN |
 | Activation / pooling | ReLU or GELU; max or average 2×2 pooling in CNNs |
-| Training | Adam learning rate, L2 weight decay, minibatch size, epochs per fold, and constant/cosine learning-rate schedule |
+| Training | Adam learning rate, L2 weight decay, minibatch size, epoch ceiling, optional inner-validation early stopping, and constant/cosine learning-rate schedule |
 
 Widths range from 1 to 256; attention uses one embedding width. Biases, normalization affine
 parameters, and learned positions count toward size. Batch-normalization running statistics
@@ -36,7 +36,9 @@ are buffers and do not count. No pruning, quantization, augmentation, pretrained
 convolutional residual blocks, or arbitrary Python architectures are included. Attention is an
 optional experiment; the agent need not spend its limited budget testing every family.
 Cosine scheduling decreases the initial learning rate to a configurable final fraction
-(default 10%) across epochs, resetting for each fold. A one-epoch recipe uses its initial learning rate.
+(default 10%) across epochs, resetting for each fold. A one-epoch recipe uses its initial learning rate. An explicit `schedule_epochs` horizon can
+finish the cosine decay before the training ceiling; subsequent epochs hold the final rate.
+The default horizon (`0`) follows the recipe epoch count, preserving earlier behavior.
 
 ## How the loop works
 
@@ -120,6 +122,36 @@ comparable on the full dataset. Compare agent designs
 only with identical resolved evaluation settings, and keep experiments under alternative CV
 methods separate from the primary ranking. No method uses the official MNIST test split.
 
+## Configuring training stopping
+
+Fixed training remains the default for reproducing the measured baseline. Early stopping
+allows different architectures and learning rates to use different amounts of training.
+The recipe's `epochs` becomes a ceiling; `max_epochs` and the shared wall-clock allowance
+remain hard acceptance limits.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `stopping_method` | `fixed` | `fixed` or `early_stopping` |
+| `patience` | `3` | Consecutive epochs without sufficient inner-validation loss improvement |
+| `min_delta` | `0.0001` | Absolute cross-entropy improvement needed to reset patience |
+| `min_epochs` | `3` | Minimum executed epochs before patience may stop training |
+| `stopping_validation_fraction` | `0.1` | Stratified holdout fraction within each outer training fold |
+| `max_epochs` | `10` | Maximum allowed recipe epoch ceiling; increase explicitly for longer training |
+
+Early stopping uses a deterministic inner holdout drawn only from the outer training fold.
+It monitors mean cross-entropy and restores the lowest-loss checkpoint, including normalization
+buffers. The outer CV fold is scored once, after checkpoint selection; it does not control
+stopping. Learning curves include training loss and inner-validation loss/accuracy, alongside
+actual epochs, selected epoch and stop reason. The agent can use this evidence to adjust later
+recipes. `min_delta` controls patience, independently of which checkpoint has the lowest loss.
+
+Holding out inner validation data reduces the number of examples used for gradient updates.
+These protocol-4 results must be compared against a baseline rerun with the same stopping
+settings, epoch ceiling and resource allowance; they do not replace historical protocol-3
+measurements without that comparison. Outer CV is still reused for architecture selection,
+so this separation does not make the overall search score an unbiased generalization estimate.
+The official test split remains excluded.
+
 ## Result and artifacts
 
 The final JSON receipt reports `target_reached`, `cv_accuracy`, `parameter_count`,
@@ -133,7 +165,8 @@ The final JSON receipt reports `target_reached`, `cv_accuracy`, `parameter_count
 - `search.json`: resolved protocol (even when no trial completes) and the shared monotonic
   deadline, whose timestamp is meaningful only on the execution host.
 
-The saved checkpoint is trained on **the last fold's training partition**, not all 60,000
+The saved checkpoint is trained on **the last fold's fit partition**, excluding the inner
+validation holdout when early stopping is enabled, not all 60,000
 examples. Mean CV accuracy describes the training recipe across folds, not those particular
 weights. Keeping a fold checkpoint avoids an unbudgeted final refit. Reconstruct the network
 with the bundled `_network(Candidate(...))` helper and load the state dictionary using

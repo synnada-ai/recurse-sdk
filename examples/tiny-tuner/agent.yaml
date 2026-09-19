@@ -39,6 +39,35 @@ inputs:
       maximum: 100
       default: 10
       description: Maximum training epochs per fold of a candidate.
+    stopping_method:
+      type: string
+      enum: [fixed, early_stopping]
+      default: fixed
+      description: Fixed epoch training or inner-validation early stopping, never outer-fold stopping.
+    patience:
+      type: integer
+      minimum: 1
+      maximum: 20
+      default: 3
+      description: Consecutive epochs without a min_delta inner-loss improvement before stopping.
+    min_delta:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.0001
+      description: Absolute inner cross-entropy improvement required to reset patience.
+    min_epochs:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 3
+      description: Earliest patience stop; candidate epochs and max_epochs still cap training.
+    stopping_validation_fraction:
+      type: number
+      minimum: 0.05
+      maximum: 0.5
+      default: 0.1
+      description: Stratified inner holdout fraction taken only from each outer training partition.
     cv_folds:
       type: integer
       minimum: 2
@@ -90,7 +119,11 @@ inputs:
         Every recipe uses {{ input.cv_method }} with {{ input.cv_folds }} folds or holdout
         fraction {{ input.validation_fraction }}, repeated {{ input.cv_repeats }} times on
         {{ input.samples }} examples. Split seed is {{ input.cv_seed }}; training seed is
-        {{ input.seed }}. Keep shrinking after reaching the target.
+        {{ input.seed }}. Stopping method is {{ input.stopping_method }}: inner validation
+        fraction {{ input.stopping_validation_fraction }}, patience {{ input.patience }},
+        minimum improvement {{ input.min_delta }}, and minimum epochs {{ input.min_epochs }}.
+        These stopping controls apply only to early_stopping; fixed uses the recipe's epoch count.
+        Keep shrinking after reaching the target.
   additionalProperties: false
 outputs:
   $schema: https://json-schema.org/draft/2020-12/schema

@@ -6,7 +6,7 @@ import math
 import shutil
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -29,6 +29,7 @@ _MAX_EPOCHS = 100
 _MIN_BATCH = 16
 _MAX_BATCH = 1024
 _MNIST_TRAIN_SIZE = 60000
+_MIN_INNER_CLASS_SIZE = 2
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class Candidate:
     schedule: Literal["constant", "cosine"] = "constant"
     convs_per_stage: int = 1
     min_lr_ratio: float = 0.1
+    schedule_epochs: int = 0
 
 
 def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bounded recipe fields
@@ -82,6 +84,11 @@ def _check(candidate: Candidate) -> None:  # noqa: PLR0912 - independently bound
         raise ValueError("schedule must be constant or cosine")
     if not math.isfinite(candidate.min_lr_ratio) or not 0 <= candidate.min_lr_ratio <= 1:
         raise ValueError("min_lr_ratio must be finite and in [0, 1]")
+    if (
+        type(candidate.schedule_epochs) is not int
+        or not 0 <= candidate.schedule_epochs <= _MAX_EPOCHS
+    ):
+        raise ValueError("schedule_epochs must be an integer between 0 and 100")
     if type(candidate.convs_per_stage) is not int or candidate.convs_per_stage not in {1, 2}:
         raise ValueError("convs_per_stage must be an integer, 1 or 2")
     if not math.isfinite(candidate.weight_decay) or not 0 <= candidate.weight_decay <= 1:
@@ -110,6 +117,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
     schedule: Literal["constant", "cosine"] = "constant",
     convs_per_stage: int = 1,
     min_lr_ratio: float = 0.1,
+    schedule_epochs: int = 0,
 ) -> Candidate:
     """Construct a bounded architecture and training recipe without training it.
 
@@ -120,6 +128,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         learning_rate: Adam learning rate in (0, 1].
         weight_decay: Adam L2 penalty in [0, 1].
         epochs: Training passes per fold, 1 to 100 and at most the run's max_epochs.
+            Under early_stopping this is a ceiling, not a mandatory number of passes.
         batch_size: Minibatch size from 16 to 1024.
         normalization: none; batch for MLP/CNN; layer for MLP/attention; group for CNN
             (one group, channel affine parameters). Applied before each hidden activation.
@@ -136,6 +145,9 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
             MLP and attention. A separable block is depthwise followed by pointwise.
         min_lr_ratio: Final cosine learning rate divided by initial learning_rate, in
             [0, 1], default 0.1. Ignored by constant schedules and one-epoch training.
+        schedule_epochs: Cosine horizon, 0 uses epochs (legacy), otherwise 1 to 100.
+            Hold the minimum rate after this horizon even if training continues. A horizon
+            of 1 uses the initial rate for epoch one and the minimum thereafter.
 
     Returns:
         A recipe to pass directly to evaluate_network. All layers include trainable biases.
@@ -154,6 +166,7 @@ def design_network(  # noqa: PLR0913 - independently tunable recipe dimensions
         schedule,
         convs_per_stage,
         min_lr_ratio,
+        schedule_epochs,
     )
     _check(candidate)
     return candidate
@@ -349,6 +362,44 @@ def _pixels(images: Tensor, indices: Tensor) -> Tensor:
     )
 
 
+def _set_learning_rate(candidate: Candidate, optimizer: torch.optim.Adam, epoch: int) -> None:
+    """Apply cosine decay on its own horizon, then hold the floor without oscillation."""
+    if candidate.schedule == "cosine":
+        horizon = candidate.schedule_epochs or candidate.epochs
+        duration = max(1, horizon - 1)
+        factor = (1 + candidate.min_lr_ratio) / 2 + (
+            (1 - candidate.min_lr_ratio) / 2 * math.cos(math.pi * min(epoch, duration) / duration)
+        )
+        for group in optimizer.param_groups:
+            group["lr"] = candidate.learning_rate * factor
+
+
+def _epoch(  # noqa: PLR0913, PLR0917 - explicit training state and data
+    model: nn.Module,
+    optimizer: torch.optim.Adam,
+    candidate: Candidate,
+    images: Tensor,
+    labels: Tensor,
+    indices: Tensor,
+    generator: torch.Generator,
+    deadline: float,
+) -> float:
+    """Train one shuffled pass and return example-weighted pre-update cross-entropy."""
+    model.train()
+    shuffled = indices[torch.randperm(len(indices), generator=generator)]
+    total = 0.0
+    for batch in shuffled.tensor_split(max(1, math.ceil(len(shuffled) / candidate.batch_size))):
+        _remaining(deadline)
+        optimizer.zero_grad(set_to_none=True)
+        loss = nn.functional.cross_entropy(model(_pixels(images, batch)), labels[batch])
+        if not bool(torch.isfinite(loss)):
+            raise ValueError("Training loss is non-finite; reduce learning_rate")
+        total += float(loss.detach()) * len(batch)
+        loss.backward()
+        optimizer.step()
+    return total / len(indices)
+
+
 def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
     candidate: Candidate,
     images: Tensor,
@@ -366,25 +417,124 @@ def _train(  # noqa: PLR0913, PLR0917 - explicit data, randomness, and deadline
         )
         generator = torch.Generator().manual_seed(seed)
         for epoch in range(candidate.epochs):
-            if candidate.schedule == "cosine":
-                factor = (1 + candidate.min_lr_ratio) / 2 + (
-                    (1 - candidate.min_lr_ratio)
-                    / 2
-                    * math.cos(math.pi * epoch / max(1, candidate.epochs - 1))
+            _set_learning_rate(candidate, optimizer, epoch)
+            _epoch(model, optimizer, candidate, images, labels, indices, generator, deadline)
+    return model
+
+
+def _inner_split(
+    labels: Tensor, indices: Tensor, fraction: float, seed: int
+) -> tuple[Tensor, Tensor]:
+    """Partition only outer-training observations, preserving every class on both sides."""
+    generator = torch.Generator().manual_seed(seed)
+    training, validation = [], []
+    for label in range(_CLASSES):
+        selected = indices[labels[indices] == label]
+        if len(selected) < _MIN_INNER_CLASS_SIZE:
+            raise ValueError(
+                f"Early stopping needs at least two outer-training examples of class {label}; "
+                "increase samples or use stopping_method='fixed'"
+            )
+        selected = selected[torch.randperm(len(selected), generator=generator)]
+        count = max(1, min(len(selected) - 1, round(len(selected) * fraction)))
+        training.append(selected[count:])
+        validation.append(selected[:count])
+    return torch.cat(training), torch.cat(validation)
+
+
+def _validation(
+    model: nn.Module, images: Tensor, labels: Tensor, indices: Tensor, deadline: float
+) -> tuple[float, float]:
+    """Measure inner loss and accuracy without gradients or updating normalization buffers."""
+    model.eval()
+    total, correct = 0.0, 0
+    with torch.inference_mode():
+        for batch in indices.split(512):
+            _remaining(deadline)
+            logits = model(_pixels(images, batch))
+            total += float(nn.functional.cross_entropy(logits, labels[batch], reduction="sum"))
+            correct += int((logits.argmax(1) == labels[batch]).sum())
+    _remaining(deadline)
+    if not math.isfinite(total):
+        raise ValueError("Inner validation loss is non-finite; reduce learning_rate")
+    return total / len(indices), correct / len(indices)
+
+
+def _train_early(  # noqa: PLR0913, PLR0917 - explicit fold data, controls and owned diagnostics
+    candidate: Candidate,
+    images: Tensor,
+    labels: Tensor,
+    indices: Tensor,
+    seed: int,
+    deadline: float,
+    settings: Mapping[str, Any],
+    split_seed: int,
+    diagnostics: dict[str, Any],
+) -> nn.Module:
+    """Stop on inner-loss stagnation and restore the minimum-loss state, including buffers."""
+    training, validation = _inner_split(
+        labels, indices, settings.get("stopping_validation_fraction", 0.1), split_seed
+    )
+    diagnostics.update(
+        training_examples=len(training),
+        inner_validation_examples=len(validation),
+        actual_epochs=0,
+        best_epoch=None,
+        stop_reason="epoch_ceiling",
+        learning_curve=[],
+    )
+    best_loss = significant_loss = math.inf
+    best_state: dict[str, Tensor] = {}
+    stale = 0
+    try:
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(seed)
+            model = _network(candidate).to(memory_format=torch.channels_last)
+            optimizer = torch.optim.Adam(
+                model.parameters(), lr=candidate.learning_rate, weight_decay=candidate.weight_decay
+            )
+            generator = torch.Generator().manual_seed(seed)
+            for epoch in range(candidate.epochs):
+                _set_learning_rate(candidate, optimizer, epoch)
+                training_loss = _epoch(
+                    model, optimizer, candidate, images, labels, training, generator, deadline
                 )
-                for group in optimizer.param_groups:
-                    group["lr"] = candidate.learning_rate * factor
-            shuffled = indices[torch.randperm(len(indices), generator=generator)]
-            for batch in shuffled.tensor_split(
-                max(1, math.ceil(len(shuffled) / candidate.batch_size))
-            ):
+                diagnostics["actual_epochs"] = epoch + 1
+                observation = {
+                    "epoch": epoch + 1,
+                    "training_loss": training_loss,
+                    "inner_validation_loss": None,
+                    "inner_validation_accuracy": None,
+                    "learning_rate": optimizer.param_groups[0]["lr"],
+                }
+                diagnostics["learning_curve"].append(observation)
+                loss, accuracy = _validation(model, images, labels, validation, deadline)
+                observation.update(inner_validation_loss=loss, inner_validation_accuracy=accuracy)
+                if loss < best_loss:
+                    best_loss = loss
+                    best_state = {
+                        key: value.detach().clone() for key, value in model.state_dict().items()
+                    }
+                    diagnostics["best_epoch"] = epoch + 1
+                if loss < significant_loss - settings.get("min_delta", 0.0001):
+                    significant_loss, stale = loss, 0
+                else:
+                    stale += 1
                 _remaining(deadline)
-                optimizer.zero_grad(set_to_none=True)
-                loss = nn.functional.cross_entropy(model(_pixels(images, batch)), labels[batch])
-                if not bool(torch.isfinite(loss)):
-                    raise ValueError("Training loss is non-finite; reduce learning_rate")
-                loss.backward()
-                optimizer.step()
+                if epoch + 1 >= settings.get("min_epochs", 3) and stale >= settings.get(
+                    "patience", 3
+                ):
+                    diagnostics["stop_reason"] = "patience"
+                    break
+            _remaining(deadline)
+            model.load_state_dict(best_state)
+            _remaining(deadline)
+    except TimeoutError:
+        diagnostics["stop_reason"] = "wall_clock"
+        raise
+    except Exception:
+        diagnostics["stop_reason"] = "failed"
+        raise
     return model
 
 
@@ -413,7 +563,16 @@ def _remaining(deadline: float) -> None:
         raise TimeoutError("Search wall-clock budget exhausted")
 
 
-def _deadline(workspace: Path, seconds: float) -> float:
+def _protocol_version(settings: Mapping[str, Any], candidate: Candidate) -> int:
+    """Label changed stopping or scheduling semantics without relabeling legacy recipes."""
+    return (
+        4
+        if settings.get("stopping_method", "fixed") == "early_stopping" or candidate.schedule_epochs
+        else 3
+    )
+
+
+def _deadline(workspace: Path, seconds: float, version: int = 3) -> float:
     """Persist the first profile/evaluation deadline so calls share one allowance."""
     path = workspace / "search.json"
     if not path.exists():
@@ -422,10 +581,14 @@ def _deadline(workspace: Path, seconds: float) -> float:
             {
                 "deadline": time.monotonic() + seconds,
                 "protocol": dict(recurse.context().inputs),
-                "protocol_version": 3,
+                "protocol_version": version,
             },
         )
-    return float(json.loads(path.read_text())["deadline"])
+    saved = json.loads(path.read_text())
+    if version > saved.get("protocol_version", 3):
+        saved["protocol_version"] = version
+        _write(path, saved)
+    return float(saved["deadline"])
 
 
 def _winner(history: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -449,7 +612,9 @@ def profile_network(candidate: Candidate) -> dict[str, Any]:
 
     Starts and consumes the shared search allowance. No validation accuracy, checkpoint,
     qualification, or trial is produced. Estimates include model/optimizer initialization
-    but exclude full validation, tool latency and runtime variability; reserve a margin.
+    but exclude inner and outer validation, tool latency and runtime variability; reserve
+    a margin. With early stopping this projects training through the epoch ceiling using
+    the full outer training size, not the unknown epoch count at which stopping will occur.
 
     Args:
         candidate: Proposed recipe to time before committing to complete CV.
@@ -466,7 +631,9 @@ def profile_network(candidate: Candidate) -> dict[str, Any]:
     with _locked(context.workspace / "search.lock"), _cpu():
         if (context.workspace / "receipt.json").exists():
             raise ValueError("Search is finalized; start a new run for more trials")
-        deadline = _deadline(context.workspace, settings["max_seconds"])
+        deadline = _deadline(
+            context.workspace, settings["max_seconds"], _protocol_version(settings, candidate)
+        )
         _remaining(deadline)
         images, labels = _data()
         splits = _splits(labels, dict(settings))
@@ -497,7 +664,7 @@ def profile_network(candidate: Candidate) -> dict[str, Any]:
         return result
 
 
-def evaluate_network(candidate: Candidate) -> dict[str, Any]:
+def evaluate_network(candidate: Candidate) -> dict[str, Any]:  # noqa: PLR0915 - durable evaluation phases
     """Train fresh models on fixed folds and record independently measured CV accuracy.
 
     Duplicate recipes return cached results. Every new attempt consumes a trial, including
@@ -521,7 +688,9 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
     with _locked(context.workspace / "search.lock"), _cpu():
         if (context.workspace / "receipt.json").exists():
             raise ValueError("Search is finalized; start a new run for more trials")
-        deadline = _deadline(context.workspace, settings["max_seconds"])
+        deadline = _deadline(
+            context.workspace, settings["max_seconds"], _protocol_version(settings, candidate)
+        )
         history = _ledger(context.workspace)
         for trial in history:
             if trial["candidate"] == recipe:
@@ -539,9 +708,26 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
             scores = []
             parameter_count = 0
             for index, (training, validation) in enumerate(splits):
-                model = _train(
-                    candidate, images, labels, training, settings["seed"] + index, deadline
-                )
+                if settings.get("stopping_method", "fixed") == "early_stopping":
+                    diagnostics: dict[str, Any] = {"fold": index}
+                    trial.setdefault("fold_training", []).append(diagnostics)
+                    model = _train_early(
+                        candidate,
+                        images,
+                        labels,
+                        training,
+                        settings["seed"] + index,
+                        deadline,
+                        settings,
+                        settings["cv_seed"] + index,
+                        diagnostics,
+                    )
+                    training_examples = diagnostics["training_examples"]
+                else:
+                    model = _train(
+                        candidate, images, labels, training, settings["seed"] + index, deadline
+                    )
+                    training_examples = len(training)
                 parameter_count = sum(parameter.numel() for parameter in model.parameters())
                 scores.append(_accuracy(model, images, labels, validation, deadline))
             _remaining(deadline)
@@ -557,7 +743,7 @@ def evaluate_network(candidate: Candidate) -> dict[str, Any]:
                 target_reached=mean >= settings["target_accuracy"],
                 checkpoint=checkpoint,
                 checkpoint_fold=len(splits) - 1,
-                training_examples=len(training),
+                training_examples=training_examples,
             )
         except TimeoutError:
             trial.update(status="timed_out")
@@ -618,7 +804,9 @@ def finish_search(
                 {
                     **best,
                     "protocol": dict(context.inputs),
-                    "protocol_version": 3,
+                    "protocol_version": _protocol_version(
+                        context.inputs, Candidate(**best["candidate"])
+                    ),
                     "torch_version": torch.__version__,
                     "note": (
                         "CV measures the recipe. Saved weights are from the last fold, "

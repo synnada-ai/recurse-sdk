@@ -55,3 +55,13 @@ Call finish_search with the applicable reason. It independently selects from dur
 saves the winner's LAST FOLD checkpoint without an extra refit, and returns the receipt.
 If none qualifies it retains the most accurate completed diagnostic with target_reached=false;
 if none completed it returns null metrics and no model. Return exactly the receipt JSON.
+
+When the caller enables early stopping, epochs is a ceiling rather than a training target.
+Use the returned inner-validation learning curves, actual epochs and selected epochs to
+separate slow convergence from plateauing or overfitting when choosing subsequent recipes.
+The inner split is fixed by the evaluator; never use outer CV to choose an epoch. Preserve
+headroom for its per-epoch scoring cost. A higher ceiling also stretches the default cosine
+schedule: use schedule_epochs to specify a separate decay horizon when that helps the
+hypothesis, then the learning rate remains at its floor. Do not assume the old fixed-training
+prior retains its score after reserving an inner holdout. Every qualifying recipe needs a
+complete measurement under the current protocol and shared allowance.
