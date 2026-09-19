@@ -5582,5 +5582,303 @@
         "sample_seconds": 0.3135056079999998
       }
     ]
+  },
+  {
+    "revision": "factorized-spatial",
+    "run_id": "79c64548-a023-482e-8ab9-e63bd6c1025f",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.9886167572448117,
+      "parameter_count": 3434,
+      "stop_reason": "wall_clock",
+      "target_reached": false,
+      "trials_attempted": 2
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "experimental_blocks": "factorized: each 3x3 convolution is replaced by a 3x1 convolution followed by a 1x3 convolution, without intermediate activation or normalization. Not included in canonical tools.",
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "factorized",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.9886167572448117,
+        "cv_std": 0.0006468425917460591,
+        "elapsed_seconds": 190.63469549900003,
+        "fold_accuracies": [
+          0.9877024595080984,
+          0.9890994549727486,
+          0.9890483572535881
+        ],
+        "parameter_count": 3434,
+        "remaining_seconds": 109.36530450099997,
+        "status": "completed",
+        "target_reached": false,
+        "training_examples": 40003,
+        "trial": 1
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "elapsed_seconds": 300.0,
+        "remaining_seconds": 0.0,
+        "status": "timed_out",
+        "trial": 2
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "factorized",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 284.13250454000513,
+        "parameter_count": 3434,
+        "remaining_seconds": 295.96038475,
+        "sample_seconds": 0.36310863200000654
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 149.8766922924945,
+        "parameter_count": 4018,
+        "remaining_seconds": 99.59576802099997,
+        "sample_seconds": 0.19153570899999295
+      }
+    ]
+  },
+  {
+    "revision": "head-bottleneck",
+    "run_id": "abf8c4ed-9471-4761-8f07-e91326e683e4",
+    "cpu": 4,
+    "memory_mib": 4096,
+    "model": "gpt-5.6-luna",
+    "receipt": {
+      "cv_accuracy": 0.9879000755557289,
+      "parameter_count": 3762,
+      "stop_reason": "wall_clock",
+      "target_reached": false,
+      "trials_attempted": 2
+    },
+    "protocol": {
+      "cv_folds": 3,
+      "cv_method": "stratified_kfold",
+      "cv_repeats": 1,
+      "cv_seed": 7,
+      "max_epochs": 10,
+      "max_seconds": 300,
+      "max_trials": 30,
+      "samples": 60000,
+      "seed": 7,
+      "target_accuracy": 0.99,
+      "validation_fraction": 0.2
+    },
+    "protocol_version": 3,
+    "experimental_blocks": "head_channels: biased 1x1 convolution after adaptive pooling and before flattening, without activation or normalization; 0 disables the block. Not included in canonical tools.",
+    "trials": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_channels": 8,
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "checkpoint": "trial-1.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.9879000755557289,
+        "cv_std": 0.0010294493912535187,
+        "elapsed_seconds": 166.951444659,
+        "fold_accuracies": [
+          0.9868526294741051,
+          0.9892994649732486,
+          0.987548132219833
+        ],
+        "parameter_count": 3762,
+        "remaining_seconds": 133.048555341,
+        "status": "completed",
+        "target_reached": false,
+        "training_examples": 40003,
+        "trial": 1
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 7,
+          "family": "cnn",
+          "head_channels": 6,
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "checkpoint": "trial-2.pt",
+        "checkpoint_fold": 2,
+        "cv_accuracy": 0.986783289706935,
+        "cv_std": 0.0009001134822036824,
+        "elapsed_seconds": 295.883484842,
+        "fold_accuracies": [
+          0.9868526294741051,
+          0.9878493924696234,
+          0.9856478471770765
+        ],
+        "parameter_count": 3556,
+        "remaining_seconds": 4.116515158000027,
+        "status": "completed",
+        "target_reached": false,
+        "training_examples": 40003,
+        "trial": 2
+      }
+    ],
+    "profiles": [
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 10,
+          "family": "cnn",
+          "head_channels": 8,
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 221.53870663499976,
+        "parameter_count": 3762,
+        "remaining_seconds": 298.811291571,
+        "sample_seconds": 0.2831165579999997
+      },
+      {
+        "candidate": {
+          "activation": "relu",
+          "batch_size": 128,
+          "convs_per_stage": 2,
+          "epochs": 7,
+          "family": "cnn",
+          "head_channels": 6,
+          "head_size": 3,
+          "learning_rate": 0.005,
+          "min_lr_ratio": 0.01,
+          "normalization": "batch",
+          "pooling": "max",
+          "schedule": "cosine",
+          "weight_decay": 0.0001,
+          "widths": [
+            8,
+            12
+          ]
+        },
+        "estimated_training_seconds": 114.15029645075413,
+        "parameter_count": 3556,
+        "remaining_seconds": 121.391732598,
+        "sample_seconds": 0.20839853300000755
+      }
+    ]
   }
 ]

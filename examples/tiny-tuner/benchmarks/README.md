@@ -9,7 +9,7 @@ same fold scores and checkpoint in a second run. The recipe is CNN(8,12), two co
 per stage, batch normalization, ReLU/max pooling, head 3, Adam 0.005 with cosine endpoint 0.01,
 weight decay 0.0001, batch 128, and ten epochs. It completed by 182.71 and 194.03 seconds.
 This is 54.8% fewer parameters than the 8,890-parameter near-feasible model that motivated
-compact refinement. The benchmark ledger contains 44 completed run records.
+compact refinement. The initial campaign contains 44 completed run records; renewed structural tests follow below.
 
 The campaign stopped on diminishing returns in the tested neighborhood after completed
 smaller-width, optimizer and channel-allocation variants failed the target. This is a practical
@@ -301,3 +301,23 @@ beat the best default-cap model. These observations justify stopping this campai
 claiming exhaustive search. Timeouts and infrastructure failures contribute no negative accuracy
 evidence. Untested architectures, optimization settings or other budgets can still improve the
 result. The selected agent retains all supported families and continues adapting to caller inputs.
+
+
+## Renewed structural exploration
+
+After the initial campaign, the user requested further investigation of smaller-model agents.
+These experiments extend the architecture space while retaining the same full-data CV protocol,
+99% cutoff, ten-epoch cap, 300-second search allowance and CPU/memory ceiling. The official
+test set is excluded from selection. Experimental blocks are described per run in `runs.json`;
+they are not automatically added to the canonical agent.
+
+| Structural hypothesis | Parameters | Mean CV | Meets 99% |
+| --- | --- | --- | --- |
+| Replace each 3x3 convolution with linear 3x1 then 1x3 | 3,434 | 0.9886167572 | No |
+| Biased 1x1 projection to eight channels after adaptive pooling | 3,762 | 0.9879000756 | No |
+
+Runs `79c64548-a023-482e-8ab9-e63bd6c1025f` and
+`abf8c4ed-9471-4761-8f07-e91326e683e4` completed these measurements. Both transformations
+restrict linear expressivity. Follow-up experiments add normalization and activation inside
+the factorized pair or after the head projection to test whether nonlinear features recover
+accuracy at a smaller parameter count. The original 4,018-parameter winner is preserved.
