@@ -135,9 +135,10 @@ uv run --locked recurse artifacts "$RUN_ID" --output "$BENCH_DIR/cloud/artifacts
 ```
 
 Do not resubmit merely because observation or download failed: the original run may still be
-executing. Retain failures and retry inspection of its existing ID. Artifact retrieval requires a
-fresh destination. Retrieve artifacts within 24 hours. If no receipt is available, retain the
-service error as a failed attempt rather than continuing the model audit.
+executing. Retain failures and retry inspection of its existing ID. Artifact retrieval atomically
+replaces existing artifact files after verification. Retrieve artifacts within 24 hours. If no
+receipt is available, retain the service error as a failed attempt rather than continuing the model
+audit.
 
 ## 4. Independently assess the cloud artifacts
 

@@ -2120,8 +2120,8 @@ def _artifacts(run_id: str, output_directory: str) -> None:
             raise ServiceError("the Recurse service returned invalid artifact metadata")
         output_id = required_field(artifact, "output_id")
         path = _artifact_path(root, artifact.get("path"))
-        if path.exists():
-            raise _CliError(f"artifact destination already exists: {path}")
+        if path.exists() and not path.is_file():
+            raise _CliError(f"artifact destination is not a regular file: {path}")
         grant, token = _authenticated_request(
             "GET",
             f"/v1/runs/{quoted_run_id}/artifacts/" + urllib.parse.quote(output_id, safe=""),
