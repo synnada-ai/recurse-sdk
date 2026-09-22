@@ -7,6 +7,7 @@ Run with: uv run --directory examples/level-design/tests --locked pytest
 
 from __future__ import annotations
 
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -40,6 +41,26 @@ def tools(tmp_path: Path) -> Any:
     import tools as module  # noqa: PLC0415 - imported after the recurse stub is installed
 
     return module
+
+
+def test_block_color_uses_the_active_layer() -> None:
+    """A block exposes the outer colour first and its configured inner colour second."""
+    use_agent(AGENT)
+    simulation = importlib.import_module("sim")
+    seat = simulation.Seat(pos=(0, 0), color=3, shape_id=0, rotation=0, inner_color=5)
+
+    assert simulation.Block(seat=seat).color == 3
+    assert simulation.Block(seat=seat, layer=1).color == 5
+
+
+def test_block_color_rejects_an_inner_layer_without_an_inner_color() -> None:
+    """An inconsistent inner-layer state fails instead of silently using the outer colour."""
+    use_agent(AGENT)
+    simulation = importlib.import_module("sim")
+    seat = simulation.Seat(pos=(0, 0), color=3, shape_id=0, rotation=0)
+
+    with pytest.raises(ValueError, match="inner layer requires an inner color"):
+        _ = simulation.Block(seat=seat, layer=1).color
 
 
 def test_every_public_tool_is_registered(tools: Any) -> None:

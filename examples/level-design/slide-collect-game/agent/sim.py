@@ -415,7 +415,9 @@ class Block:
     @property
     def color(self) -> int:
         """Color of the currently exposed layer."""
-        if self.layer == 1 and self.seat.inner_color is not None:
+        if self.layer == 1:
+            if self.seat.inner_color is None:
+                raise ValueError("inner layer requires an inner color")
             return self.seat.inner_color
         return self.seat.color
 
