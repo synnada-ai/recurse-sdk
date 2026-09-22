@@ -559,7 +559,7 @@ def _build_lap(  # noqa: PLR0913, PLR0917 - one argument per board layer
                     prior = objects[-1]
                     prior_rank = prior.retraction_rank
                     item_rank = item.retraction_rank
-                    if prior_rank is None or item_rank is None:  # pragma: no cover
+                    if prior_rank is None or item_rank is None:  # pragma: no cover - checked above
                         raise ValueError("retracting targets must carry a retraction rank")
                     objects[-1] = RayObject(
                         kind=prior.kind,
