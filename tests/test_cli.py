@@ -143,21 +143,7 @@ class FakeService:
                 },
             },
         ]
-        self.legacy_artifact_view: dict[str, Any] = {
-            "run_id": self.run_id,
-            "status": "succeeded",
-            "result": {"answer": "done"},
-            "error": None,
-            "artifacts": [
-                {
-                    "output_id": "99999999-9999-4999-8999-999999999999",
-                    "path": "results/receipt.json",
-                    "size_bytes": len(self.artifact_bytes),
-                    "sha256": self.artifact_sha256,
-                }
-            ],
-            "payload_expired": False,
-        }
+        self.artifact_run_view = self.run_views[-1]
         service = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -1778,7 +1764,7 @@ def test_status_cancel_and_artifacts_use_the_public_run_routes(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Follow-up commands inspect, cancel, and verify retained artifact bytes."""
-    service.run_views = [service.run_views[-1], service.legacy_artifact_view]
+    service.run_views = [service.run_views[-1], service.artifact_run_view]
     output_directory = tmp_path / "downloads"
 
     assert main(["status", service.run_id]) == 0
@@ -1799,7 +1785,7 @@ def test_artifacts_replace_an_existing_regular_file_on_each_download(
     tmp_path: Path,
 ) -> None:
     """A verified artifact replaces only its destination and can be downloaded again."""
-    service.run_views = [service.legacy_artifact_view]
+    service.run_views = [service.artifact_run_view]
     output_directory = tmp_path / "downloads"
     destination = output_directory / "results" / "receipt.json"
     destination.parent.mkdir(parents=True)
@@ -1814,6 +1800,119 @@ def test_artifacts_replace_an_existing_regular_file_on_each_download(
     assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 0
     assert destination.read_bytes() == service.artifact_bytes
     assert unrelated.read_bytes() == b"keep me"
+
+
+def test_artifacts_accept_a_finalized_empty_inventory_without_claiming_a_download(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A known-empty inventory succeeds without inventing an artifact or message."""
+    del logged_in
+    service.run_views = [
+        {
+            **service.artifact_run_view,
+            "outputs": {**service.artifact_run_view["outputs"], "artifacts": []},
+        }
+    ]
+
+    assert main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == ""
+    assert not any("/artifacts/" in path for _method, path, _body, _token in service.requests)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(("pending", None, "run outputs are not finalized"), id="pending-inventory"),
+        pytest.param(
+            ("unavailable", None, "artifact inventory is unavailable"),
+            id="unavailable-inventory",
+        ),
+        pytest.param(
+            (
+                "expired",
+                [
+                    {
+                        "id": "99999999-9999-4999-8999-999999999999",
+                        "path": "results/receipt.json",
+                        "size_bytes": 10,
+                        "sha256": "a" * 64,
+                    }
+                ],
+                "run outputs have expired",
+            ),
+            id="expired-retained-metadata",
+        ),
+        pytest.param(("expired", [], "run outputs have expired"), id="expired-empty-inventory"),
+    ],
+)
+def test_artifacts_refuse_nondownloadable_output_states_without_claiming_zero_artifacts(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    case: tuple[str, list[dict[str, object]] | None, str],
+) -> None:
+    """Unknown or expired bytes fail before a grant without erasing inventory meaning."""
+    del logged_in
+    availability, artifacts, expected_error = case
+    if availability == "pending":
+        view = service.run_views[0]
+    else:
+        view = {
+            **service.artifact_run_view,
+            "status": "failed" if availability == "unavailable" else "succeeded",
+            "error": (
+                {"code": "artifact_failed", "message": "Artifact inventory is unavailable."}
+                if availability == "unavailable"
+                else None
+            ),
+            "outputs": {
+                **service.artifact_run_view["outputs"],
+                "availability": availability,
+                "result": None,
+                "artifacts": artifacts,
+            },
+        }
+    service.run_views = [view]
+
+    assert main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 2
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert expected_error in output.err
+    assert "no artifacts" not in output.err
+    assert not any("/artifacts/" in path for _method, path, _body, _token in service.requests)
+
+
+def test_artifacts_reject_a_legacy_or_malformed_snapshot_without_partial_output(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The command consumes only the canonical Engine snapshot and fails safely otherwise."""
+    del logged_in
+    service.run_views = [
+        {
+            "run_id": service.run_id,
+            "status": "succeeded",
+            "artifacts": [],
+            "payload_expired": False,
+        }
+    ]
+
+    assert main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 2
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "invalid run response" in output.err
+    assert not any("/artifacts/" in path for _method, path, _body, _token in service.requests)
 
 
 @pytest.mark.parametrize("failure", ["authentication", "transport", "malformed", "server"])
@@ -2393,44 +2492,13 @@ def test_non_transient_run_request_is_not_retried(monkeypatch: pytest.MonkeyPatc
     assert attempts == 1
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"run_id": "different"},
-        {"status": "unknown"},
-        {"artifacts": {}},
-        {"payload_expired": "no"},
-    ],
-)
-def test_artifacts_reject_malformed_legacy_run_fields(change: dict[str, Any]) -> None:
-    """Artifact downloads retain their existing legacy response validation."""
-    run_id = "77777777-7777-4777-8777-777777777777"
-    view: dict[str, Any] = {
-        "run_id": run_id,
-        "status": "queued",
-        "result": None,
-        "error": None,
-        "artifacts": [],
-        "payload_expired": False,
-    }
-    view.update(change)
-    with pytest.raises(cli.ServiceError, match="invalid run response"):
-        cli._validated_artifact_run_view(view, run_id)
-
-
 def test_artifacts_accept_the_canonical_form_of_an_uppercase_uuid() -> None:
     """Artifact lookup retains equivalent UUID spelling support."""
-    run_id = "77777777-7777-4777-8777-77777777777a"
-    view: dict[str, Any] = {
-        "run_id": run_id,
-        "status": "queued",
-        "result": None,
-        "error": None,
-        "artifacts": [],
-        "payload_expired": False,
-    }
-
-    assert cli._validated_artifact_run_view(view, run_id.upper()) is view
+    run_id = "77777777-7777-4777-8777-777777777777"
+    assert (
+        cli._validated_public_run_view(_canonical_successful_run(run_id), run_id.upper())["run_id"]
+        == run_id
+    )
 
 
 def test_run_rejects_malformed_admission_and_poll_timeout(
@@ -2521,7 +2589,7 @@ def test_artifacts_reject_a_destination_symlink_without_replacing_its_target(
     tmp_path: Path,
 ) -> None:
     """An inventoried artifact path cannot alias and replace an unrelated local file."""
-    service.run_views = [service.legacy_artifact_view]
+    service.run_views = [service.artifact_run_view]
     output_directory = tmp_path / "downloads"
     unrelated = output_directory / "notes.txt"
     unrelated.parent.mkdir()
@@ -2535,17 +2603,19 @@ def test_artifacts_reject_a_destination_symlink_without_replacing_its_target(
     assert unrelated.read_bytes() == b"keep me"
 
 
-@pytest.mark.parametrize("case", ["expired", "non-object", "directory"])
+@pytest.mark.parametrize("case", ["non-object", "directory"])
 def test_artifact_download_refuses_unusable_metadata_or_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     case: str,
 ) -> None:
-    """Expired payloads, malformed lists, and destination directories remain errors."""
+    """Malformed metadata and destination directories remain errors."""
     monkeypatch.setattr(cli, "_access_token", lambda: "token")
     artifact: object = {
-        "output_id": "output-id",
+        "id": "99999999-9999-4999-8999-999999999999",
         "path": "result.json",
+        "size_bytes": 6,
+        "sha256": "a" * 64,
     }
     destination = tmp_path / "result.json"
     if case == "non-object":
@@ -2557,18 +2627,19 @@ def test_artifact_download_refuses_unusable_metadata_or_directory(
         "_run_request",
         lambda *_args, **_kwargs: (
             {
-                "run_id": "run-id",
-                "status": "succeeded",
-                "result": {"answer": "done"},
-                "error": None,
-                "payload_expired": case == "expired",
-                "artifacts": [artifact],
+                **_canonical_successful_run("77777777-7777-4777-8777-777777777777"),
+                "outputs": {
+                    "availability": "available",
+                    "expires_at": "2026-09-23T12:01:00Z",
+                    "result": {"answer": "done"},
+                    "artifacts": [artifact],
+                },
             },
             "token",
         ),
     )
     with pytest.raises((cli.ServiceError, cli._CliError)):
-        cli._artifacts("run-id", str(tmp_path))
+        cli._artifacts("77777777-7777-4777-8777-777777777777", str(tmp_path))
     if case == "directory":
         assert destination.is_dir()
         assert list(destination.iterdir()) == []
@@ -2589,7 +2660,7 @@ def test_artifact_download_failure_preserves_an_existing_file(
     failure: cli.ServiceError,
 ) -> None:
     """Transport and verification failures cannot replace previously downloaded bytes."""
-    service.run_views = [service.legacy_artifact_view]
+    service.run_views = [service.artifact_run_view]
     destination = tmp_path / "results" / "receipt.json"
     destination.parent.mkdir()
     destination.write_bytes(b"known good artifact")
@@ -2616,12 +2687,20 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
         del method, path
         return (
             {
-                "run_id": "run-id",
-                "status": "succeeded",
-                "result": {"answer": "done"},
-                "error": None,
-                "payload_expired": False,
-                "artifacts": [{"output_id": "output-id", "path": "result.json"}],
+                **_canonical_successful_run("77777777-7777-4777-8777-777777777777"),
+                "outputs": {
+                    "availability": "available",
+                    "expires_at": "2026-09-23T12:01:00Z",
+                    "result": {"answer": "done"},
+                    "artifacts": [
+                        {
+                            "id": "99999999-9999-4999-8999-999999999999",
+                            "path": "result.json",
+                            "size_bytes": 6,
+                            "sha256": "a" * 64,
+                        }
+                    ],
+                },
             },
             token,
         )
@@ -2638,7 +2717,17 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
         raise OSError("rename failed")
 
     monkeypatch.setattr("os.replace", fail_replace)
-    assert main(["artifacts", "run-id", "--output", str(tmp_path)]) == 2
+    assert (
+        main(
+            [
+                "artifacts",
+                "77777777-7777-4777-8777-777777777777",
+                "--output",
+                str(tmp_path),
+            ]
+        )
+        == 2
+    )
     assert "error: could not save artifact result.json: rename failed" in capsys.readouterr().err
     assert destination.read_bytes() == b"known good artifact"
     assert list(tmp_path.iterdir()) == [destination]
