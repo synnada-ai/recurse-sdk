@@ -865,6 +865,32 @@ def test_status_does_not_special_case_an_answer_result(
     assert output.err == ""
 
 
+def test_status_escapes_terminal_format_controls_without_changing_result(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Bidi and zero-width controls round-trip without reaching the terminal raw."""
+    del logged_in
+    terminal = service.run_views[-1]
+    terminal["outputs"] = {
+        **terminal["outputs"],
+        "result": {"note": "ok \u202e\u200b\x1b[2J"},
+    }
+    service.run_views = [terminal]
+
+    assert main(["status", service.run_id]) == 0
+
+    output = capsys.readouterr()
+    assert "\u202e" not in output.out
+    assert "\u200b" not in output.out
+    assert "\x1b" not in output.out
+    assert "\\u202E" in output.out
+    assert "\\u200B" in output.out
+    assert list(yaml.safe_load_all(output.out)) == [terminal]
+    assert output.err == ""
+
+
 @pytest.mark.parametrize(
     ("run_status", "error"),
     [

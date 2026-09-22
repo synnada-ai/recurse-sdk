@@ -464,7 +464,9 @@ directories, verify size and SHA-256, and only then atomically replace the desti
 For automation, both `recurse run` and `recurse status` write exactly one canonical YAML document
 to standard output after a successful retrieval. Field order and explicit `null` values are stable;
 the complete application return value always stays under `outputs.result`, including an `answer`
-property. Progress, the admitted run ID, and recovery guidance go only to standard error.
+property. Non-ASCII and terminal control characters are emitted as YAML escapes; parsing the YAML
+restores the original strings. Progress, the admitted run ID, and recovery guidance go only to
+standard error.
 
 `recurse run` exits `0` for `succeeded` and `1` for every confirmed unsuccessful terminal state:
 `failed`, `cancelled`, `timed_out`, or `preempted`. `recurse status` exits `0` whenever it retrieves a

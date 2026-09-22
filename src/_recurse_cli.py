@@ -2134,7 +2134,7 @@ def _get_run(run_id: str, token: str) -> dict[str, Any]:
 
 def _print_run_view(view: dict[str, Any]) -> None:
     """Print exactly one canonical YAML run document to standard output."""
-    yaml.safe_dump(view, sys.stdout, sort_keys=False, allow_unicode=True)
+    yaml.safe_dump(view, sys.stdout, sort_keys=False, allow_unicode=False)
 
 
 def _print_run_recovery(
