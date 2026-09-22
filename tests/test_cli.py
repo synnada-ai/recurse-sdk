@@ -2494,7 +2494,7 @@ def test_non_transient_run_request_is_not_retried(monkeypatch: pytest.MonkeyPatc
 
 def test_artifacts_accept_the_canonical_form_of_an_uppercase_uuid() -> None:
     """Artifact lookup retains equivalent UUID spelling support."""
-    run_id = "77777777-7777-4777-8777-777777777777"
+    run_id = "77777777-7777-4777-8777-77777777777a"
     assert (
         cli._validated_public_run_view(_canonical_successful_run(run_id), run_id.upper())["run_id"]
         == run_id
