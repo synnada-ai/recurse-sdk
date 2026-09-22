@@ -2100,8 +2100,9 @@ def _artifact_path(output_directory: Path, path: object) -> Path:
     if path.startswith("/") or "\\" in path or any(part in {"", ".", ".."} for part in parts):
         raise ServiceError("the Recurse service returned invalid artifact metadata")
     root = output_directory.resolve()
-    destination = root.joinpath(*parts).resolve(strict=False)
-    if not destination.is_relative_to(root):
+    candidate = root.joinpath(*parts)
+    destination = candidate.resolve(strict=False)
+    if candidate != destination or not destination.is_relative_to(root):
         raise ServiceError("the Recurse service returned invalid artifact metadata")
     return destination
 

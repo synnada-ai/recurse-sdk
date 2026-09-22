@@ -2149,6 +2149,26 @@ def test_artifact_path_cannot_escape_through_a_local_symlink(tmp_path: Path) -> 
         cli._artifact_path(output, "linked/result.json")
 
 
+def test_artifacts_reject_a_destination_symlink_without_replacing_its_target(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+) -> None:
+    """An inventoried artifact path cannot alias and replace an unrelated local file."""
+    service.run_views = [service.run_views[-1]]
+    output_directory = tmp_path / "downloads"
+    unrelated = output_directory / "notes.txt"
+    unrelated.parent.mkdir()
+    unrelated.write_bytes(b"keep me")
+    destination = output_directory / "results" / "receipt.json"
+    destination.parent.mkdir()
+    destination.symlink_to("../notes.txt")
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 2
+    assert destination.is_symlink()
+    assert unrelated.read_bytes() == b"keep me"
+
+
 @pytest.mark.parametrize("case", ["expired", "non-object", "directory"])
 def test_artifact_download_refuses_unusable_metadata_or_directory(
     tmp_path: Path,
