@@ -961,6 +961,34 @@ def test_run_uses_one_for_every_confirmed_unsuccessful_terminal_state(  # noqa: 
     assert f"run: {service.run_id}" in output.err
 
 
+def test_run_preserves_a_future_safe_error_code_and_unsuccessful_exit(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A new Engine error category remains data; failed status still controls exit one."""
+    del logged_in
+    terminal = {
+        **service.run_views[-1],
+        "status": "failed",
+        "error": {
+            "code": "model_unavailable",
+            "message": "The selected model is temporarily unavailable.",
+        },
+        "outputs": {**service.run_views[-1]["outputs"], "result": None},
+    }
+    service.run_views = [terminal]
+    monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
+
+    assert main(["run", str(write_app(tmp_path / "app"))]) == 1
+
+    output = capsys.readouterr()
+    assert yaml.safe_load(output.out) == terminal
+    assert f"run: {service.run_id}" in output.err
+
+
 def test_status_preserves_canonical_nulls_and_ignores_undeclared_private_fields(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
@@ -1098,7 +1126,9 @@ def test_canonical_run_validation_rejects_invalid_cost(cost: object) -> None:
         ("private", "failed"),
         ({"message": "failed"}, "failed"),
         ({"code": 7, "message": "failed"}, "failed"),
-        ({"code": "private", "message": "failed"}, "failed"),
+        ({"code": "", "message": "failed"}, "failed"),
+        ({"code": "a" * 129, "message": "failed"}, "failed"),
+        ({"code": "unsafe-code", "message": "failed"}, "failed"),
         ({"code": "execution_failed", "message": 7}, "failed"),
         ({"code": "execution_failed", "message": ""}, "failed"),
         ({"code": "execution_failed", "message": "failed"}, "succeeded"),

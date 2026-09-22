@@ -1868,19 +1868,7 @@ _RUN_EXIT_STATUS = {
 }
 _RUN_STATUSES = {"queued", "running", *_RUN_EXIT_STATUS}
 _PUBLIC_RUN_STATUSES = _RUN_STATUSES - {"infrastructure_failed"}
-_PUBLIC_RUN_ERROR_CODES = {
-    "insufficient_balance",
-    "secret_unavailable",
-    "invalid_inputs",
-    "invalid_agent",
-    "invalid_output",
-    "execution_failed",
-    "artifact_failed",
-    "timed_out",
-    "cancelled",
-    "infrastructure_failed",
-    "preempted",
-}
+_PUBLIC_RUN_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _OUTPUT_AVAILABILITIES = {"pending", "available", "expired", "unavailable"}
 
 
@@ -1966,7 +1954,7 @@ def _validated_run_error(value: object, status: str) -> dict[str, str] | None:
         message = value.get("message")
         if (
             not isinstance(code, str)
-            or code not in _PUBLIC_RUN_ERROR_CODES
+            or _PUBLIC_RUN_ERROR_CODE.fullmatch(code) is None
             or not isinstance(message, str)
             or not message
         ):
