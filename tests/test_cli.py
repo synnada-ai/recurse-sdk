@@ -865,30 +865,108 @@ def test_status_does_not_special_case_an_answer_result(
     assert output.err == ""
 
 
-def test_status_escapes_terminal_format_controls_without_changing_result(
+def test_status_preserves_readable_unicode_and_escapes_only_unsafe_controls(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Bidi and zero-width controls round-trip without reaching the terminal raw."""
+    """Readable Unicode stays visible while terminal and bidi controls remain inert."""
     del logged_in
+    readable = "İstanbul — 你好 العربية עברית 👩‍💻"
+    terminal_controls = "\x00\x07\x1b\x1f\x7f\x80\x85\x9b\x9f"
+    bidi_controls = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+    yaml_syntax = '"\\'
     terminal = service.run_views[-1]
     terminal["outputs"] = {
         **terminal["outputs"],
-        "result": {"note": "ok \u202e\u200b\x1b[2J"},
+        "result": {
+            "note": f"{readable} {yaml_syntax} before{terminal_controls}{bidi_controls}after",
+        },
     }
     service.run_views = [terminal]
 
     assert main(["status", service.run_id]) == 0
 
     output = capsys.readouterr()
-    assert "\u202e" not in output.out
-    assert "\u200b" not in output.out
-    assert "\x1b" not in output.out
-    assert "\\u202E" in output.out
-    assert "\\u200B" in output.out
+    assert readable in output.out
+    assert all(control not in output.out for control in terminal_controls)
+    assert all(control not in output.out for control in bidi_controls)
     assert list(yaml.safe_load_all(output.out)) == [terminal]
     assert output.err == ""
+
+
+@pytest.mark.parametrize(
+    "unsafe_character",
+    [
+        *(chr(codepoint) for codepoint in range(0x20)),
+        *(chr(codepoint) for codepoint in range(0x7F, 0xA0)),
+        "\u061c",
+        "\u200e",
+        "\u200f",
+        "\u2028",
+        "\u2029",
+        "\u202a",
+        "\u202b",
+        "\u202c",
+        "\u202d",
+        "\u202e",
+        "\u2066",
+        "\u2067",
+        "\u2068",
+        "\u2069",
+        "\ufeff",
+    ],
+)
+def test_run_yaml_escapes_each_unsafe_character_in_isolation(
+    capsys: pytest.CaptureFixture[str],
+    unsafe_character: str,
+) -> None:
+    """No individual terminal or bidi control can remain raw in a scalar."""
+    view = _canonical_successful_run("77777777-7777-4777-8777-777777777777")
+    view["outputs"]["result"] = {"note": f"before{unsafe_character}after"}
+
+    cli._print_run_view(view)
+
+    output = capsys.readouterr().out
+    serialized_note = output.partition("note: ")[2].partition("\n")[0]
+    assert serialized_note.startswith('"before')
+    assert serialized_note.endswith('after"')
+    assert unsafe_character not in serialized_note
+    assert yaml.safe_load(output) == view
+
+
+def test_run_yaml_does_not_depend_on_whether_stdout_is_a_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The structured output is byte-for-byte stable between terminals and pipes."""
+
+    class Output(io.StringIO):
+        """Expose a chosen terminal state while retaining captured text."""
+
+        def __init__(self, *, is_terminal: bool) -> None:
+            """Retain the terminal state returned to the serializer."""
+            super().__init__()
+            self._is_terminal = is_terminal
+
+        def isatty(self) -> bool:
+            """Return the configured terminal state."""
+            return self._is_terminal
+
+    terminal = _canonical_successful_run("77777777-7777-4777-8777-777777777777")
+    terminal["outputs"] = {
+        **terminal["outputs"],
+        "result": {"note": "İstanbul 👩‍💻 \u202e\x1b[2J"},
+    }
+    tty_output = Output(is_terminal=True)
+    pipe_output = Output(is_terminal=False)
+
+    monkeypatch.setattr(sys, "stdout", tty_output)
+    cli._print_run_view(terminal)
+    monkeypatch.setattr(sys, "stdout", pipe_output)
+    cli._print_run_view(terminal)
+
+    assert tty_output.getvalue() == pipe_output.getvalue()
+    assert yaml.safe_load(tty_output.getvalue()) == terminal
 
 
 @pytest.mark.parametrize(

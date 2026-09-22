@@ -1870,6 +1870,55 @@ _RUN_STATUSES = {"queued", "running", *_RUN_EXIT_STATUS}
 _PUBLIC_RUN_STATUSES = _RUN_STATUSES - {"infrastructure_failed"}
 _PUBLIC_RUN_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
 _OUTPUT_AVAILABILITIES = {"pending", "available", "expired", "unavailable"}
+_BIDI_CONTROL_CHARACTERS = (
+    "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+)
+_EXPLICIT_YAML_CONTROL_CHARACTERS = _BIDI_CONTROL_CHARACTERS + "\u2028\u2029\ufeff"
+_YAML_PRINTABLE_CODEPOINT_RANGES = (
+    (0x20, 0x7E),
+    (0xA0, 0xD7FF),
+    (0xE000, 0xFFFD),
+    (0x10000, 0x10FFFE),
+)
+
+
+def _run_yaml_requires_escape(character: str) -> bool:
+    """Identify terminal, bidi, and non-printable characters in one scalar."""
+    codepoint = ord(character)
+    return character in _EXPLICIT_YAML_CONTROL_CHARACTERS or not any(
+        lower <= codepoint <= upper for lower, upper in _YAML_PRINTABLE_CODEPOINT_RANGES
+    )
+
+
+def _double_quoted_yaml_character(character: str) -> str:
+    """Render one character without losing readable Unicode or YAML round-tripping."""
+    if character in {'"', "\\"}:
+        return f"\\{character}"
+    if _run_yaml_requires_escape(character):
+        return ascii(character)[1:-1]
+    return character
+
+
+class _RunViewDumper(yaml.SafeDumper):
+    """Render run snapshots with readable Unicode and inert bidi controls."""
+
+    def write_double_quoted(self, text: str, split: bool = True) -> None:
+        """Write quoted text without PyYAML's broad non-ASCII escaping."""
+        del split
+        self.write_indicator('"', True)
+        rendered = "".join(_double_quoted_yaml_character(character) for character in text)
+        self.column += len(rendered)
+        self.stream.write(rendered)
+        self.write_indicator('"', False)
+
+
+def _represent_run_view_string(dumper: yaml.SafeDumper, value: str) -> yaml.ScalarNode:
+    """Use double quotes where a later YAML escape must retain its meaning."""
+    style = '"' if any(_run_yaml_requires_escape(character) for character in value) else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_RunViewDumper.add_representer(str, _represent_run_view_string)
 
 
 def _same_run_id(returned: str, requested: str) -> bool:
@@ -2122,7 +2171,8 @@ def _get_run(run_id: str, token: str) -> dict[str, Any]:
 
 def _print_run_view(view: dict[str, Any]) -> None:
     """Print exactly one canonical YAML run document to standard output."""
-    yaml.safe_dump(view, sys.stdout, sort_keys=False, allow_unicode=False)
+    rendered = yaml.dump(view, Dumper=_RunViewDumper, sort_keys=False, allow_unicode=True)
+    sys.stdout.write(rendered)
 
 
 def _print_run_recovery(
