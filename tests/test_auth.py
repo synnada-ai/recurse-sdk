@@ -186,7 +186,7 @@ def test_cli_artifacts_refreshes_one_rejected_bearer(
     """Artifact retrieval refreshes one API 401 and downloads the bytes once."""
     del logged_in
     service.token_responses = ["access-old", "access-new"]
-    service.run_views = [service.run_views[-1]]
+    service.run_views = [service.legacy_artifact_view]
     status_path = f"/v1/runs/{service.run_id}"
     grant_path = f"{status_path}/artifacts/99999999-9999-4999-8999-999999999999"
     rejected_path = status_path if rejected_request == "status" else grant_path
@@ -237,6 +237,7 @@ def test_cli_artifacts_preserves_status_gateway_retry(
     """Authentication recovery must retain the existing safe status retry."""
     del logged_in
     status_path = f"/v1/runs/{service.run_id}"
+    service.run_views = [service.legacy_artifact_view]
     service.transient_failures[status_path] = 1
 
     assert cli.main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0

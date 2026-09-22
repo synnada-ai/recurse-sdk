@@ -26,16 +26,17 @@ import urllib.parse
 import urllib.request
 import webbrowser
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from decimal import Decimal, DecimalException
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, BinaryIO, NoReturn, cast
+from typing import Any, BinaryIO, NoReturn, TextIO, cast
 from uuid import UUID, uuid4
 
 import keyring
 import keyring.errors
+import yaml
 from filelock import FileLock, Timeout
 
 from recurse import RecurseError, _build_bundle
@@ -1859,52 +1860,28 @@ def _authenticated_request(
 _RUN_EXIT_STATUS = {
     "succeeded": 0,
     "failed": 1,
-    "timed_out": 5,
-    "cancelled": 3,
-    "infrastructure_failed": 4,
+    "timed_out": 1,
+    "cancelled": 1,
+    "preempted": 1,
+    # Retained only for the legacy artifact/cancellation response contracts.
+    "infrastructure_failed": 1,
 }
 _RUN_STATUSES = {"queued", "running", *_RUN_EXIT_STATUS}
-_RUN_FAILURE_MESSAGES = {
-    "insufficient_balance": (
-        "Wallet balance is too low. Add balance with `recurse billing top-up 5` or redeem a "
-        "code with `recurse billing redeem CODE`, then retry."
-    ),
-    "secret_unavailable": (
-        "A bound runtime secret could not be supplied. Use `recurse secret list` to check the "
-        "binding; restore the secret with `recurse secret set NAME` if needed."
-    ),
-    "invalid_inputs": (
-        "Run inputs do not match the agent's input schema. Check --inputs against agent.yaml."
-    ),
-    "invalid_agent": (
-        "The application could not be loaded as a valid agent. Check agent.yaml and the "
-        "packaged tool definitions."
-    ),
-    "invalid_output": (
-        "The final result does not match the declared output schema. Check the agent's output "
-        "declaration and return value."
-    ),
-    "execution_failed": (
-        "The agent did not complete successfully. No further public cause is available. "
-        "Keep the run ID when asking for help."
-    ),
-    "artifact_failed": (
-        "The run's artifacts could not be collected or stored. Check the artifact paths and "
-        "keep the run ID when asking for help."
-    ),
-    "timed_out": (
-        "The service reports that the run reached its time limit. Review the workload before "
-        "starting another run."
-    ),
-    "cancelled": "The service reports that the run was cancelled.",
-    "infrastructure_failed": (
-        "The service reports an infrastructure failure. Keep the run ID when asking for help."
-    ),
-    "unknown_error": (
-        "The run failed. No further public cause is available. "
-        "Keep the run ID when asking for help."
-    ),
+_PUBLIC_RUN_STATUSES = _RUN_STATUSES - {"infrastructure_failed"}
+_PUBLIC_RUN_ERROR_CODES = {
+    "insufficient_balance",
+    "secret_unavailable",
+    "invalid_inputs",
+    "invalid_agent",
+    "invalid_output",
+    "execution_failed",
+    "artifact_failed",
+    "timed_out",
+    "cancelled",
+    "infrastructure_failed",
+    "preempted",
 }
+_OUTPUT_AVAILABILITIES = {"pending", "available", "expired", "unavailable"}
 
 
 def _same_run_id(returned: str, requested: str) -> bool:
@@ -1923,8 +1900,8 @@ def _same_run_id(returned: str, requested: str) -> bool:
         return returned == requested
 
 
-def _validated_run_view(payload: dict[str, Any], run_id: str) -> dict[str, Any]:
-    """Validate the public fields consumed by run-oriented CLI commands."""
+def _validated_artifact_run_view(payload: dict[str, Any], run_id: str) -> dict[str, Any]:
+    """Validate the legacy public fields consumed only by artifact downloads."""
     if not _same_run_id(required_field(payload, "run_id"), run_id):
         raise ServiceError("the Recurse service returned an invalid run response")
     run_status = required_field(payload, "status")
@@ -1936,55 +1913,249 @@ def _validated_run_view(payload: dict[str, Any], run_id: str) -> dict[str, Any]:
     return payload
 
 
+def _invalid_run_response() -> NoReturn:
+    """Reject a malformed canonical run snapshot without echoing its contents."""
+    raise ServiceError("the Recurse service returned an invalid run response")
+
+
+def _validated_run_resources(value: object) -> dict[str, int | float]:
+    """Validate and order the admitted resource limits in a run snapshot."""
+    if not isinstance(value, dict) or not {"cpu_limit", "memory_limit_mib"} <= value.keys():
+        _invalid_run_response()
+    cpu_limit = value.get("cpu_limit")
+    memory_limit_mib = value.get("memory_limit_mib")
+    if (
+        isinstance(cpu_limit, bool)
+        or not isinstance(cpu_limit, int | float)
+        or not math.isfinite(cpu_limit)
+        or cpu_limit <= 0
+        or isinstance(memory_limit_mib, bool)
+        or not isinstance(memory_limit_mib, int)
+        or memory_limit_mib <= 0
+    ):
+        _invalid_run_response()
+    return {"cpu_limit": cpu_limit, "memory_limit_mib": memory_limit_mib}
+
+
+def _validated_run_cost(value: object) -> dict[str, object]:
+    """Validate and order one run's settled-or-pending cost."""
+    if (
+        not isinstance(value, dict)
+        or not {"currency", "total_microusd"} <= value.keys()
+        or value.get("currency") != "USD"
+    ):
+        _invalid_run_response()
+    total_microusd = value.get("total_microusd")
+    if total_microusd is not None and (
+        isinstance(total_microusd, bool)
+        or not isinstance(total_microusd, int)
+        or total_microusd < 0
+    ):
+        _invalid_run_response()
+    return {"currency": "USD", "total_microusd": total_microusd}
+
+
+def _validated_run_error(value: object, status: str) -> dict[str, str] | None:
+    """Validate and order the safe structured error for one lifecycle state."""
+    if value is None:
+        projected = None
+    elif isinstance(value, dict):
+        if not {"code", "message"} <= value.keys():
+            _invalid_run_response()
+        code = value.get("code")
+        message = value.get("message")
+        if (
+            not isinstance(code, str)
+            or code not in _PUBLIC_RUN_ERROR_CODES
+            or not isinstance(message, str)
+            or not message
+        ):
+            _invalid_run_response()
+        projected = {"code": code, "message": message}
+    else:
+        _invalid_run_response()
+    if (status in {"queued", "running", "succeeded"}) != (projected is None):
+        _invalid_run_response()
+    return projected
+
+
+def _validated_run_artifacts(value: object) -> list[dict[str, object]] | None:
+    """Validate and order retained public artifact metadata."""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        _invalid_run_response()
+    projected = []
+    for artifact in value:
+        if (
+            not isinstance(artifact, dict)
+            or not {
+                "id",
+                "path",
+                "size_bytes",
+                "sha256",
+            }
+            <= artifact.keys()
+        ):
+            _invalid_run_response()
+        artifact_id = artifact.get("id")
+        path = artifact.get("path")
+        size_bytes = artifact.get("size_bytes")
+        sha256 = artifact.get("sha256")
+        if (
+            not isinstance(artifact_id, str)
+            or not artifact_id
+            or not isinstance(path, str)
+            or not path
+            or isinstance(size_bytes, bool)
+            or not isinstance(size_bytes, int)
+            or size_bytes < 0
+            or not isinstance(sha256, str)
+            or len(sha256) != _SHA256_HEX_LENGTH
+            or any(character not in "0123456789abcdef" for character in sha256)
+        ):
+            _invalid_run_response()
+        try:
+            UUID(artifact_id)
+        except ValueError:
+            _invalid_run_response()
+        projected.append(
+            {"id": artifact_id, "path": path, "size_bytes": size_bytes, "sha256": sha256}
+        )
+    return projected
+
+
+def _validated_run_outputs(value: object, status: str) -> dict[str, object]:
+    """Validate and order result availability and artifact inventory."""
+    if (
+        not isinstance(value, dict)
+        or not {
+            "availability",
+            "expires_at",
+            "result",
+            "artifacts",
+        }
+        <= value.keys()
+    ):
+        _invalid_run_response()
+    availability = value.get("availability")
+    expires_at = value.get("expires_at")
+    result = value.get("result")
+    artifacts = _validated_run_artifacts(value.get("artifacts"))
+    if (
+        not isinstance(availability, str)
+        or availability not in _OUTPUT_AVAILABILITIES
+        or (expires_at is not None and not isinstance(expires_at, str))
+        or (result is not None and not isinstance(result, dict))
+    ):
+        _invalid_run_response()
+    if (status in {"queued", "running"}) != (availability == "pending"):
+        _invalid_run_response()
+    if availability in {"pending", "expired", "unavailable"} and result is not None:
+        _invalid_run_response()
+    if availability in {"pending", "unavailable"} and artifacts is not None:
+        _invalid_run_response()
+    if availability in {"available", "expired"} and artifacts is None:
+        _invalid_run_response()
+    return {
+        "availability": availability,
+        "expires_at": expires_at,
+        "result": result,
+        "artifacts": artifacts,
+    }
+
+
+def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str, Any]:
+    """Validate and project one version-1 Engine snapshot in canonical key order."""
+    if not {
+        "schema_version",
+        "run_id",
+        "status",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "elapsed_seconds",
+        "resources",
+        "cost",
+        "error",
+        "outputs",
+    } <= payload.keys() or (
+        payload.get("schema_version") != 1 or isinstance(payload.get("schema_version"), bool)
+    ):
+        _invalid_run_response()
+    returned_run_id = payload.get("run_id")
+    status = payload.get("status")
+    created_at = payload.get("created_at")
+    started_at = payload.get("started_at")
+    completed_at = payload.get("completed_at")
+    elapsed_seconds = payload.get("elapsed_seconds")
+    if (
+        not isinstance(returned_run_id, str)
+        or not _same_run_id(returned_run_id, run_id)
+        or not isinstance(status, str)
+        or status not in _PUBLIC_RUN_STATUSES
+        or not isinstance(created_at, str)
+        or not created_at
+        or (started_at is not None and not isinstance(started_at, str))
+        or (completed_at is not None and not isinstance(completed_at, str))
+        or (
+            elapsed_seconds is not None
+            and (
+                isinstance(elapsed_seconds, bool)
+                or not isinstance(elapsed_seconds, int)
+                or elapsed_seconds < 0
+            )
+        )
+    ):
+        _invalid_run_response()
+
+    return {
+        "schema_version": 1,
+        "run_id": returned_run_id,
+        "status": status,
+        "created_at": created_at,
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "elapsed_seconds": elapsed_seconds,
+        "resources": _validated_run_resources(payload.get("resources")),
+        "cost": _validated_run_cost(payload.get("cost")),
+        "error": _validated_run_error(payload.get("error"), status),
+        "outputs": _validated_run_outputs(payload.get("outputs"), status),
+    }
+
+
 def _get_run(run_id: str, token: str) -> dict[str, Any]:
     """Load and validate one account-owned public run."""
     quoted_run_id = urllib.parse.quote(run_id, safe="")
-    return _validated_run_view(
+    return _validated_public_run_view(
         _retry_request("GET", f"/v1/runs/{quoted_run_id}", token=token), run_id
     )
 
 
 def _print_run_view(view: dict[str, Any]) -> None:
-    """Print stable, human-readable run state, result, and artifact count."""
-    print(f"status: {view['status']}")
-    result = view.get("result")
-    if isinstance(result, dict):
-        answer = result.get("answer")
-        if isinstance(answer, str):
-            print(f"answer: {answer}")
-        else:
-            print(f"result: {json.dumps(result, sort_keys=True, separators=(',', ':'))}")
-    if view["status"] in _RUN_EXIT_STATUS and view["status"] != "succeeded":
-        error = view.get("error") if view["status"] == "failed" else view["status"]
-        if not isinstance(error, str) or error not in _RUN_FAILURE_MESSAGES:
-            error = "unknown_error"
-        detail = view.get("error_detail")
-        explanation = _RUN_FAILURE_MESSAGES[error]
-        if isinstance(detail, str) and detail.strip():
-            explanation = "".join(
-                character if character.isprintable() else repr(character)[1:-1]
-                for character in detail.strip()
-            )
-        print(f"error: {error}: {explanation}")
-    print(f"artifacts: {len(view['artifacts'])}")
-    if view["payload_expired"]:
-        print("payloads: expired")
+    """Print exactly one canonical YAML run document to standard output."""
+    yaml.safe_dump(view, sys.stdout, sort_keys=False, allow_unicode=True)
 
 
-def _print_run_recovery(run_id: str | None, admission_reference: str | None = None) -> None:
+def _print_run_recovery(
+    run_id: str | None, admission_reference: str | None = None, *, stream: TextIO
+) -> None:
     """Retain safe next steps; an unknown run ID requires its admission reference."""
-    print("Remote state is unconfirmed. Execution and charges may continue.")
+    print("Remote state is unconfirmed. Execution and charges may continue.", file=stream)
     if run_id is None:
-        print(f"admission: {admission_reference}")
-        print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
+        print(f"admission: {admission_reference}", file=stream)
+        print(
+            "Run identity is unknown. Keep this reference and do not blindly retry the run.",
+            file=stream,
+        )
     else:
-        print(f"run: {run_id}")
-        print("Inspect this run before starting another run.")
-        print(f"inspect: recurse status {run_id}")
-        print(f"cancel: recurse cancel {run_id}")
+        print(f"run: {run_id}", file=stream)
+        print("Inspect this run before starting another run.", file=stream)
+        print(f"inspect: recurse status {run_id}", file=stream)
+        print(f"cancel: recurse cancel {run_id}", file=stream)
 
 
-def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and Ctrl-C paths
+def _run(  # noqa: PLR0912,PLR0915 - explicit admission, polling, reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
@@ -1993,12 +2164,13 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
 ) -> int:
     """Prepare an application, admit it directly, and wait for terminal state."""
     inputs = _read_run_inputs(inputs_source)
-    resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
-    token, version_id = _prepare(
-        app_directory,
-        token=resolved_token,
-        billing_retry_target="the run",
-    )
+    with redirect_stdout(sys.stderr):
+        resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
+        token, version_id = _prepare(
+            app_directory,
+            token=resolved_token,
+            billing_retry_target="the run",
+        )
     admission_body = {
         "version_id": version_id,
         "idempotency_key": f"run_{uuid4().hex}",
@@ -2015,12 +2187,12 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
         run_id = required_field(admitted, "run_id")
         if admitted.get("status") != "queued":
             raise ServiceError("the Recurse service returned an invalid run response")
-        print(f"run: {run_id}", flush=True)
+        print(f"run: {run_id}", file=sys.stderr, flush=True)
         for _attempt in range(_RUN_POLL_ATTEMPTS):
             try:
                 quoted_run_id = urllib.parse.quote(run_id, safe="")
                 payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
-                view = _validated_run_view(payload, run_id)
+                view = _validated_public_run_view(payload, run_id)
             except ServiceError as error:
                 if error.status_code not in {
                     HTTPStatus.BAD_GATEWAY,
@@ -2040,11 +2212,13 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
             and isinstance(error, ServiceError)
             and error.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
         ):
-            _print_run_recovery(run_id, str(admission_body["idempotency_key"]))
+            _print_run_recovery(run_id, str(admission_body["idempotency_key"]), stream=sys.stderr)
         raise
     except KeyboardInterrupt:
         print(
-            "Interrupted. Requesting cancellation; press Ctrl-C again to stop waiting.", flush=True
+            "Interrupted. Requesting cancellation; press Ctrl-C again to stop waiting.",
+            file=sys.stderr,
+            flush=True,
         )
         try:
             if run_id is None:
@@ -2053,27 +2227,33 @@ def _run(  # noqa: PLR0912 - explicit admission, polling, failure reporting and 
                     "POST", "/v1/runs", token=token, json_body=admission_body
                 )
                 run_id = required_field(admitted, "run_id")
-            if _cancel(run_id) in _RUN_EXIT_STATUS:
+            with redirect_stdout(sys.stderr):
+                cancelled_status = _cancel(run_id)
+            if cancelled_status in _RUN_EXIT_STATUS:
                 return 130
         except RecurseError, ServiceError, KeyboardInterrupt:
-            print("Cancellation could not be confirmed.")
-        print("Execution and charges may continue until cancellation is confirmed.")
+            print("Cancellation could not be confirmed.", file=sys.stderr)
+        print(
+            "Execution and charges may continue until cancellation is confirmed.",
+            file=sys.stderr,
+        )
         if run_id is not None:
-            print(f"inspect: recurse status {run_id}")
-            print(f"cancel: recurse cancel {run_id}")
+            print(f"inspect: recurse status {run_id}", file=sys.stderr)
+            print(f"cancel: recurse cancel {run_id}", file=sys.stderr)
         else:
-            print(f"admission: {admission_body['idempotency_key']}")
-            print("Run identity is unknown. Keep this reference and do not blindly retry the run.")
+            print(f"admission: {admission_body['idempotency_key']}", file=sys.stderr)
+            print(
+                "Run identity is unknown. Keep this reference and do not blindly retry the run.",
+                file=sys.stderr,
+            )
         return 130
-    _print_run_recovery(run_id)
+    _print_run_recovery(run_id, stream=sys.stderr)
     raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
 
 
 def _status(run_id: str) -> None:
     """Print the current durable state of one account-owned run."""
     view = _get_run(run_id, _access_token())
-    if view["status"] in _RUN_EXIT_STATUS and view["status"] != "succeeded":
-        print(f"run: {view['run_id']}")
     _print_run_view(view)
 
 
@@ -2112,7 +2292,7 @@ def _artifacts(run_id: str, output_directory: str) -> None:
     token = _access_token()
     quoted_run_id = urllib.parse.quote(run_id, safe="")
     payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
-    view = _validated_run_view(payload, run_id)
+    view = _validated_artifact_run_view(payload, run_id)
     if view["payload_expired"]:
         raise _CliError("run payloads have expired")
     root = Path(output_directory)
@@ -2405,7 +2585,8 @@ def _print_cli_error(error: RecurseError | ServiceError, arguments: argparse.Nam
         else:
             message = f"request_failed: {message}"
     if arguments.command in {"status", "cancel"}:
-        _print_run_recovery(arguments.run_id)
+        stream = sys.stderr if arguments.command == "status" else sys.stdout
+        _print_run_recovery(arguments.run_id, stream=stream)
     print(f"error: {message}", file=sys.stderr)
 
 
@@ -2416,8 +2597,8 @@ def main(argv: list[str] | None = None) -> int:
         argv: Command-line arguments; defaults to ``sys.argv[1:]``.
 
     Returns:
-        Process exit status. Confirmed run states use stable status-specific values
-        (1 failed, 3 cancelled, 4 infrastructure, 5 timed out); every CLI-layer error exits 2.
+        Process exit status. A successful run exits 0, any confirmed unsuccessful
+        terminal run exits 1, and every CLI-layer error exits 2.
     """
     arguments = _build_parser().parse_args(argv)
     try:

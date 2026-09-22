@@ -425,8 +425,10 @@ recurse run path/to/app --inputs inputs.json --cpu 1 --memory-mib 1024 \
   --secret GITHUB_TOKEN=github-token
 ```
 
-The CLI builds and prepares an immutable version, admits that version directly, prints its run id,
-and waits for terminal state. It does not create an MCP deployment. Runs have a 15-minute execution
+The CLI builds and prepares an immutable version, admits that version directly, and waits for
+terminal state. Progress and the admitted run ID go to standard error. At terminal state, standard
+output contains exactly one YAML document: the same versioned run snapshot returned by
+`recurse status <run-id>`. It does not create an MCP deployment. Runs have a 15-minute execution
 limit. Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
@@ -459,24 +461,49 @@ run cancellation request.
 Artifacts are available for 24 hours after completion. Downloads refuse unsafe paths and existing
 directories, verify size and SHA-256, and only then atomically replace the destination file.
 
-For automation, `recurse run` exits with `0` on success, `1` on confirmed agent failure, `3` when
-it observes a remotely cancelled run, `4` on confirmed infrastructure failure, and `5` on a confirmed
-run timeout. A CLI interrupted by Ctrl-C exits with `130`, including when cancellation is confirmed.
-Every failure produced by the CLI itself exits `2`: invalid command syntax or option values, local
-input and packaging errors, authentication failures, request and transport failures, malformed
-service responses, and an observation timeout where the remote state is unconfirmed.
+For automation, both `recurse run` and `recurse status` write exactly one canonical YAML document
+to standard output after a successful retrieval. Field order and explicit `null` values are stable;
+the complete application return value always stays under `outputs.result`, including an `answer`
+property. Progress, the admitted run ID, and recovery guidance go only to standard error.
 
-Confirmed run failures include the run ID, status, a stable public error identifier and a short
-explanation. `recurse run` and `recurse status` display the service's public failure detail when
-available, falling back to a generic explanation otherwise. Terminal control characters are
-displayed as escapes. For example:
+`recurse run` exits `0` for `succeeded` and `1` for every confirmed unsuccessful terminal state:
+`failed`, `cancelled`, `timed_out`, or `preempted`. `recurse status` exits `0` whenever it retrieves a
+valid snapshot, including queued, running, and unsuccessful states. Both commands exit `2` for
+invalid syntax or options, local input and packaging errors, authentication failures, request and
+transport failures, malformed service responses, or an observation timeout where remote state is
+unconfirmed. These CLI/API errors leave standard output empty. Ctrl-C retains exit `130`, including
+when cancellation is confirmed.
 
-```text
-run: 77777777-7777-4777-8777-777777777777
-status: failed
-error: invalid_inputs: Run inputs do not match the agent's input schema. Check --inputs against agent.yaml.
-artifacts: 0
+For example, a completed run can produce:
+
+```yaml
+schema_version: 1
+run_id: 77777777-7777-4777-8777-777777777777
+status: succeeded
+created_at: '2026-09-22T12:00:00Z'
+started_at: '2026-09-22T12:00:02Z'
+completed_at: '2026-09-22T12:01:00Z'
+elapsed_seconds: 58
+resources:
+  cpu_limit: 1.0
+  memory_limit_mib: 1024
+cost:
+  currency: USD
+  total_microusd: 12345
+error: null
+outputs:
+  availability: available
+  expires_at: '2026-09-23T12:01:00Z'
+  result:
+    answer: done
+    score: 0.9
+  artifacts: []
 ```
+
+`outputs.availability` is `pending`, `available`, `expired`, or `unavailable`. Artifact metadata can
+remain listed after expiration even though `outputs.result` and downloads are no longer available.
+`outputs.artifacts: []` means the finalized run produced no artifacts; `null` means the inventory is
+not yet known or is unavailable.
 
 | Public reason | Meaning and next step |
 | --- | --- |
@@ -489,8 +516,8 @@ artifacts: 0
 | `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
-| `infrastructure_failed` | The service reports an infrastructure failure. Retain the run ID when asking for help. |
-| `unknown_error` | A failed run has no recognized public reason. No private detail or guessed diagnosis is printed. |
+| `infrastructure_failed` | The public status is `failed`; retain the run ID when asking for help. |
+| `preempted` | Occasional preemption did not restart the run automatically. Inspect external effects before deciding whether to retry. |
 
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote

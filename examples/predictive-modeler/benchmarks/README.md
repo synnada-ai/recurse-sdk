@@ -118,7 +118,8 @@ PY
 
 uv run --locked recurse login
 uv run --locked recurse run . \
-  --inputs "$BENCH_DIR/cloud/request.json" --cpu 1 --memory-mib 2048
+  --inputs "$BENCH_DIR/cloud/request.json" --cpu 1 --memory-mib 2048 \
+  > "$BENCH_DIR/cloud/run.yaml"
 ```
 
 The run requires a funded Recurse account. The request's training/trial limits are not a monetary
@@ -126,7 +127,9 @@ spending cap. Decide your allowance before starting a series of runs. Record the
 model, run ID, resource settings, and service output for each attempt. For matched comparisons,
 set the same explicit `agent.model` in each design's manifest.
 
-Copy the printed run ID into this variable, then inspect and download that same run:
+The command writes progress to standard error and the terminal run snapshot to `run.yaml`. Read the
+`run_id` field from that YAML document, copy it into this variable, then inspect and download the
+same run. `recurse status` emits the same YAML schema for its current snapshot:
 
 ```sh
 export RUN_ID='paste-the-run-id-here'
