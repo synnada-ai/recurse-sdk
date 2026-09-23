@@ -1825,6 +1825,31 @@ def test_artifacts_accept_a_finalized_empty_inventory_without_claiming_a_downloa
     assert not any("/artifacts/" in path for _method, path, _body, _token in service.requests)
 
 
+def test_artifacts_download_available_partial_outputs_from_a_failed_run(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Finalized partial artifacts remain downloadable even when execution failed."""
+    del logged_in
+    service.run_views = [
+        {
+            **service.artifact_run_view,
+            "status": "failed",
+            "error": {"code": "execution_failed", "message": "The agent failed."},
+        }
+    ]
+
+    assert main(["artifacts", service.run_id, "--output", str(tmp_path)]) == 0
+
+    output = capsys.readouterr()
+    assert output.out == "downloaded: results/receipt.json\n"
+    assert output.err == ""
+    assert (tmp_path / "results" / "receipt.json").read_bytes() == service.artifact_bytes
+    assert sum("/artifacts/" in path for _method, path, _body, _token in service.requests) == 1
+
+
 @pytest.mark.parametrize(
     "case",
     [
