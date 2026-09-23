@@ -30,12 +30,14 @@ class Workspace:
 
 
 def _require_design(ws: Workspace) -> Design:
+    """Return the current design or explain how to start one."""
     if ws.design is None:
         raise ValueError("no board yet - call new_board(width, height) first")
     return ws.design
 
 
 def _board_state(ws: Workspace) -> str:
+    """Render the board and the remaining settler deficit."""
     design = _require_design(ws)
     deficit = dict(design.deficit())
     return (
@@ -44,7 +46,7 @@ def _board_state(ws: Workspace) -> str:
     )
 
 
-def make_tools(ws: Workspace) -> list[Any]:
+def make_tools(ws: Workspace) -> list[Any]:  # noqa: PLR0915 - one closure per design tool
     """Build the design tool set closing over one workspace."""
 
     def window() -> str:
@@ -79,7 +81,7 @@ def make_tools(ws: Workspace) -> list[Any]:
         ws.certificate = None
         return _board_state(ws)
 
-    def place_seat(
+    def place_seat(  # noqa: PLR0913, PLR0917 - parameters mirror the seat record
         shape_id: int,
         x: int,
         y: int,
