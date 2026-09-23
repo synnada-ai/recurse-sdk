@@ -1177,6 +1177,29 @@ def test_status_cancel_and_artifacts_use_the_public_run_routes(
     assert service.artifact_download_authorization == "Bearer artifact-token"
 
 
+def test_artifacts_replace_an_existing_regular_file_on_each_download(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+) -> None:
+    """A verified artifact replaces only its destination and can be downloaded again."""
+    service.run_views = [service.run_views[-1]]
+    output_directory = tmp_path / "downloads"
+    destination = output_directory / "results" / "receipt.json"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"old artifact")
+    unrelated = output_directory / "notes.txt"
+    unrelated.write_bytes(b"keep me")
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 0
+    assert destination.read_bytes() == service.artifact_bytes
+    assert unrelated.read_bytes() == b"keep me"
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 0
+    assert destination.read_bytes() == service.artifact_bytes
+    assert unrelated.read_bytes() == b"keep me"
+
+
 @pytest.mark.parametrize("run_status", ["queued", "running", "succeeded"])
 def test_status_without_failure_preserves_normal_output(
     service: FakeService,
@@ -2126,13 +2149,56 @@ def test_artifact_path_cannot_escape_through_a_local_symlink(tmp_path: Path) -> 
         cli._artifact_path(output, "linked/result.json")
 
 
-@pytest.mark.parametrize("case", ["expired", "non-object", "collision"])
-def test_artifact_download_refuses_unusable_metadata_or_destination(
+def test_artifacts_reject_a_destination_symlink_without_replacing_its_target(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+) -> None:
+    """An inventoried artifact path cannot alias and replace an unrelated local file."""
+    service.run_views = [service.run_views[-1]]
+    output_directory = tmp_path / "downloads"
+    unrelated = output_directory / "notes.txt"
+    unrelated.parent.mkdir()
+    unrelated.write_bytes(b"keep me")
+    destination = output_directory / "results" / "receipt.json"
+    destination.parent.mkdir()
+    destination.symlink_to("../notes.txt")
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 2
+    assert destination.is_symlink()
+    assert unrelated.read_bytes() == b"keep me"
+
+
+def test_artifacts_explain_a_local_parent_symlink_without_touching_its_target(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A refused local alias is identified as a local path, not bad service data."""
+    service.run_views = [service.run_views[-1]]
+    output_directory = tmp_path / "downloads"
+    real_directory = output_directory / "real"
+    real_directory.mkdir(parents=True)
+    target = real_directory / "receipt.json"
+    target.write_bytes(b"unrelated file")
+    (output_directory / "results").symlink_to(real_directory, target_is_directory=True)
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 2
+    error = capsys.readouterr().err
+    assert "artifact destination path contains a symlink" in error
+    assert str(output_directory / "results" / "receipt.json") in error
+    assert "service returned invalid artifact metadata" not in error
+    assert target.read_bytes() == b"unrelated file"
+
+
+@pytest.mark.parametrize("case", ["expired", "non-object", "directory"])
+def test_artifact_download_refuses_unusable_metadata_or_directory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     case: str,
 ) -> None:
-    """Expired payloads, malformed lists, and existing files are never overwritten."""
+    """Expired payloads, malformed lists, and destination directories remain errors."""
     monkeypatch.setattr(cli, "_access_token", lambda: "token")
     artifact: object = {
         "output_id": "output-id",
@@ -2141,8 +2207,8 @@ def test_artifact_download_refuses_unusable_metadata_or_destination(
     destination = tmp_path / "result.json"
     if case == "non-object":
         artifact = "bad"
-    elif case == "collision":
-        destination.write_text("keep")
+    elif case == "directory":
+        destination.mkdir()
     monkeypatch.setattr(
         cli,
         "_run_request",
@@ -2160,8 +2226,36 @@ def test_artifact_download_refuses_unusable_metadata_or_destination(
     )
     with pytest.raises((cli.ServiceError, cli._CliError)):
         cli._artifacts("run-id", str(tmp_path))
-    if case == "collision":
-        assert destination.read_text() == "keep"
+    if case == "directory":
+        assert destination.is_dir()
+        assert list(destination.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        cli.ServiceError("artifact download failed"),
+        cli.ServiceError("artifact verification failed"),
+    ],
+)
+def test_artifact_download_failure_preserves_an_existing_file(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: cli.ServiceError,
+) -> None:
+    """Transport and verification failures cannot replace previously downloaded bytes."""
+    service.run_views = [service.run_views[-1]]
+    destination = tmp_path / "results" / "receipt.json"
+    destination.parent.mkdir()
+    destination.write_bytes(b"known good artifact")
+    monkeypatch.setattr(cli, "_download_artifact", lambda _grant: (_ for _ in ()).throw(failure))
+
+    with pytest.raises(cli.ServiceError, match=str(failure)):
+        cli._artifacts(service.run_id, str(tmp_path))
+    assert destination.read_bytes() == b"known good artifact"
+    assert list(destination.parent.iterdir()) == [destination]
 
 
 def test_artifact_atomic_write_cleans_up_after_replace_failure(
@@ -2192,6 +2286,8 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
     monkeypatch.setattr(cli, "_run_request", run_request)
     monkeypatch.setattr(cli, "_authenticated_request", lambda *_args, **_kwargs: ({}, "token"))
     monkeypatch.setattr(cli, "_download_artifact", lambda _grant: b"result")
+    destination = tmp_path / "result.json"
+    destination.write_bytes(b"known good artifact")
 
     def fail_replace(source: str, destination: Path) -> None:
         """Simulate a filesystem failure after the temporary write."""
@@ -2201,7 +2297,8 @@ def test_artifact_atomic_write_cleans_up_after_replace_failure(
     monkeypatch.setattr("os.replace", fail_replace)
     assert main(["artifacts", "run-id", "--output", str(tmp_path)]) == 2
     assert "error: could not save artifact result.json: rename failed" in capsys.readouterr().err
-    assert list(tmp_path.iterdir()) == []
+    assert destination.read_bytes() == b"known good artifact"
+    assert list(tmp_path.iterdir()) == [destination]
 
 
 def test_deploy_sends_and_confirms_selected_resource_defaults(

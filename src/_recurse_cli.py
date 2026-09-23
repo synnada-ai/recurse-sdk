@@ -2100,9 +2100,12 @@ def _artifact_path(output_directory: Path, path: object) -> Path:
     if path.startswith("/") or "\\" in path or any(part in {"", ".", ".."} for part in parts):
         raise ServiceError("the Recurse service returned invalid artifact metadata")
     root = output_directory.resolve()
-    destination = root.joinpath(*parts).resolve(strict=False)
+    candidate = root.joinpath(*parts)
+    destination = candidate.resolve(strict=False)
     if not destination.is_relative_to(root):
         raise ServiceError("the Recurse service returned invalid artifact metadata")
+    if candidate != destination:
+        raise _CliError(f"artifact destination path contains a symlink: {candidate}")
     return destination
 
 
@@ -2120,8 +2123,8 @@ def _artifacts(run_id: str, output_directory: str) -> None:
             raise ServiceError("the Recurse service returned invalid artifact metadata")
         output_id = required_field(artifact, "output_id")
         path = _artifact_path(root, artifact.get("path"))
-        if path.exists():
-            raise _CliError(f"artifact destination already exists: {path}")
+        if path.exists() and not path.is_file():
+            raise _CliError(f"artifact destination is not a regular file: {path}")
         grant, token = _authenticated_request(
             "GET",
             f"/v1/runs/{quoted_run_id}/artifacts/" + urllib.parse.quote(output_id, safe=""),

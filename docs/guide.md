@@ -457,7 +457,7 @@ Ctrl-D still ends stdin input or aborts an unanswered prompt. Closing a terminal
 run cancellation request.
 
 Artifacts are available for 24 hours after completion. Downloads refuse unsafe paths and existing
-files, verify size and SHA-256, and only then atomically move the file into place.
+directories, verify size and SHA-256, and only then atomically replace the destination file.
 
 For automation, `recurse run` exits with `0` on success, `1` on confirmed agent failure, `3` when
 it observes a remotely cancelled run, `4` on confirmed infrastructure failure, and `5` on a confirmed
