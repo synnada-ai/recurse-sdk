@@ -74,6 +74,7 @@ import json
 import random
 from collections import Counter
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -103,6 +104,11 @@ _AXIS_NAMES = {
 }
 
 N_COLORS = 10
+
+#: Connected seats are welded in pairs.
+_CONNECTED_GROUP_SIZE = 2
+#: The beam keeps at most this many candidate drags per seat group at each depth.
+_PLANS_PER_GROUP = 2
 
 
 def seat_cells(shape_id: int, rotation: int, mirrored: bool, pos: Coord) -> tuple[Coord, ...]:
@@ -212,24 +218,29 @@ class Level:
 
 
 def _xy(v: dict[str, Any]) -> Coord:
+    """Read an integer (x, y) pair."""
     return int(v["x"]), int(v["y"])
 
 
 def _opt_color(v: Any) -> int | None:
+    """Read a color index, treating null and negative values as none."""
     return None if v is None or int(v) < 0 else int(v)
 
 
 def _lock_id(cfg: Any, want_type: int) -> int | None:
+    """Read a lock family id when the config has the wanted type."""
     if not isinstance(cfg, dict) or int(cfg.get("Type", 0)) != want_type:
         return None
     return int(cfg["ColorId"])
 
 
 def _axis_lock(v: Any) -> int:
+    """Read an axis lock given as a name or an integer."""
     return _AXIS_NAMES[v] if isinstance(v, str) else int(v)
 
 
 def _parse_seat(s: dict[str, Any]) -> Seat:
+    """Parse one seat record."""
     # ConnectedBrickID "none" sentinel is 0 in old exports and -1 in new ones;
     # real groups use positive ids.
     connected = int(s.get("ConnectedBrickID") or 0)
@@ -247,10 +258,12 @@ def _parse_seat(s: dict[str, Any]) -> Seat:
 
 
 def _parse_settler(t: dict[str, Any]) -> Settler:
+    """Parse one settler record."""
     return Settler(color=int(t["ColorIndex"]), key_id=_lock_id(t.get("LockNKeyConfig"), 2))
 
 
 def _parse_elevator(e: dict[str, Any]) -> Elevator:
+    """Parse one elevator record and its queue."""
     cfg = e.get("SettlerConfig")
     if cfg is not None:
         queue = tuple(_parse_settler(t) for t in cfg)
@@ -267,7 +280,7 @@ def _parse_elevator(e: dict[str, Any]) -> Elevator:
 # --------------------------------------------------------------------------- validation
 
 
-def validate(level: Level) -> list[str]:
+def validate(level: Level) -> list[str]:  # noqa: PLR0912, PLR0915 - one flat invariant list
     """Check every corpus-exact invariant; return human-readable violations.
 
     An empty list means the level satisfies all rules that hold 100/100 in the
@@ -277,6 +290,7 @@ def validate(level: Level) -> list[str]:
     errors: list[str] = []
 
     def err(msg: str) -> None:
+        """Record one validation error."""
         errors.append(msg)
 
     if level.width <= 0 or level.height <= 0:
@@ -284,7 +298,7 @@ def validate(level: Level) -> list[str]:
 
     covered: dict[Coord, int] = {}
     for i, seat in enumerate(level.seats):
-        if not 0 <= seat.shape_id <= 7:
+        if seat.shape_id not in SHAPES:
             err(f"seat {i}: SeatID {seat.shape_id} outside 0-7")
             continue
         if not 0 <= seat.color < N_COLORS:
@@ -366,7 +380,7 @@ def validate(level: Level) -> list[str]:
         if seat.connected_id is not None:
             groups.setdefault(seat.connected_id, []).append(i)
     for gid, members in groups.items():
-        if len(members) != 2:
+        if len(members) != _CONNECTED_GROUP_SIZE:
             err(f"connected group {gid} has {len(members)} seats, expected 2")
             continue
         a, b = (level.seats[m] for m in members)
@@ -402,7 +416,8 @@ class Block:
     def color(self) -> int:
         """Color of the currently exposed layer."""
         if self.layer == 1:
-            assert self.seat.inner_color is not None
+            if self.seat.inner_color is None:
+                raise ValueError("inner layer requires an inner color")
             return self.seat.inner_color
         return self.seat.color
 
@@ -442,6 +457,10 @@ class Rules:
     cell)."""
 
 
+#: The default rule variant, shared because ``Rules`` is immutable.
+DEFAULT_RULES = Rules()
+
+
 class Simulator:
     """Mutable game state driven by unit-step block moves.
 
@@ -460,9 +479,10 @@ class Simulator:
         self,
         level: Level,
         *,
-        rules: Rules = Rules(),
+        rules: Rules = DEFAULT_RULES,
         unlock_requires_all_keys: bool = True,
     ) -> None:
+        """Set up the mutable game state for one level under the given rules."""
         self.level = level
         self.rules = rules
         self.unlock_all = unlock_requires_all_keys
@@ -509,6 +529,7 @@ class Simulator:
     # -- state queries
 
     def _blocked_cells(self, exclude: frozenset[int]) -> set[Coord]:
+        """Cells occupied by live blocks other than the excluded ones."""
         out: set[Coord] = set()
         for i, b in enumerate(self.blocks):
             if b.alive and i not in exclude:
@@ -631,6 +652,7 @@ class Simulator:
         return out
 
     def _take(self, settler: Settler, index: int) -> None:
+        """Board one settler onto a block, completing or flipping the block when it fills."""
         if settler.key_id is not None:
             self.keys_collected[settler.key_id] += 1
         block = self.blocks[index]
@@ -643,6 +665,7 @@ class Simulator:
                 block.alive = False
 
     def _board(self, cell: Coord, index: int) -> None:
+        """Board the settler standing on a cell onto a block."""
         self._take(self.figures.pop(cell), index)
 
     def _mouth_takers(self, cell: Coord, color: int) -> list[int]:
@@ -769,6 +792,8 @@ class SolveResult:
 
 @dataclass(frozen=True)
 class _Plan:
+    """One candidate drag: which block moves, along which path, and what it collects."""
+
     index: int
     path: tuple[Coord, ...]
     covered: int
@@ -776,7 +801,9 @@ class _Plan:
     dest: Coord | None = None
 
 
-def _plans_for(sim: Simulator, index: int, limit: int = 4096) -> tuple[list[_Plan], list[_Plan]]:
+def _plans_for(  # noqa: PLR0915 - one breadth-first search with its local helpers
+    sim: Simulator, index: int, limit: int = 4096
+) -> tuple[list[_Plan], list[_Plan]]:
     """BFS the group's translation space for reachable placements.
 
     Returns:
@@ -797,12 +824,14 @@ def _plans_for(sim: Simulator, index: int, limit: int = 4096) -> tuple[list[_Pla
     start = sim.blocks[index].delta
 
     def legal(delta: Coord) -> bool:
+        """Whether the group may rest at this translation."""
         dx, dy = delta[0] - start[0], delta[1] - start[1]
         return all(
             sim.cell_ok(b, (x + dx, y + dy), blocked) for _, b in members for x, y in b.cells
         )
 
     def gain(delta: Coord) -> tuple[int, bool]:
+        """Settlers collected at this translation, and whether a block completes."""
         dx, dy = delta[0] - start[0], delta[1] - start[1]
         total = 0
         completes = False
@@ -833,13 +862,14 @@ def _plans_for(sim: Simulator, index: int, limit: int = 4096) -> tuple[list[_Pla
         return total, completes
 
     def path_to(delta: Coord, prev: dict[Coord, Coord]) -> tuple[Coord, ...]:
+        """Rebuild the step path from the search's predecessor map."""
         path = [delta]
         node = delta
         while prev[node] != node:
             node = prev[node]
             path.append(node)
         path.reverse()
-        return tuple((b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:], strict=False))
+        return tuple((b[0] - a[0], b[1] - a[1]) for a, b in pairwise(path))
 
     absorbing: list[_Plan] = []
     parks: list[_Plan] = []
@@ -877,6 +907,7 @@ def _plans_for(sim: Simulator, index: int, limit: int = 4096) -> tuple[list[_Pla
 
 
 def _execute(sim: Simulator, plan: _Plan) -> None:
+    """Carry out one planned drag on the simulator."""
     sim.taps += 1
     if plan.dest is not None:
         sim.place(plan.index, plan.dest)
@@ -917,6 +948,7 @@ def _pick_park(sim: Simulator, parks: list[_Plan], rng: random.Random, sample: i
 
 
 def _gather_plans(sim: Simulator) -> tuple[list[_Plan], list[_Plan]]:
+    """Collect the absorbing drags and the repositioning drags available now."""
     absorbing: list[_Plan] = []
     parks: list[_Plan] = []
     seen: set[tuple[int, ...]] = set()
@@ -933,14 +965,14 @@ def _gather_plans(sim: Simulator) -> tuple[list[_Plan], list[_Plan]]:
     return absorbing, parks
 
 
-def solve_beam(
+def solve_beam(  # noqa: PLR0913 - independent keyword-only search knobs
     level: Level,
     *,
     width: int = 48,
     max_taps: int = 96,
     branch: int = 10,
     park_branch: int = 4,
-    rules: Rules = Rules(),
+    rules: Rules = DEFAULT_RULES,
     unlock_requires_all_keys: bool = True,
 ) -> SolveResult:
     """Clear a level with a deduplicated beam search over drag plans.
@@ -980,7 +1012,7 @@ def solve_beam(
             diverse: list[_Plan] = []
             rest: list[_Plan] = []
             for plan in absorbing:
-                if per_group.get(plan.index, 0) < 2:
+                if per_group.get(plan.index, 0) < _PLANS_PER_GROUP:
                     per_group[plan.index] = per_group.get(plan.index, 0) + 1
                     diverse.append(plan)
                 else:
@@ -1012,14 +1044,14 @@ def solve_beam(
     return SolveResult(False, best_fail.taps, best_fail.steps, 1)
 
 
-def solve(
+def solve(  # noqa: PLR0913 - independent keyword-only search knobs
     level: Level,
     *,
     playouts: int = 32,
     max_taps: int = 400,
     seed: int = 0,
     park_patience: int = 6,
-    rules: Rules = Rules(),
+    rules: Rules = DEFAULT_RULES,
     unlock_requires_all_keys: bool = True,
 ) -> SolveResult:
     """Try to clear a level with randomized greedy playouts.
@@ -1037,6 +1069,7 @@ def solve(
         max_taps: Per-playout drag budget (a generous multiple of corpus taps).
         seed: Base RNG seed; playout ``k`` uses ``seed + k``.
         park_patience: Consecutive non-absorbing moves allowed before giving up.
+        rules: Movement and absorption rule variant.
         unlock_requires_all_keys: Passed through to :class:`Simulator`.
 
     Returns:
@@ -1044,7 +1077,7 @@ def solve(
     """
     last = SolveResult(False, 0, 0, 0)
     for k in range(playouts):
-        rng = random.Random(seed + k)
+        rng = random.Random(seed + k)  # noqa: S311 - reproducible playouts, not security
         sim = Simulator(level, rules=rules, unlock_requires_all_keys=unlock_requires_all_keys)
         parked = 0
         while not sim.solved and sim.taps < max_taps:
@@ -1075,6 +1108,7 @@ BROKEN_EXPORTS = frozenset({31, 53, 62, 72, 84, 92})
 
 
 def _level_files(corpus: Path) -> list[Path]:
+    """List level files in numeric order."""
     return sorted(corpus.glob("Level *.json"), key=lambda p: int(p.stem.split()[1]))
 
 

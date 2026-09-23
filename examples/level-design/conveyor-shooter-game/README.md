@@ -171,8 +171,8 @@ keys. The rules were inferred from reference levels and play observation, and a 
 not guaranteed to match the original game in every detail. Recognizability is an LLM judgment
 recorded by `review_visual_retention`; it still requires human review.
 
-For local checks, run from this folder:
+For local checks, run from the repository root:
 
 ```sh
-uv run --directory tests --locked pytest
+uv run --directory examples/level-design/tests --locked pytest -k conveyor_shooter
 ```

@@ -20,6 +20,10 @@ _Tool = Callable[..., Any]
 _READ_ONLY_TOOLS = frozenset({"compare_image_variants"})
 
 
+#: A crop is (left, top, right, bottom).
+_CROP_BOUNDS = 4
+
+
 class DesignSession:
     """Opaque run-local design workspace passed through agent storage."""
 
@@ -78,7 +82,7 @@ def _build_tools() -> DesignSession:
     if crop_value is not None:
         if (
             not isinstance(crop_value, (list, tuple))
-            or len(crop_value) != 4
+            or len(crop_value) != _CROP_BOUNDS
             or any(not isinstance(value, int) for value in crop_value)
         ):
             raise ValueError("crop must contain exactly four integers")
