@@ -96,7 +96,7 @@ def new_board(session: DesignSession, width: int, height: int) -> str:
     return _call(session, "new_board", width=width, height=height)
 
 
-def place_seat(
+def place_seat(  # noqa: PLR0913, PLR0917 - parameters mirror the seat record
     session: DesignSession,
     shape_id: int,
     x: int,

@@ -262,7 +262,9 @@ class Engine:
         self._advance_cache[state] = result
         return result
 
-    def _advance_uncached(self, state: GameState) -> tuple[GameState, Event]:
+    def _advance_uncached(  # noqa: PLR0911 - one return per kind of game event
+        self, state: GameState
+    ) -> tuple[GameState, Event]:
         """Compute one pure event transition before it is memoized by ``advance``."""
         if not state.active:
             raise ValueError("cannot advance without an active shooter")
@@ -312,6 +314,7 @@ class Engine:
         lane_heads: tuple[int, ...],
         tray: tuple[ShooterState, ...],
     ) -> GameState:
+        """Put a shooter group on the belt and open front locks a waiting key allows."""
         if state.outcome(self.level) is not Outcome.IN_PROGRESS:
             raise ValueError("cannot launch after the level has ended")
         active_count = sum(len(group.shooters) for group in state.active)
@@ -335,6 +338,7 @@ class Engine:
         )
 
     def _tick(self, state: GameState) -> tuple[GameState, tuple[int, ...]]:
+        """Advance one belt tick: each shooter fires, then moves, exits, parks, or loses."""
         health = list(state.health)
         tray = list(state.tray)
         next_active: list[BeltGroup] = []
@@ -405,6 +409,7 @@ class Engine:
         selected: Shooter,
         selected_lane: int,
     ) -> tuple[tuple[ShooterState, ...], tuple[int, ...]]:
+        """Resolve the shooter or complete connected group launched from a lane front."""
         heads = list(state.lane_heads)
         if selected.id in state.locked:
             raise ValueError(f"queue lock {selected.id} blocks lane {selected_lane}")
@@ -434,6 +439,7 @@ class Engine:
         tray: tuple[ShooterState, ...],
         selected: ShooterState,
     ) -> tuple[tuple[ShooterState, ...], tuple[ShooterState, ...]]:
+        """Resolve the shooter or complete connected group relaunched from the tray."""
         if selected.connection_id is None:
             slot_index = tray.index(selected)
             return (selected,), (*tray[:slot_index], *tray[slot_index + 1 :])
@@ -453,6 +459,7 @@ class Engine:
         return shooters, remaining
 
     def _member_position(self, group: BeltGroup, member_index: int) -> int:
+        """Belt position of one member of a connected group."""
         connected_gap = self.rules.connected_gap or 0
         return group.position + (len(group.shooters) - member_index - 1) * connected_gap
 
@@ -463,6 +470,7 @@ class Engine:
         locked: frozenset[int],
         lane_heads: tuple[int, ...],
     ) -> tuple[frozenset[int], frozenset[int], frozenset[int], tuple[int, ...]]:
+        """Open front-of-lane locks with waiting keys, lowest lane first."""
         waiting = set(waiting_keys)
         freed = set(freed_keys)
         remaining = set(locked)
@@ -488,7 +496,7 @@ class Engine:
             heads[lane_index] += 1
         return frozenset(waiting), frozenset(freed), frozenset(remaining), tuple(heads)
 
-    def _fire(
+    def _fire(  # noqa: PLR0911, PLR0912, PLR0913, PLR0917 - the complete shot rule in one place
         self,
         position: int,
         shooter: ShooterState,
@@ -498,6 +506,7 @@ class Engine:
         pipe_progress: list[int],
         ice_health: list[int],
     ) -> tuple[ShooterState, int | None, int | None]:
+        """Fire one shot; return the updated shooter, the hit target, and any released key."""
         if position >= len(self.level.lap):
             return shooter, None, None
         ray = self.level.lap[position]

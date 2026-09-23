@@ -24,6 +24,15 @@ from conveyor_game import (
 )
 from conveyor_game.model import mechanics_used
 
+#: A target window is a (first level, last level) pair.
+_WINDOW_BOUNDS = 2
+#: Campaign-fit floors: how many measured axes must sit inside their reference bands.
+MIN_STATIC_INSIDE = 10
+MIN_TEMPORAL_INSIDE = 2
+MIN_RICHNESS_INSIDE = 5
+#: Every admitted level gives the player this many tray slots.
+REQUIRED_SLOT_COUNT = 5
+
 
 @dataclass(frozen=True)
 class Band:
@@ -84,7 +93,7 @@ def load_context(path: Path) -> CampaignContext:
     if raw.get("schema") != "conveyor-campaign-context-v1":
         raise ValueError(f"unsupported conveyor shooter campaign context in {path}")
     window = raw["target_window"]
-    if len(window) != 2:
+    if len(window) != _WINDOW_BOUNDS:
         raise ValueError(f"target_window must have two entries, got {window!r}")
     return CampaignContext(
         next_level=int(raw["next_level"]),
@@ -226,9 +235,9 @@ def campaign_gate(measurement: CampaignMeasurement) -> bool:
     floors.
     """
     return bool(
-        measurement.static_inside >= 10
-        and measurement.temporal_inside >= 2
-        and measurement.richness_inside >= 5
+        measurement.static_inside >= MIN_STATIC_INSIDE
+        and measurement.temporal_inside >= MIN_TEMPORAL_INSIDE
+        and measurement.richness_inside >= MIN_RICHNESS_INSIDE
     )
 
 
@@ -247,7 +256,7 @@ def source_campaign_gate(measurement: CampaignMeasurement) -> bool:
     tray = measurement.static["mean_tray"]
     choices = measurement.static["mean_available_actions"]
     return bool(
-        measurement.temporal_inside >= 2
+        measurement.temporal_inside >= MIN_TEMPORAL_INSIDE
         and fill.value >= fill.low
         and box_fill.value >= box_fill.low
         and relaunch.inside
@@ -607,7 +616,7 @@ def _mechanical_violations(
         violations.append(
             f"Pixel Pipe segment has no matching live trigger pixel: {missing_pipe_triggers}"
         )
-    if raw.get("SlotCount") != 5:
+    if raw.get("SlotCount") != REQUIRED_SLOT_COUNT:
         violations.append(f"SlotCount must be 5, got {raw.get('SlotCount')}")
     if raw.get("ConveyorLimit") not in {4, 5}:
         violations.append(
@@ -629,7 +638,8 @@ def _band_value_dict(value: BandValue) -> dict[str, float | bool]:
 
 def _report(stem: str, result: CertificationResult) -> str:
     """Render a compact visual and metric review artifact."""
-    assert result.campaign is not None and result.certificate is not None
+    if result.campaign is None or result.certificate is None:
+        raise ValueError("a report needs a certified result with campaign measurements")
     rows = []
     for axis, values in (
         ("static", result.campaign.static),

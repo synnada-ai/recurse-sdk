@@ -2603,6 +2603,29 @@ def test_artifacts_reject_a_destination_symlink_without_replacing_its_target(
     assert unrelated.read_bytes() == b"keep me"
 
 
+def test_artifacts_explain_a_local_parent_symlink_without_touching_its_target(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A refused local alias is identified as a local path, not bad service data."""
+    service.run_views = [service.artifact_run_view]
+    output_directory = tmp_path / "downloads"
+    real_directory = output_directory / "real"
+    real_directory.mkdir(parents=True)
+    target = real_directory / "receipt.json"
+    target.write_bytes(b"unrelated file")
+    (output_directory / "results").symlink_to(real_directory, target_is_directory=True)
+
+    assert main(["artifacts", service.run_id, "--output", str(output_directory)]) == 2
+    error = capsys.readouterr().err
+    assert "artifact destination path contains a symlink" in error
+    assert str(output_directory / "results" / "receipt.json") in error
+    assert "service returned invalid artifact metadata" not in error
+    assert target.read_bytes() == b"unrelated file"
+
+
 @pytest.mark.parametrize("case", ["non-object", "directory"])
 def test_artifact_download_refuses_unusable_metadata_or_directory(
     tmp_path: Path,
