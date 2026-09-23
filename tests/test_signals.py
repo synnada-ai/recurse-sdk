@@ -95,11 +95,12 @@ def test_sigint_cancels_or_reports_uncertainty(
         admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
         assert len(admissions) == (2 if stage == "admission" else 1)
         assert all(body == admissions[0] for body in admissions)
+        assert stdout == b""
         if stage == "cancellation":
-            assert b"may continue" in stdout
-            assert b"status: cancelled" not in stdout
+            assert b"may continue" in stderr
+            assert b"status: cancelled" not in stderr
         else:
-            assert b"status: cancelled" in stdout
+            assert b"status: cancelled" in stderr
     finally:
         release.set()
         if process.poll() is None:
@@ -131,7 +132,8 @@ def test_sigtstp_and_sigcont_keep_native_job_control(service: FakeService, tmp_p
         stdout, stderr = process.communicate(timeout=10)  # EOF resumes normal input consumption.
         assert process.returncode == 0
         assert b"status: succeeded" in stdout
-        assert stderr == b""
+        assert b"Packaging application..." in stderr
+        assert f"run: {service.run_id}".encode() in stderr
         assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
     finally:
         if process.poll() is None:
