@@ -2540,9 +2540,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "run",
         help="run an application to completion",
         epilog=(
-            "Runs are preemptible by default and can occasionally be interrupted. "
-            "Recurse does not restart a preempted run because tools may already have acted. "
-            "Inspect external effects before deciding whether to start a new run."
+            "Runs are preemptible by default. Interruption detection is best-effort; "
+            "some interruptions may not be reported as preempted. The CLI does not "
+            "automatically retry a reported preempted run. Inspect external effects "
+            "before deciding whether to start a new run, which may repeat them."
         ),
     )
     run.add_argument("app", help="application directory containing agent.yaml")
@@ -2567,7 +2568,10 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--non-preemptible",
         action="store_true",
-        help="avoid occasional Function preemption at 3x Function CPU and memory cost",
+        help=(
+            "avoid Modal Function preemption at 3x Function CPU and memory cost; "
+            "other failures can still occur"
+        ),
     )
     run_status = commands.add_parser("status", help="inspect a run")
     run_status.add_argument("run_id", help="run identifier")

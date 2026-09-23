@@ -3406,7 +3406,10 @@ def test_run_help_explains_non_preemptible_function_surcharge(
     output = " ".join(capsys.readouterr().out.split())
     assert "--non-preemptible" in output
     assert "preemptible by default" in output
+    assert "best-effort" in output
+    assert "does not automatically retry a reported preempted run" in output
     assert "3x Function CPU and memory cost" in output
+    assert "other failures can still occur" in output
     assert "Inspect external effects before deciding whether to start a new run" in output
 
 
