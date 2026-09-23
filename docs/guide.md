@@ -426,9 +426,10 @@ recurse run path/to/app --inputs inputs.json --cpu 1 --memory-mib 1024 \
 ```
 
 The CLI builds and prepares an immutable version, admits that version directly, and waits for
-terminal state. Progress and the admitted run ID go to standard error. At terminal state, standard
-output contains exactly one YAML document: the same versioned run snapshot returned by
-`recurse status <run-id>`. It does not create an MCP deployment. Runs have a 15-minute execution
+terminal state. It writes and flushes `run_id` to standard output as soon as admission is confirmed,
+then appends the terminal snapshot and `cli_error: null` to the same YAML document. Routine progress
+messages are suppressed; standard error is reserved for error diagnostics. A later
+`recurse status <run-id>` returns the same snapshot and CLI outcome. It does not create an MCP deployment. Runs have a 15-minute execution
 limit. Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
@@ -466,26 +467,82 @@ metadata, but `recurse artifacts` refuses the unavailable download. Downloads re
 and existing directories, verify size and SHA-256, and only then atomically replace the destination
 file.
 
-For automation, both `recurse run` and `recurse status` write exactly one canonical YAML document
-to standard output after a successful retrieval. Field order and explicit `null` values are stable;
-the complete application return value always stays under `outputs.result`, including an `answer`
-property. Ordinary Unicode remains readable UTF-8; terminal controls and explicit bidirectional
-formatting controls are emitted as YAML escapes. Parsing the YAML restores the original strings.
-Progress, the admitted run ID, and recovery guidance go only to standard error.
+For automation, `recurse run` and `recurse status` write one YAML document to standard output,
+including on handled command errors and Ctrl-C. The early run ID is available through a pipe;
+read until command completion before treating the rest of the document as a complete outcome.
+Each field is written once. The full application return value stays under `outputs.result`,
+including an `answer` property. Ordinary Unicode remains readable UTF-8; terminal controls and
+explicit bidirectional formatting controls are escaped. Parsing restores the original strings.
+Help remains normal CLI help, and an uncatchable termination or broken output stream cannot
+promise a completed document.
 
-`recurse run` exits `0` for `succeeded` and `1` for every confirmed unsuccessful terminal state:
-`failed`, `cancelled`, `timed_out`, or `preempted`. `recurse status` exits `0` whenever it retrieves a
-valid snapshot, including queued, running, and unsuccessful states. Both commands exit `2` for
-invalid syntax or options, local input and packaging errors, authentication failures, request and
-transport failures, malformed service responses, or an observation timeout where remote state is
-unconfirmed. These CLI/API errors leave standard output empty. Ctrl-C retains exit `130`, including
-when cancellation is confirmed.
+The two commands use the same exit-code meaning: whether the **CLI operation** completed.
+The YAML `status` and `error` describe the **remote execution**; top-level `cli_error` describes
+a command failure and is `null` when the command succeeds.
+
+| Exit code | `recurse run` | `recurse status` |
+| --- | --- | --- |
+| `0` | Observed a terminal outcome, including a failed, cancelled, timed-out, or preempted run. | Retrieved a valid snapshot, including queued, running, or unsuccessful runs. |
+| `1` | Command failed: invalid input, packaging/authentication/API/network failure, malformed response, observation timeout, or an internal CLI error. | Command failed: invalid arguments, authentication/API/network failure, malformed response, or an internal CLI error. |
+| `130` | Interrupted by Ctrl-C; cancellation may or may not be confirmed. | Interrupted by Ctrl-C; this lookup does not cancel the run. |
+
+**Breaking change from SDK 0.2.0:** a confirmed unsuccessful `run` now exits `0` instead of `1`;
+handled CLI/API errors in these two commands exit `1` instead of `2`. Other commands retain their
+existing exit codes. `recurse run ... && next-step` alone no longer gates on remote execution success.
+Check the YAML status as well, using Python from an environment containing the SDK and PyYAML:
+
+```sh
+recurse run path/to/app --inputs inputs.json > run.yaml &&
+python -c 'import sys, yaml; run = yaml.safe_load(open("run.yaml")); sys.exit(run.get("status") != "succeeded")' &&
+echo "The remote run succeeded; continue here."
+```
+
+A confirmed failed execution still has its original remote `error` and any available partial
+outputs in the snapshot, with `cli_error: null`, and exits `0`. For example, its outcome fields are:
+
+```yaml
+run_id: 77777777-7777-4777-8777-777777777777
+status: failed
+error:
+  code: execution_failed
+  message: The agent execution failed.
+cli_error: null
+```
+
+On a command failure, the document contains `cli_error.code` and `cli_error.message` instead of an
+invented remote failure. Before admission, there may be no run ID. For example, `recurse run` without
+an application argument exits `1` with an `invalid_arguments` CLI error. A failed observation retains
+the run ID, admission reference when available, and structured recovery guidance:
+
+```yaml
+run_id: 77777777-7777-4777-8777-777777777777
+admission_reference: run_example
+recovery:
+  message: Remote state is unconfirmed. Execution and charges may continue. Inspect this run before starting another run.
+  inspect: recurse status 77777777-7777-4777-8777-777777777777
+  cancel: recurse cancel 77777777-7777-4777-8777-777777777777
+cli_error:
+  code: request_failed
+  message: The Recurse service could not be reached.
+```
+
+`cli_error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
+`authentication_failed`, `request_failed`, `observation_timeout`, `interrupted`, or `internal_error`.
+These are separate from the remote `error.code` values below. When admission identity is unknown,
+keep `admission_reference`; do not blindly resubmit. A confirmed input rejection does not claim
+that remote execution may continue.
+
+Ctrl-C finishes the document with `cli_error.code: interrupted` and exits `130`. After admission,
+it includes the cancellation response's `status` only when validated; this can be a terminal state
+or a still-pending state. It does not invent result, cost, or artifact fields from that limited
+response. If cancellation remains unconfirmed or pending, `recovery` gives the next steps.
+Use `status` to retrieve the complete snapshot later.
 
 For example, a completed run can produce:
 
 ```yaml
-schema_version: 1
 run_id: 77777777-7777-4777-8777-777777777777
+schema_version: 1
 status: succeeded
 created_at: '2026-09-22T12:00:00Z'
 started_at: '2026-09-22T12:00:02Z'
@@ -505,6 +562,7 @@ outputs:
     answer: done
     score: 0.9
   artifacts: []
+cli_error: null
 ```
 
 `outputs.availability` is `pending`, `available`, `expired`, or `unavailable`. Artifact metadata can
@@ -529,13 +587,15 @@ not yet known or is unavailable.
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
 execution stopped. `observation_timeout` means local polling ended without confirmation, not that
-the service reported `timed_out`. These CLI failures exit `2`.
+the service reported `timed_out`. These CLI failures exit `1` and appear under `cli_error`.
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
-may continue, and prints `recurse status <run-id>` and `recurse cancel <run-id>`. Inspect the existing
+may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id>` under `recovery`. Inspect the existing
 run before starting another. If admission itself lost its response, keep the printed admission
 reference: the CLI does not know whether a run was created and does not automatically resubmit it.
 The Ctrl-C recovery described above is the explicit cancellation path.
+
+For a repeatable local check without hosted runs, see [CLI output UAT](cli-output-uat.md).
 
 ## Deployment
 

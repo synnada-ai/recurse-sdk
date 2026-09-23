@@ -775,13 +775,8 @@ def test_run_prepares_and_waits_for_one_direct_run(
     assert admission["idempotency_key"].startswith("run_")
     assert not any(path == "/v1/deployments" for _, path, _, _ in service.requests)
     output = capsys.readouterr()
-    assert yaml.safe_load(output.out) == service.run_views[-1]
-    assert output.err.splitlines() == [
-        "Packaging application...",
-        "Uploading source distribution...",
-        "Preparing runtime...",
-        f"run: {service.run_id}",
-    ]
+    assert yaml.safe_load(output.out) == {**service.run_views[-1], "cli_error": None}
+    assert output.err == ""
 
 
 def test_run_and_status_emit_the_same_single_canonical_yaml_document(
@@ -791,17 +786,17 @@ def test_run_and_status_emit_the_same_single_canonical_yaml_document(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Run progress stays on stderr while both commands preserve one Engine snapshot."""
+    """Both commands preserve the Engine snapshot and add the same CLI outcome."""
     del logged_in
     terminal = service.run_views[-1]
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
     assert main(["run", str(write_app(tmp_path / "app"))]) == 0
     run_output = capsys.readouterr()
-    assert yaml.safe_load(run_output.out) == terminal
+    assert yaml.safe_load(run_output.out) == {**terminal, "cli_error": None}
     assert list(yaml.safe_load(run_output.out)) == [
-        "schema_version",
         "run_id",
+        "schema_version",
         "status",
         "created_at",
         "started_at",
@@ -811,10 +806,10 @@ def test_run_and_status_emit_the_same_single_canonical_yaml_document(
         "cost",
         "error",
         "outputs",
+        "cli_error",
     ]
     assert run_output.out.count("schema_version:") == 1
-    assert "Packaging application..." in run_output.err
-    assert f"run: {service.run_id}" in run_output.err
+    assert run_output.err == ""
 
     service.run_views = [terminal]
     assert main(["status", service.run_id]) == 0
@@ -877,7 +872,7 @@ def test_status_preserves_readable_unicode_and_escapes_only_unsafe_controls(
     assert readable in output.out
     assert all(control not in output.out for control in terminal_controls)
     assert all(control not in output.out for control in bidi_controls)
-    assert list(yaml.safe_load_all(output.out)) == [terminal]
+    assert list(yaml.safe_load_all(output.out)) == [{**terminal, "cli_error": None}]
     assert output.err == ""
 
 
@@ -996,7 +991,7 @@ def test_status_prints_every_canonical_lifecycle_state_and_exits_zero(
 
 
 @pytest.mark.parametrize("run_status", ["failed", "cancelled", "timed_out", "preempted"])
-def test_run_uses_one_for_every_confirmed_unsuccessful_terminal_state(  # noqa: PLR0913,PLR0917 - integration fixtures plus state
+def test_run_observation_succeeds_for_every_confirmed_terminal_state(  # noqa: PLR0913,PLR0917 - integration fixtures plus state
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     tmp_path: Path,
@@ -1004,7 +999,7 @@ def test_run_uses_one_for_every_confirmed_unsuccessful_terminal_state(  # noqa: 
     capsys: pytest.CaptureFixture[str],
     run_status: str,
 ) -> None:
-    """Exit one identifies a retrieved terminal run that did not succeed."""
+    """Exit zero confirms observation even when the remote run did not succeed."""
     del logged_in
     terminal = service.run_views[-1]
     terminal = {
@@ -1019,13 +1014,13 @@ def test_run_uses_one_for_every_confirmed_unsuccessful_terminal_state(  # noqa: 
     service.run_views = [terminal]
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
-    assert main(["run", str(write_app(tmp_path / "app"))]) == 1
+    assert main(["run", str(write_app(tmp_path / "app"))]) == 0
     output = capsys.readouterr()
     assert yaml.safe_load(output.out)["status"] == run_status
-    assert f"run: {service.run_id}" in output.err
+    assert output.err == ""
 
 
-def test_run_preserves_a_future_safe_error_code_and_unsuccessful_exit(
+def test_run_preserves_a_future_safe_error_code_with_successful_observation(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     tmp_path: Path,
@@ -1046,11 +1041,11 @@ def test_run_preserves_a_future_safe_error_code_and_unsuccessful_exit(
     service.run_views = [terminal]
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
-    assert main(["run", str(write_app(tmp_path / "app"))]) == 1
+    assert main(["run", str(write_app(tmp_path / "app"))]) == 0
 
     output = capsys.readouterr()
-    assert yaml.safe_load(output.out) == terminal
-    assert f"run: {service.run_id}" in output.err
+    assert yaml.safe_load(output.out) == {**terminal, "cli_error": None}
+    assert output.err == ""
 
 
 def test_status_preserves_canonical_nulls_and_ignores_undeclared_private_fields(
@@ -1095,20 +1090,23 @@ def test_status_preserves_canonical_nulls_and_ignores_undeclared_private_fields(
         {"error": {"code": "private_provider", "message": "must-not-leak"}},
     ],
 )
-def test_status_rejects_malformed_canonical_snapshots_without_stdout(
+def test_status_rejects_malformed_canonical_snapshots_with_cli_error(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     capsys: pytest.CaptureFixture[str],
     change: dict[str, Any],
 ) -> None:
-    """Incomplete or ill-typed snapshots are CLI errors, never partial YAML documents."""
+    """Malformed remote snapshots produce a CLI error instead of a remote outcome."""
     del logged_in
     service.run_views = [{**service.run_views[-1], **change}]
 
-    assert main(["status", service.run_id]) == 2
+    assert main(["status", service.run_id]) == 1
 
     output = capsys.readouterr()
-    assert output.out == ""
+    view = yaml.safe_load(output.out)
+    assert view["cli_error"]["code"] == "request_failed"
+    assert "status" not in view
+    assert "must-not-leak" not in output.out
     assert "invalid run response" in output.err
 
 
@@ -1383,7 +1381,7 @@ def test_run_resolves_secret_names_before_preparation_and_admits_ids(
     assert not any(path == "/v1/deployments" for path in paths)
     output = capsys.readouterr()
     assert yaml.safe_load(output.out)["status"] == "succeeded"
-    assert output.err.splitlines()[0] == "secret binding: GITHUB_TOKEN=github-token"
+    assert output.err == ""
 
 
 def test_deploy_resolves_secret_names_before_preparation_and_binds_ids(
@@ -1450,11 +1448,11 @@ def test_commands_reuse_the_token_that_resolved_secret_bindings(
         raise RuntimeError("preparation observed")
 
     monkeypatch.setattr(cli, "_prepare", prepare)
-    with pytest.raises(RuntimeError, match="preparation observed"):
-        if operation == "deploy":
+    if operation == "deploy":
+        with pytest.raises(RuntimeError, match="preparation observed"):
             cli._deploy("app", 1.0, 1024, ["TOKEN=secret"])
-        else:
-            cli._run("app", None, 1.0, 1024, ["TOKEN=secret"])
+    else:
+        assert cli._run("app", None, 1.0, 1024, ["TOKEN=secret"]) == 1
 
     assert prepared_with == [("resolved-token", billing_retry_target)]
 
@@ -1481,7 +1479,7 @@ def test_secret_binding_rejects_invalid_or_unresolved_mappings_before_preparatio
     app = write_app(tmp_path / "app")
     service.runtime_secrets = [_runtime_secret_metadata(service)]
 
-    assert main(["run", str(app), "--secret", binding]) == 2
+    assert main(["run", str(app), "--secret", binding]) == 1
     assert not any(path == "/v1/agent-versions" for _, path, _, _ in service.requests)
     assert "secret" in capsys.readouterr().err
 
@@ -1508,7 +1506,7 @@ def test_secret_binding_rejects_duplicate_environment_names_before_preparation(
                 "TOKEN=github-token",
             ]
         )
-        == 2
+        == 1
     )
     assert not any(path == "/v1/agent-versions" for _, path, _, _ in service.requests)
     assert "duplicate" in capsys.readouterr().err
@@ -1640,10 +1638,11 @@ def test_run_interrupt_cancels_and_reports_confirmed_state(  # noqa: PLR0913, PL
     assert main(["run", str(app)]) == 130
 
     captured = capsys.readouterr()
-    assert captured.out == ""
-    output = captured.err
-    assert f"run: {service.run_id}" in output
-    assert f"status: {cancel_status}" in output
+    view = yaml.safe_load(captured.out)
+    assert view["run_id"] == service.run_id
+    assert view["status"] == cancel_status
+    assert view["cli_error"]["code"] == "interrupted"
+    output = captured.out
     assert sum(path == cancel_path for _, path, _, _ in service.requests) == 1
     assert "detached" not in output
     if cancel_status in {"running", "queued"}:
@@ -1682,12 +1681,13 @@ def test_run_interrupt_preserves_recovery_when_cancellation_is_unconfirmed(
     assert main(["run", "app"]) == 130
 
     output = capsys.readouterr()
-    assert output.out == ""
-    assert "may continue" in output.err
-    assert output.err.splitlines().count(f"run: {service.run_id}") == 1
-    assert f"recurse cancel {service.run_id}" in output.err
-    assert f"recurse status {service.run_id}" in output.err
-    assert "status: cancelled" not in output.err
+    view = yaml.safe_load(output.out)
+    assert view["run_id"] == service.run_id
+    assert view["cli_error"]["code"] == "interrupted"
+    assert "status" not in view
+    assert "may continue" in view["recovery"]["message"]
+    assert view["recovery"]["cancel"] == f"recurse cancel {service.run_id}"
+    assert view["recovery"]["inspect"] == f"recurse status {service.run_id}"
     assert "Traceback" not in output.err
 
 
@@ -1720,8 +1720,10 @@ def test_run_interrupt_during_admission_reuses_the_exact_request(
     assert admissions[0] == admissions[1]
     assert sum(path.endswith("/cancel") for _, path, _, _ in service.requests) == 1
     output = capsys.readouterr()
-    assert output.out == ""
-    assert f"run: {service.run_id}" in output.err
+    view = yaml.safe_load(output.out)
+    assert view["run_id"] == service.run_id
+    assert view["status"] == "cancelled"
+    assert view["cli_error"]["code"] == "interrupted"
 
 
 @pytest.mark.parametrize("failure", [cli.ServiceError("offline"), KeyboardInterrupt()])
@@ -1749,9 +1751,11 @@ def test_run_interrupt_with_unknown_admission_preserves_uncertainty(
     assert main(["run", "app"]) == 130
 
     output = capsys.readouterr()
-    assert output.out == ""
-    assert "may continue" in output.err
-    assert attempts[0]["idempotency_key"] in output.err
+    view = yaml.safe_load(output.out)
+    assert "run_id" not in view
+    assert view["admission_reference"] == attempts[0]["idempotency_key"]
+    assert "may continue" in view["recovery"]["message"]
+    assert view["cli_error"]["code"] == "interrupted"
     assert len(attempts) == 2
     assert attempts[0] == attempts[1]
     assert "No run was started" not in output.err
@@ -1968,14 +1972,17 @@ def test_failed_run_observation_preserves_identity_without_resubmission(
 
         monkeypatch.setattr(urllib.request, "urlopen", disconnect)
 
-    assert main(["run", "app"]) == 2
+    assert main(["run", "app"]) == 1
 
     output = capsys.readouterr()
-    assert output.out == ""
-    assert f"recurse status {service.run_id}" in output.err
-    assert f"recurse cancel {service.run_id}" in output.err
-    assert "may continue" in output.err
-    assert "before starting another run" in output.err
+    view = yaml.safe_load(output.out)
+    assert view["run_id"] == service.run_id
+    assert "status" not in view
+    assert view["cli_error"]["code"] in {"authentication_failed", "request_failed"}
+    assert f"recurse status {service.run_id}" in output.out
+    assert f"recurse cancel {service.run_id}" in output.out
+    assert "may continue" in output.out
+    assert "before starting another run" in output.out
     assert "status: failed" not in output.err
     assert "private" not in output.err
     assert (
@@ -2008,15 +2015,17 @@ def test_lost_admission_response_retains_reference_without_retrying(
 
     monkeypatch.setattr(cli, "request", lose_response)
 
-    assert main(["run", "app"]) == 2
+    assert main(["run", "app"]) == 1
 
     captured = capsys.readouterr()
-    assert captured.out == ""
-    output = captured.err
+    view = yaml.safe_load(captured.out)
+    assert view["cli_error"]["code"] == "request_failed"
+    assert "run_id" not in view
+    output = captured.out
     admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
     assert len(admissions) == 1
     assert isinstance(admissions[0], dict)
-    assert f"admission: {admissions[0]['idempotency_key']}" in output
+    assert f"admission_reference: {admissions[0]['idempotency_key']}" in output
     assert "may continue" in output
     assert "do not blindly retry" in output
 
@@ -2031,11 +2040,14 @@ def test_rejected_run_admission_does_not_report_uncertain_remote_state(
     monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
     service.fail_detail["/v1/runs"] = (422, "inputs do not match the tool schema")
 
-    assert main(["run", "app"]) == 2
+    assert main(["run", "app"]) == 1
 
     output = capsys.readouterr()
     assert "request_failed: inputs do not match the tool schema" in output.err
-    assert output.out == ""
+    view = yaml.safe_load(output.out)
+    assert view["cli_error"]["code"] == "request_failed"
+    assert "recovery" not in view
+    assert "admission_reference" not in view
     assert "Remote state is unconfirmed" not in output.err
     assert "Execution and charges may continue" not in output.err
     assert "admission:" not in output.err
@@ -2052,13 +2064,13 @@ def test_login_removed_during_run_observation_preserves_recovery(
     service.fail_detail[f"/v1/runs/{service.run_id}"] = (401, "expired access token")
     logged_in.clear()
 
-    assert main(["run", "app"]) == 2
+    assert main(["run", "app"]) == 1
 
     output = capsys.readouterr()
-    assert output.out == ""
+    assert yaml.safe_load(output.out)["run_id"] == service.run_id
     assert "recurse login" in output.err
-    assert "may continue" in output.err
-    assert f"recurse status {service.run_id}" in output.err
+    assert "may continue" in output.out
+    assert f"recurse status {service.run_id}" in output.out
     assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
 
 
@@ -2072,28 +2084,26 @@ def test_follow_up_authentication_failure_keeps_run_recovery(
     """Failed authentication cannot establish whether a previously admitted run stopped."""
     service.fail_detail["/v1/auth/token"] = (401, "private authentication detail")
 
-    assert main([command, service.run_id]) == 2
+    assert main([command, service.run_id]) == (1 if command == "status" else 2)
 
     output = capsys.readouterr()
     assert "authentication_failed" in output.err
     assert "recurse login" in output.err
     assert "private" not in output.err
-    recovery = output.err if command == "status" else output.out
+    recovery = output.out
     assert f"recurse status {service.run_id}" in recovery
     assert "may continue" in recovery
     if command == "status":
-        assert output.out == ""
+        assert yaml.safe_load(output.out)["cli_error"]["code"] == "authentication_failed"
 
 
 def test_cli_syntax_error_uses_cli_layer_error_status(
     service: FakeService, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Parser rejection is a CLI error, not a confirmed remote timeout."""
-    with pytest.raises(SystemExit) as exit_info:
-        main(["run"])
-    assert exit_info.value.code == 2
+    assert main(["run"]) == 1
     output = capsys.readouterr()
-    assert "usage:" in output.err
+    assert yaml.safe_load(output.out)["cli_error"]["code"] == "invalid_arguments"
     assert "status: timed_out" not in output.out
     assert service.requests == []
 
@@ -2108,7 +2118,7 @@ def test_run_inputs_require_one_readable_json_object(
     source = tmp_path / "inputs.json"
     source.write_text(content)
 
-    assert main(["run", str(tmp_path), "--inputs", str(source)]) == 2
+    assert main(["run", str(tmp_path), "--inputs", str(source)]) == 1
     assert "readable JSON object" in capsys.readouterr().err
 
 
@@ -2528,6 +2538,7 @@ def test_artifacts_accept_the_canonical_form_of_an_uppercase_uuid() -> None:
 
 def test_run_rejects_malformed_admission_and_poll_timeout(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Admission acknowledgement and bounded polling both fail clearly."""
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("token", "version"))
@@ -2536,8 +2547,8 @@ def test_run_rejects_malformed_admission_and_poll_timeout(
         "_retry_request",
         lambda *args, **kwargs: {"run_id": "run-id", "status": "running"},
     )
-    with pytest.raises(cli.ServiceError, match="invalid run response"):
-        cli._run("app", None, 1.0, 1024)
+    assert cli._run("app", None, 1.0, 1024) == 1
+    assert "invalid run response" in yaml.safe_load(capsys.readouterr().out)["cli_error"]["message"]
 
     monkeypatch.setattr(
         cli,
@@ -2545,8 +2556,8 @@ def test_run_rejects_malformed_admission_and_poll_timeout(
         lambda *args, **kwargs: {"run_id": "run-id", "status": "queued"},
     )
     monkeypatch.setattr(cli, "_RUN_POLL_ATTEMPTS", 0)
-    with pytest.raises(cli._CliError, match="did not finish"):
-        cli._run("app", None, 1.0, 1024)
+    assert cli._run("app", None, 1.0, 1024) == 1
+    assert "did not finish" in yaml.safe_load(capsys.readouterr().out)["cli_error"]["message"]
 
     monkeypatch.setattr(cli, "_RUN_POLL_ATTEMPTS", 1)
 
@@ -2568,8 +2579,8 @@ def test_run_rejects_malformed_admission_and_poll_timeout(
         "_run_request",
         missing_run,
     )
-    with pytest.raises(cli.ServiceError, match="run was not found"):
-        cli._run("app", None, 1.0, 1024)
+    assert cli._run("app", None, 1.0, 1024) == 1
+    assert "run was not found" in yaml.safe_load(capsys.readouterr().out)["cli_error"]["message"]
 
 
 @pytest.mark.parametrize(
@@ -3013,7 +3024,7 @@ def test_run_reports_how_to_resolve_an_insufficient_balance(
     service.version_statuses = ["failed"]
     service.version_error = "insufficient_balance"
 
-    assert main(["run", str(app)]) == 2
+    assert main(["run", str(app)]) == 1
     message = capsys.readouterr().err
     assert (
         "Run recurse billing top-up 5 or recurse billing redeem CODE, then retry the run" in message

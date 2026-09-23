@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from tests.conftest import write_app
 from tests.keyring_backend import process_environment
@@ -95,12 +96,14 @@ def test_sigint_cancels_or_reports_uncertainty(
         admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
         assert len(admissions) == (2 if stage == "admission" else 1)
         assert all(body == admissions[0] for body in admissions)
-        assert stdout == b""
+        view = yaml.safe_load(stdout)
+        assert view["run_id"] == service.run_id
+        assert view["cli_error"]["code"] == "interrupted"
         if stage == "cancellation":
-            assert b"may continue" in stderr
-            assert b"status: cancelled" not in stderr
+            assert "may continue" in view["recovery"]["message"]
+            assert "status" not in view
         else:
-            assert b"status: cancelled" in stderr
+            assert view["status"] == "cancelled"
     finally:
         release.set()
         if process.poll() is None:
@@ -132,8 +135,8 @@ def test_sigtstp_and_sigcont_keep_native_job_control(service: FakeService, tmp_p
         stdout, stderr = process.communicate(timeout=10)  # EOF resumes normal input consumption.
         assert process.returncode == 0
         assert b"status: succeeded" in stdout
-        assert b"Packaging application..." in stderr
-        assert f"run: {service.run_id}".encode() in stderr
+        assert stderr == b""
+        assert yaml.safe_load(stdout)["cli_error"] is None
         assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
     finally:
         if process.poll() is None:
