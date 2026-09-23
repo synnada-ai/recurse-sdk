@@ -16,6 +16,9 @@ This installs both the `recurse` command and the Python API. Check the installat
 recurse --help
 ```
 
+Version 0.2.0 requires the canonical run response from the current Engine. Older SDK versions
+cannot read that response; upgrade the SDK when the Engine is deployed.
+
 If you prefer uv, install the CLI as an isolated tool:
 
 ```sh
