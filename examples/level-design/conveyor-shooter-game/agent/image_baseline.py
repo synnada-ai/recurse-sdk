@@ -32,6 +32,23 @@ MAX_SOURCE_DIMENSION = 4096
 MAX_SOURCE_PIXELS = 1_000_000
 
 
+#: PNG structure: bytes of chunk framing, IHDR payload size, and the supported encodings.
+_PNG_CHUNK_OVERHEAD = 12
+_IHDR_SIZE = 13
+_SUPPORTED_BIT_DEPTH = 8
+_COLOUR_TYPE_RGB = 2
+_COLOUR_TYPE_GREY_ALPHA = 4
+#: Alpha at or above which a sampled pixel becomes a cube, and below which it is invisible.
+_OPAQUE_ALPHA = 96
+_VISIBLE_ALPHA = 32
+#: Colour-distance thresholds for contrast boosting and background detection.
+_HIGH_CONTRAST = 105
+_UNIFORM_CORNER_DISTANCE = 58
+_BACKGROUND_DISTANCE = 36
+#: A conversion grid needs at least this many cells per side.
+_MIN_GRID_SIDE = 2
+
+
 @dataclass(frozen=True)
 class Raster:
     """A small dependency-free RGBA image."""
@@ -96,12 +113,15 @@ class Conversion:
 
 
 def _paeth(left: int, up: int, upper_left: int) -> int:
+    """PNG Paeth predictor."""
     estimate = left + up - upper_left
     distances = (abs(estimate - left), abs(estimate - up), abs(estimate - upper_left))
     return (left, up, upper_left)[distances.index(min(distances))]
 
 
-def _decode_png_payload(source: bytes) -> tuple[int, int, int, int, bytes]:
+def _decode_png_payload(  # noqa: PLR0912, PLR0915 - sequential PNG chunk validation
+    source: bytes,
+) -> tuple[int, int, int, int, bytes]:
     """Validate PNG structure and return its bounded decompressed scanlines."""
     if len(source) > MAX_SOURCE_BYTES:
         raise ValueError(f"source PNG is {len(source)} bytes; maximum is {MAX_SOURCE_BYTES} bytes")
@@ -113,7 +133,7 @@ def _decode_png_payload(source: bytes) -> tuple[int, int, int, int, bytes]:
     saw_header = saw_data = saw_end = False
     chunk_index = 0
     while offset < len(source):
-        if len(source) - offset < 12:
+        if len(source) - offset < _PNG_CHUNK_OVERHEAD:
             raise ValueError("PNG ends inside a chunk header")
         size = struct.unpack(">I", source[offset : offset + 4])[0]
         kind = source[offset + 4 : offset + 8]
@@ -129,12 +149,12 @@ def _decode_png_payload(source: bytes) -> tuple[int, int, int, int, bytes]:
             raise ValueError(f"PNG chunk {kind!r} has an invalid CRC")
         offset = chunk_end
         if kind == b"IHDR":
-            if saw_header or chunk_index != 0 or size != 13:
+            if saw_header or chunk_index != 0 or size != _IHDR_SIZE:
                 raise ValueError("PNG must begin with exactly one 13-byte IHDR chunk")
             width, height, depth, colour_type, _compression, _filter, interlace = struct.unpack(
                 ">IIBBBBB", payload
             )
-            if depth != 8:
+            if depth != _SUPPORTED_BIT_DEPTH:
                 raise ValueError(f"PNG bit depth must be 8, got {depth}")
             if _compression != 0 or _filter != 0:
                 raise ValueError("PNG uses unsupported compression or filtering methods")
@@ -227,9 +247,9 @@ def decode_png(source: bytes) -> Raster:
             values = row[x * channels : (x + 1) * channels]
             if colour_type == 0:
                 pixels.append((values[0], values[0], values[0], 255))
-            elif colour_type == 2:
+            elif colour_type == _COLOUR_TYPE_RGB:
                 pixels.append((values[0], values[1], values[2], 255))
-            elif colour_type == 4:
+            elif colour_type == _COLOUR_TYPE_GREY_ALPHA:
                 pixels.append((values[0], values[0], values[0], values[1]))
             else:
                 pixels.append((values[0], values[1], values[2], values[3]))
@@ -242,6 +262,7 @@ def prepare_png(source: bytes) -> PreparedImage:
 
 
 def _distance(left: tuple[int, ...], right: tuple[int, ...]) -> float:
+    """Perceptually weighted distance between two RGB colours."""
     return math.sqrt(
         2 * (left[0] - right[0]) ** 2
         + 4 * (left[1] - right[1]) ** 2
@@ -250,6 +271,7 @@ def _distance(left: tuple[int, ...], right: tuple[int, ...]) -> float:
 
 
 def _sample(raster: Raster, x: float, y: float, variant: Variant) -> RGBA:
+    """Sample the raster at a fractional position using the variant's filter."""
     if variant == "crisp":
         return raster.get(round(x), round(y))
     x0, y0 = math.floor(x), math.floor(y)
@@ -269,7 +291,7 @@ def _sample(raster: Raster, x: float, y: float, variant: Variant) -> RGBA:
     if variant == "edge":
         colours = [pixel for pixel, _weight in neighbours]
         contrast = max(_distance(left, right) for left in colours for right in colours)
-        if contrast > 105:
+        if contrast > _HIGH_CONTRAST:
             return raster.get(round(x), round(y))
     return blended
 
@@ -284,13 +306,13 @@ def _cluster_materials(
         sampled.get(x, y)[:3]
         for y in range(sampled.height)
         for x in range(sampled.width)
-        if (x, y) not in removed and sampled.get(x, y)[3] >= 96
+        if (x, y) not in removed and sampled.get(x, y)[3] >= _OPAQUE_ALPHA
     ]
     if not colours:
         return ()
     centres: list[tuple[int, int, int]] = [
-        min(colours, key=lambda colour: sum(colour)),
-        max(colours, key=lambda colour: sum(colour)),
+        min(colours, key=sum),
+        max(colours, key=sum),
     ]
     while len(centres) < min(8, len(set(colours))):
         centres.append(
@@ -328,7 +350,7 @@ def _content_bbox(raster: Raster) -> tuple[int, int, int, int]:
     right = bottom = -1
     for y in range(raster.height):
         for x in range(raster.width):
-            if raster.get(x, y)[3] < 32:
+            if raster.get(x, y)[3] < _VISIBLE_ALPHA:
                 continue
             left = min(left, x)
             top = min(top, y)
@@ -353,6 +375,7 @@ def crop_variants(
     left, top, right, bottom = _content_bbox(raster)
 
     def expand(fraction: float) -> tuple[int, int, int, int]:
+        """Grow the content box by a fraction of its size, clamped to the image."""
         dx = round((right - left) * fraction)
         dy = round((bottom - top) * fraction)
         return (
@@ -372,6 +395,7 @@ def crop_variants(
 def _resample(
     raster: Raster, box: tuple[int, int, int, int], width: int, height: int, variant: Variant
 ) -> Raster:
+    """Resample a crop of the raster to the target grid."""
     left, top, right, bottom = box
     pixels: list[RGBA] = []
     for y in range(height):
@@ -411,13 +435,14 @@ def _resample(
 
 
 def _background(raster: Raster) -> tuple[int, int, int] | None:
+    """Detect a uniform background colour from the corners, if any."""
     corners = [
         raster.get(0, 0),
         raster.get(raster.width - 1, 0),
         raster.get(0, raster.height - 1),
         raster.get(raster.width - 1, raster.height - 1),
     ]
-    if max(_distance(corners[0], colour) for colour in corners[1:]) > 58:
+    if max(_distance(corners[0], colour) for colour in corners[1:]) > _UNIFORM_CORNER_DISTANCE:
         return None
     return tuple(round(sum(colour[channel] for colour in corners) / 4) for channel in range(3))  # type: ignore[return-value]
 
@@ -425,6 +450,7 @@ def _background(raster: Raster) -> tuple[int, int, int] | None:
 def _connected_background(
     raster: Raster, background: tuple[int, int, int] | None
 ) -> set[tuple[int, int]]:
+    """Pixels of the background colour connected to the image border."""
     if background is None:
         return set()
     pending = [(x, y) for x in range(raster.width) for y in (0, raster.height - 1)]
@@ -435,7 +461,7 @@ def _connected_background(
         if cell in removed:
             continue
         colour = raster.get(*cell)
-        if colour[3] >= 96 and _distance(colour, background) >= 36:
+        if colour[3] >= _OPAQUE_ALPHA and _distance(colour, background) >= _BACKGROUND_DISTANCE:
             continue
         removed.add(cell)
         x, y = cell
@@ -448,6 +474,7 @@ def _connected_background(
 
 
 def _rgb(hexcode: str) -> tuple[int, int, int]:
+    """Parse a #rrggbb colour."""
     value = hexcode.removeprefix("#")
     return (int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
 
@@ -459,6 +486,7 @@ def _material(
     variant: Variant,
     allowed: list[int],
 ) -> int:
+    """Map one sampled colour to the nearest palette material."""
     palette = [_rgb(value) for value in render.palette()]
     ranked = sorted(allowed, key=lambda index: _distance(colour, palette[index]))
     if variant != "colour-mix":
@@ -471,7 +499,7 @@ def _material(
     return second if second_share > (bayer[y % 4][x % 4] + 0.5) / 16 else first
 
 
-def convert(
+def convert(  # noqa: PLR0912, PLR0913 - one deterministic conversion pipeline
     source: bytes | PreparedImage,
     *,
     width: int,
@@ -481,7 +509,7 @@ def convert(
     remove_background: bool = True,
 ) -> Conversion:
     """Convert normalized PNG bytes into game materials without model-authored pixels."""
-    if width < 2 or height < 2:
+    if width < _MIN_GRID_SIDE or height < _MIN_GRID_SIDE:
         raise ValueError(f"grid must be at least 2x2, got {width}x{height}")
     prepared = source if isinstance(source, PreparedImage) else prepare_png(source)
     opened = prepared.raster
@@ -498,7 +526,7 @@ def convert(
     for y in range(height):
         for x in range(width):
             colour = sampled.get(x, y)
-            if (x, y) in removed or colour[3] < 96:
+            if (x, y) in removed or colour[3] < _OPAQUE_ALPHA:
                 continue
             nearest = min(confirmed, key=lambda index: _distance(colour, palette[index]))
             nearest_counts[nearest] = nearest_counts.get(nearest, 0) + 1
@@ -518,7 +546,7 @@ def convert(
     for y in range(height):
         for x in range(width):
             colour = sampled.get(x, y)
-            if (x, y) in removed or colour[3] < 96:
+            if (x, y) in removed or colour[3] < _OPAQUE_ALPHA:
                 continue
             if cluster_mapping:
                 material = min(cluster_mapping, key=lambda item: _distance(colour, item[0]))[1]
