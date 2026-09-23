@@ -2542,7 +2542,7 @@ def test_artifacts_explain_a_local_parent_symlink_without_touching_its_target(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A refused local alias is identified as a local path, not bad service data."""
-    service.run_views = [service.run_views[-1]]
+    service.run_views = [service.legacy_artifact_view]
     output_directory = tmp_path / "downloads"
     real_directory = output_directory / "real"
     real_directory.mkdir(parents=True)
