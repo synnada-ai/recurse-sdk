@@ -118,9 +118,9 @@ The agent that drives the application's tools: its system prompt, optional model
 
 *choice, optional*
 
-Supported specialist model: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, or `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). The service also checks availability; models are never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.
+Supported specialist model: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, or `gpt-6-sol`. Omit to use the platform default (currently `gpt-5.6-luna`). The service also checks availability; models are never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.
 
-Allowed values: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`
+Allowed values: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`
 
 Example:
 

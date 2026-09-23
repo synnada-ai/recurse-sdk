@@ -49,7 +49,17 @@ def test_valid_manifest_round_trips_the_authored_document(app: Path) -> None:
     assert manifest == yaml.safe_load((app / "agent.yaml").read_text())
 
 
-@pytest.mark.parametrize("model", ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"])
+@pytest.mark.parametrize(
+    "model",
+    [
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "gpt-6-astra",
+        "gpt-6-luna",
+        "gpt-6-sol",
+    ],
+)
 def test_model_selection_survives_manifest_loading(edit_manifest: Edit, model: str) -> None:
     """The declared specialist model is retained without importing application code."""
     app = edit_manifest(lambda manifest: manifest["agent"].__setitem__("model", model))
