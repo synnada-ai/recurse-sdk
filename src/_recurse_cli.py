@@ -1937,19 +1937,6 @@ def _same_run_id(returned: str, requested: str) -> bool:
         return returned == requested
 
 
-def _validated_artifact_run_view(payload: dict[str, Any], run_id: str) -> dict[str, Any]:
-    """Validate the legacy public fields consumed only by artifact downloads."""
-    if not _same_run_id(required_field(payload, "run_id"), run_id):
-        raise ServiceError("the Recurse service returned an invalid run response")
-    run_status = required_field(payload, "status")
-    if run_status not in _RUN_STATUSES:
-        raise ServiceError("the Recurse service returned an invalid run response")
-    artifacts = payload.get("artifacts")
-    if not isinstance(artifacts, list) or not isinstance(payload.get("payload_expired"), bool):
-        raise ServiceError("the Recurse service returned an invalid run response")
-    return payload
-
-
 def _invalid_run_response() -> NoReturn:
     """Reject a malformed canonical run snapshot without echoing its contents."""
     raise ServiceError("the Recurse service returned an invalid run response")
@@ -2332,20 +2319,27 @@ def _artifacts(run_id: str, output_directory: str) -> None:
     token = _access_token()
     quoted_run_id = urllib.parse.quote(run_id, safe="")
     payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
-    view = _validated_artifact_run_view(payload, run_id)
-    if view["payload_expired"]:
-        raise _CliError("run payloads have expired")
+    view = _validated_public_run_view(payload, run_id)
+    outputs = cast(dict[str, Any], view["outputs"])
+    availability = cast(str, outputs["availability"])
+    if availability == "pending":
+        raise _CliError("run outputs are not finalized")
+    if availability == "expired":
+        raise _CliError(
+            f"run outputs have expired; inspect retained metadata with recurse status {run_id}"
+        )
+    if availability == "unavailable":
+        raise _CliError("artifact inventory is unavailable")
     root = Path(output_directory)
-    for artifact in view["artifacts"]:
-        if not isinstance(artifact, dict):
-            raise ServiceError("the Recurse service returned invalid artifact metadata")
-        output_id = required_field(artifact, "output_id")
+    artifacts = cast(list[dict[str, Any]], outputs["artifacts"])
+    for artifact in artifacts:
+        artifact_id = required_field(artifact, "id")
         path = _artifact_path(root, artifact.get("path"))
         if path.exists() and not path.is_file():
             raise _CliError(f"artifact destination is not a regular file: {path}")
         grant, token = _authenticated_request(
             "GET",
-            f"/v1/runs/{quoted_run_id}/artifacts/" + urllib.parse.quote(output_id, safe=""),
+            f"/v1/runs/{quoted_run_id}/artifacts/" + urllib.parse.quote(artifact_id, safe=""),
             token=token,
         )
         body = _download_artifact(grant)

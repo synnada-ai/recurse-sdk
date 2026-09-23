@@ -458,8 +458,13 @@ terminal behavior: it suspends the local CLI, and `fg` or `bg` resumes it; remot
 Ctrl-D still ends stdin input or aborts an unanswered prompt. Closing a terminal is not an explicit
 run cancellation request.
 
-Artifacts are available for 24 hours after completion. Downloads refuse unsafe paths and existing
-directories, verify size and SHA-256, and only then atomically replace the destination file.
+Artifacts are available for 24 hours after completion. `recurse artifacts` downloads only when the
+run snapshot reports `outputs.availability: available`; a finalized `outputs.artifacts: []` exits
+successfully without printing a download. Pending and unavailable inventories fail without claiming
+the run produced no artifacts. After expiration, `recurse status` still shows retained artifact
+metadata, but `recurse artifacts` refuses the unavailable download. Downloads refuse unsafe paths
+and existing directories, verify size and SHA-256, and only then atomically replace the destination
+file.
 
 For automation, both `recurse run` and `recurse status` write exactly one canonical YAML document
 to standard output after a successful retrieval. Field order and explicit `null` values are stable;
