@@ -2102,8 +2102,10 @@ def _artifact_path(output_directory: Path, path: object) -> Path:
     root = output_directory.resolve()
     candidate = root.joinpath(*parts)
     destination = candidate.resolve(strict=False)
-    if candidate != destination or not destination.is_relative_to(root):
+    if not destination.is_relative_to(root):
         raise ServiceError("the Recurse service returned invalid artifact metadata")
+    if candidate != destination:
+        raise _CliError(f"artifact destination path contains a symlink: {candidate}")
     return destination
 
 
