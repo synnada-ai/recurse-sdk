@@ -1437,7 +1437,7 @@ def _prepare(
     *,
     token: str | None = None,
     billing_retry_target: str = "deployment",
-) -> tuple[str, str]:
+) -> tuple[str, str, str | None]:
     """Build, upload, and prepare one immutable application version.
 
     Args:
@@ -1446,7 +1446,7 @@ def _prepare(
         billing_retry_target: The caller action named after a billing denial.
 
     Returns:
-        The short-lived access token and prepared version identifier.
+        The short-lived access token, prepared version identifier, and resolved model if supplied.
 
     Raises:
         RecurseError: If the application fails authoring validation.
@@ -1509,7 +1509,7 @@ def _prepare(
         time.sleep(_POLL_SECONDS)
     else:
         raise _CliError("the deployment build did not finish; try again later")
-    return token, version_id
+    return token, version_id, model if isinstance(model, str) else None
 
 
 def _deploy(
@@ -1520,7 +1520,7 @@ def _deploy(
 ) -> None:
     """Prepare and create one permanent MCP deployment."""
     resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
-    token, version_id = _prepare(app_directory, token=resolved_token)
+    token, version_id, _model = _prepare(app_directory, token=resolved_token)
     print("Creating MCP deployment...", flush=True)
     request_body: dict[str, Any] = {
         "version_id": version_id,
@@ -2182,6 +2182,7 @@ class _RunOutput:
         """Retain recovery identity even before any output has been written."""
         self.run_id = run_id
         self.admission_reference: str | None = None
+        self.model: str | None = None
         self.started = False
 
     def start(self, run_id: str) -> None:
@@ -2192,6 +2193,8 @@ class _RunOutput:
 
     def finish(self, view: dict[str, Any]) -> None:
         """Append fields without repeating an already emitted run ID."""
+        if self.model is not None:
+            view = {"model": self.model, **view}
         if self.started:
             view = {key: value for key, value in view.items() if key != "run_id"}
         elif self.run_id is not None:
@@ -2241,7 +2244,7 @@ def _run(
         inputs = _read_run_inputs(inputs_source)
         with open(os.devnull, "w") as progress, redirect_stdout(progress):
             resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
-            token, version_id = _prepare(
+            token, version_id, output.model = _prepare(
                 app_directory,
                 token=resolved_token,
                 billing_retry_target="the run",

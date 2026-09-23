@@ -1442,7 +1442,7 @@ def test_commands_reuse_the_token_that_resolved_secret_bindings(
         *,
         token: str | None = None,
         billing_retry_target: str = "deployment",
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str | None]:
         """Stop after recording the shared preparation arguments."""
         prepared_with.append((token, billing_retry_target))
         raise RuntimeError("preparation observed")
@@ -1537,7 +1537,7 @@ def test_run_reauthenticates_once_after_401_during_admission(
     run_id = "77777777-7777-4777-8777-777777777777"
     admissions: list[tuple[str, dict[str, Any]]] = []
 
-    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1", None))
     monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
@@ -1587,7 +1587,7 @@ def test_run_reauthenticates_once_after_401_during_polling(
     run_id = "77777777-7777-4777-8777-777777777777"
     tokens: list[str] = []
 
-    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("access-old", "version-1", None))
     monkeypatch.setattr(cli, "_access_token", lambda rejected_token=None: "access-new")
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
 
@@ -1659,7 +1659,7 @@ def test_run_interrupt_preserves_recovery_when_cancellation_is_unconfirmed(
     failure: str,
 ) -> None:
     """An unsuccessful cancellation never masquerades as stopped remote work."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     original = cli.request
 
     def interrupted_request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -1698,7 +1698,7 @@ def test_run_interrupt_during_admission_reuses_the_exact_request(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A lost admission response is recovered with the same idempotency key before cancellation."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     original = cli.request
     interrupted = False
 
@@ -1735,7 +1735,7 @@ def test_run_interrupt_with_unknown_admission_preserves_uncertainty(
     failure: BaseException,
 ) -> None:
     """If admission recovery also fails, retain its reference without claiming no run exists."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     attempts: list[dict[str, Any]] = []
 
     def interrupt_admission(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -1953,7 +1953,7 @@ def test_failed_run_observation_preserves_identity_without_resubmission(
     failure: str,
 ) -> None:
     """Losing observation must not look like a terminal run failure or start another run."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     path = f"/v1/runs/{service.run_id}"
     if failure == "authentication":
         service.fail_detail[path] = (401, "private authentication detail")
@@ -2003,7 +2003,7 @@ def test_lost_admission_response_retains_reference_without_retrying(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A failed acknowledgement can follow acceptance; preserve its key, not a retry prompt."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     original = cli.request
 
     def lose_response(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -2037,7 +2037,7 @@ def test_rejected_run_admission_does_not_report_uncertain_remote_state(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A confirmed input rejection cannot have started a run or incurred charges."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     service.fail_detail["/v1/runs"] = (422, "inputs do not match the tool schema")
 
     assert main(["run", "app"]) == 1
@@ -2060,7 +2060,7 @@ def test_login_removed_during_run_observation_preserves_recovery(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Losing the local credential during reauthentication cannot hide the admitted run."""
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     service.fail_detail[f"/v1/runs/{service.run_id}"] = (401, "expired access token")
     logged_in.clear()
 
@@ -2541,7 +2541,7 @@ def test_run_rejects_malformed_admission_and_poll_timeout(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Admission acknowledgement and bounded polling both fail clearly."""
-    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("token", "version"))
+    monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("token", "version", None))
     monkeypatch.setattr(
         cli,
         "_retry_request",

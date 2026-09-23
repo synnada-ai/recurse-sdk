@@ -225,7 +225,7 @@ def test_internal_error_after_admission_preserves_the_already_printed_id(
 ) -> None:
     """Unexpected polling errors must finish the same document and retain recovery."""
     del logged_in
-    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     original = cli._run_request
 
     def request(method: str, path: str, **kwargs: Any) -> tuple[dict[str, Any], str]:
@@ -244,3 +244,61 @@ def test_internal_error_after_admission_preserves_the_already_printed_id(
     assert view["recovery"]["cancel"] == f"recurse cancel {service.run_id}"
     assert "status" not in view
     assert "private" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize(
+    "outcome", ["succeeded", "failed", "admission_error", "observation_error", "interrupted"]
+)
+def test_run_preserves_service_resolved_model_in_yaml(  # noqa: PLR0913,PLR0917 - fixtures plus outcome
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    outcome: str,
+) -> None:
+    """Retain the service-selected default even when later execution or observation fails."""
+    del logged_in
+    service.version_model = "gpt-6-astra"
+    service.version_statuses = ["ready"]
+    monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
+    expected_exit = 0
+    if outcome == "failed":
+        service.run_views = [
+            {
+                **service.run_views[-1],
+                "status": "failed",
+                "error": {"code": "execution_failed", "message": "Remote failure."},
+            }
+        ]
+    elif outcome in {"admission_error", "observation_error"}:
+        path = "/v1/runs" if outcome == "admission_error" else f"/v1/runs/{service.run_id}"
+        service.fail_detail[path] = (500, "private server trace")
+        expected_exit = 1
+    elif outcome == "interrupted":
+        original = cli._run_request
+
+        def request(method: str, path: str, **kwargs: Any) -> tuple[dict[str, Any], str]:
+            """Interrupt observation after the version and admission are confirmed."""
+            if method == "GET":
+                raise KeyboardInterrupt
+            return original(method, path, **kwargs)
+
+        monkeypatch.setattr(cli, "_run_request", request)
+        expected_exit = 130
+    assert cli.main(["run", str(write_app(tmp_path / "app"))]) == expected_exit
+    captured = capsys.readouterr()
+    view = document(captured.out)
+    assert view["model"] == "gpt-6-astra"
+    assert "model:" not in captured.err
+    if expected_exit == 0:
+        assert view["status"] == outcome
+        assert view["cli_error"] is None
+        assert captured.err == ""
+    else:
+        assert view["cli_error"] is not None
+        assert "error:" in captured.err
+        if outcome == "admission_error":
+            assert "run_id" not in view
+        else:
+            assert view["run_id"] == service.run_id
