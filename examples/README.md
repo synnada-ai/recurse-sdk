@@ -24,7 +24,7 @@ example/
 └── evals/               # Independent evaluation collateral 
 ```
 
-Not all examples may require an `impl` package; a single `tools.py` file may be more appropriate if collecting all Python code in one file doesn't surpass 1000 lines. Simple examples with small input/output snippets may place them directly in the `README.md` file instead of having an `inputs` directory. Almost all examples, except very trivial ones, should contain an `evals` directory.
+Not all examples may require an `impl` package; a single `tools.py` file may be more appropriate if collecting all Python code in one file doesn't surpass 1000 lines. Simple examples with small input/output snippets may place them directly in the `README.md` file instead of having an `inputs/` directory. Almost all examples, except very trivial ones, should contain an `evals/` directory.
 
 ## What each part contributes
 
@@ -51,25 +51,27 @@ The section detail varies with the example. A small example may require only a s
 
 The `agent.yaml` file contains the agent manifest and defines the runtime contract. It declares the input and output shapes, and connects the prompt and Python tools to the Recurse harness.
 
-## The prompt
+### The prompt
 
-The `prompt.md` file contains the system prompt for the agent: See [prompting guide](https://recurse.run/SKILL.md#prompting)
+The `prompt.md` file contains the system prompt for the agent, see [prompting guide](https://recurse.run/SKILL.md#prompting) for details.
 
-## Tools
+### Tools
 
-The `tools.py` file contains the actual functions that perform work the agent can request and return observations it can use to drive its the next decision.
+The `tools.py` file contains the actual functions that perform work the agent can request, and return observations it can use to drive its the next decision.
 
-The `pyproject.toml` and `uv.lock` describe the environment used to package and run the example. Supporting Python modules, when present, hold domain logic behind the tool interface. Checked-in files under `inputs/` show concrete requests; `tests/` exercise the behavior locally. A `benchmarks/` directory, when present, compares outcomes across cases or changes to the agent design.
+### Packaging
+
+The `pyproject.toml` and `uv.lock` files describe the environment for packaging purposes and running the example. Supporting Python modules in the `impl/` directory, when present, contain domain logic implementing the tool interface. When present, the `inputs/` directory collects concrete request examples; `tests/` exercise the behavior locally. An `evals/` directory, when present, compares any evaluation collateral to measure or quantify the agent's performance.
 
 ## How a run moves through the example
 
 1. A caller submits one input request through `recurse run`. The manifest supplies the schema and runtime wiring.
-2. The agent reads its task and prompt, then calls tools to inspect the problem and create or change a candidate.
+2. The agent starts with the system prompt, reads its inputs, and then begins an iterative refinement loop where it can calls tools to inspect the problem and create or change a candidate.
 3. Measurement tools return scores, checks, or diagnostics. The agent uses that evidence to choose another attempt or stop.
-4. A final tool checks the selected result, writes the run's receipt and artifacts, and returns an output matching the declared contract.
+4. A final termination tool checks the candidate result and decides loop convergence. If so, it writes the run's receipt and artifacts, and returns an output matching the output contract.
 
-The exact loop depends on the task. A numerical example may compare held-out scores; a visual example may inspect renders; a puzzle example may use a solver. In each case, the result is tied to recorded observations rather than the agent's unsupported assertion.
+The exact loop depends on the example. A numerical predictive example may compare held-out scores; a visual example may inspect renders; a puzzle example may use a solver. In each case, the agent should always justify a result with observations or verifiers rather than arbitrary judgement.
 
 ## Outputs and evidence
 
-The final response is a compact summary of status and result. Artifacts hold larger deliverables and the evidence behind them, such as a candidate file, report, trial history, or evaluation record. An unsuccessful run can still produce a receipt and diagnostics even when it has no accepted candidate.
+The final response is a compact summary of status and result. Artifacts hold larger deliverables and the evidence behind them, such as a candidate file, report, trial history, or evaluation summary. An unsuccessful run can still produce a receipt and diagnostics even when it doesn't produce an acceptable candidate.
