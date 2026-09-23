@@ -53,11 +53,7 @@ def test_valid_manifest_round_trips_the_authored_document(app: Path) -> None:
     "model",
     [
         "gpt-5.6-luna",
-        "gpt-5.6-terra",
-        "gpt-5.6-sol",
-        "gpt-6-astra",
-        "gpt-6-luna",
-        "gpt-6-sol",
+        "future-model-id",
     ],
 )
 def test_model_selection_survives_manifest_loading(edit_manifest: Edit, model: str) -> None:
@@ -278,14 +274,6 @@ def test_invalid_manifests_name_the_offending_field(
     """Every contract violation names the exact offending field."""
     app = edit_manifest(mutation)
     with pytest.raises(ManifestError, match=message):
-        load_manifest(app)
-
-
-@pytest.mark.parametrize("model", ["gpt-5.6", "astra", "unknown-model"])
-def test_unsupported_model_is_rejected_locally(edit_manifest: Edit, model: str) -> None:
-    """Reject unsupported selections before building or uploading an application."""
-    app = edit_manifest(lambda m: m["agent"].update(model=model))
-    with pytest.raises(recurse.ManifestError, match=r"agent\.model must be one of"):
         load_manifest(app)
 
 
