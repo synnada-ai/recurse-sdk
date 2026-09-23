@@ -433,6 +433,14 @@ limit. Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
 
+Direct runs are preemptible by default and may occasionally end as `preempted`. Recurse does not
+automatically restart a preempted run: tools may already have performed external actions. Inspect
+those effects before deciding whether to start a new run; that choice belongs to the caller. To
+avoid Modal Function preemption, use `recurse run path/to/app --non-preemptible`. This option costs
+3× the otherwise-equivalent Function CPU and memory charge, not 3× the total run cost. Sandbox,
+model-token, and preparation charges are unchanged. The option applies to direct runs, not MCP
+deployments.
+
 Ctrl-C during `recurse run` requests cancellation of the admitted run and exits `130`. The CLI
 prints the state confirmed by the service: cancellation can race completion, and a request alone
 does not prove the run has stopped. If confirmation fails or remains pending, execution and charges
@@ -524,7 +532,7 @@ not yet known or is unavailable.
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
 | `infrastructure_failed` | The public status is `failed`; retain the run ID when asking for help. |
-| `preempted` | Occasional preemption did not restart the run automatically. Inspect external effects before deciding whether to retry. |
+| `preempted` | Recurse did not restart the interrupted run. Inspect external effects before deciding whether to start a new run; use `--non-preemptible` to avoid Function preemption at 3× Function CPU and memory cost. |
 
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
