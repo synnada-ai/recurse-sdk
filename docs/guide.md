@@ -191,8 +191,10 @@ the count. `0` disables either limit, and omitting a setting keeps its default.
 ### Input and output contracts
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
-`task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
-task; the remaining values are available to tools at run time.
+`task` property is reserved: declare it as a string with either a non-empty default or a place
+in `inputs.required`. After `{{ input.NAME }}` placeholders are resolved, it becomes the Agentia
+user message and is excluded from `recurse.context().inputs`; the remaining values are available
+to tools at run time.
 
 The successful result is declared as a self-contained object JSON Schema under `outputs`. Finish
 the agent with only a JSON object matching that schema. Files written to the run workspace remain
