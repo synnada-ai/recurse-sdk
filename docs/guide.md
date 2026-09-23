@@ -595,8 +595,6 @@ run before starting another. If admission itself lost its response, keep the pri
 reference: the CLI does not know whether a run was created and does not automatically resubmit it.
 The Ctrl-C recovery described above is the explicit cancellation path.
 
-For a repeatable local check without hosted runs, see [CLI output UAT](cli-output-uat.md).
-
 ## Deployment
 
 ```sh
