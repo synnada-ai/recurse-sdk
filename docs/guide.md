@@ -178,7 +178,7 @@ Use `tools.defaults` for shared settings and override individual registrations w
 `tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
 
-Each application tool call has a timeout, separate from the 15-minute run limit. It is set by
+Each application tool call has a timeout, separate from the account-funded run lifetime. It is set by
 `agent.timeout_tools` in seconds (default 30); `0` or `null` disables it. A tool timeout is
 reported to the specialist for recovery; it does not necessarily end the run immediately. Design
 individual calls to fit that budget, breaking longer work into smaller steps where practical.
@@ -438,7 +438,9 @@ terminal state. It writes and flushes `run_id` to standard output as soon as adm
 then appends the terminal snapshot to the same YAML document. Routine progress messages are
 suppressed; standard error is reserved for error diagnostics. A later `recurse status <run-id>`
 returns the same remote snapshot and CLI outcome, including the selected model. Direct runs do not
-create an MCP deployment and have a 15-minute execution limit. Inputs must be one JSON object; omit
+create an MCP deployment. Runs continue while the account can fund them, up to the fixed
+24-hour provider limit with three minutes reserved for finalization. The CLI waits for the remote
+outcome without imposing a separate run duration. Inputs must be one JSON object; omit
 `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same ranges
 and defaults as deployment.
 
@@ -546,7 +548,7 @@ error:
 ```
 
 For `error.type: cli`, `error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
-`authentication_failed`, `request_failed`, `observation_timeout`, `interrupted`, or `internal_error`.
+`authentication_failed`, `request_failed`, `interrupted`, or `internal_error`.
 These are separate from the remote `error.code` values below. When admission identity is unknown,
 do not blindly resubmit. A confirmed input rejection does not claim that remote execution may
 continue.
@@ -598,13 +600,13 @@ queued or running.
 | `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
+| `account_balance_exhausted` | The account ran out of available credit. Its active funded runs are stopped; add credit before choosing whether to run again. |
 | `infrastructure_failed` | The public status is `failed`; retain the run ID when asking for help. |
 | `preempted` | Reported interruption; the CLI does not automatically retry. Inspect external effects before deciding whether to start a new run. `--non-preemptible` avoids Modal Function preemption at 3× Function CPU and memory cost, but not other failures. |
 
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
-execution stopped. `observation_timeout` means local polling ended without confirmation, not that
-the service reported `timed_out`. These CLI failures exit `1` and use `error.type: cli`.
+execution stopped. These CLI failures exit `1` and use `error.type: cli`.
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
 may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id>` under `recovery`.
@@ -640,15 +642,15 @@ claude mcp add recurse -- recurse mcp serve <deployment-id>
 ```
 
 For Codex, add the following timeouts to the `recurse` server section created in
-`~/.codex/config.toml`. The 19-minute host timeout outlives bridge startup, the 15-minute execution
-limit, and worst-case request/result delivery:
+`~/.codex/config.toml`. This host timeout allows 24 hours plus ten minutes for startup and
+result delivery. Hosts can impose their own limits; configure enough time for your workload:
 
 ```toml
 [mcp_servers.recurse]
 command = "recurse"
 args = ["mcp", "serve", "<deployment-id>"]
 startup_timeout_sec = 180
-tool_timeout_sec = 1140
+tool_timeout_sec = 87000
 ```
 
 Give other MCP hosts comparable startup and tool-call headroom around the execution limit.
