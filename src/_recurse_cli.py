@@ -742,7 +742,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.0",
+            "version": "0.3.0",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1023,7 +1023,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.0",
+            "User-Agent": "recurse-sdk/0.3.0",
         },
         method="GET",
     )
