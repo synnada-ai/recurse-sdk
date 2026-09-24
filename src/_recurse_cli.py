@@ -2224,7 +2224,7 @@ class _RunOutput:
         return 130 if isinstance(error, KeyboardInterrupt) else 1
 
 
-def _run(
+def _run(  # noqa: PLR0912,PLR0913 - explicit admission, polling, reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
