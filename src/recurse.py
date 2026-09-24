@@ -298,8 +298,26 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
             jsonschema.Draft202012Validator.check_schema(manifest[field])
         except jsonschema.exceptions.SchemaError as error:
             raise ManifestError(f"{field} is not a valid Draft 2020-12 schema") from error
+    _validate_task_contract(manifest["inputs"])
     if _has_external_schema_reference(manifest["outputs"]):
         raise ManifestError("outputs must be self-contained")
+
+
+def _validate_task_contract(schema: dict[str, Any]) -> None:
+    """Validate the supported declaration for the reserved run task."""
+    properties = schema.get("properties")
+    if not isinstance(properties, dict) or "task" not in properties:
+        raise ManifestError("inputs.properties.task must be declared")
+    task = properties["task"]
+    if not isinstance(task, dict) or task.get("type") != "string":
+        raise ManifestError("inputs.properties.task.type must be string")
+    if "default" in task and (not isinstance(task["default"], str) or not task["default"]):
+        raise ManifestError("inputs.properties.task.default must be a non-empty string")
+    required = schema.get("required", [])
+    if "default" not in task and "task" not in required:
+        raise ManifestError(
+            "inputs.properties.task must have a non-empty default or be listed in inputs.required"
+        )
 
 
 def _has_external_schema_reference(value: object) -> bool:

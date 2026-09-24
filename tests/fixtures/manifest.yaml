@@ -13,6 +13,9 @@ inputs:
   type: object
   properties:
     target_f1: {type: number}
+    task:
+      type: string
+      default: Reach F1 {{ input.target_f1 }}.
   additionalProperties: false
 outputs:
   type: object

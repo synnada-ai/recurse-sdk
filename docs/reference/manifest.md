@@ -184,7 +184,7 @@ timeout_tools: 30
 
 *mapping, required*
 
-JSON Schema (Draft 2020-12) describing run inputs. Supplied values are validated against it and property defaults are applied. The resolved `task` string, templated with `{{ input.NAME }}` placeholders, becomes the agent task; the remaining values are available to tools through `recurse.context().inputs`.
+JSON Schema (Draft 2020-12) describing run inputs. `task` is a reserved string property and must either have a non-empty default or be required from the caller. Supplied values are validated against the schema and property defaults are applied. The resolved `task` string, templated with `{{ input.NAME }}` placeholders, becomes the Agentia user message and is excluded from `recurse.context().inputs`.
 
 Example:
 
