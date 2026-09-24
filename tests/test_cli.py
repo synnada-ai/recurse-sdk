@@ -2955,12 +2955,17 @@ def test_deploy_explains_an_unsupported_model(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A rejected selection directs the author to the declaration, not a fallback."""
+    """The service rejects an unknown model after the SDK accepts its identifier."""
     app = write_app(tmp_path / "app")
+    manifest_path = app / "agent.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["agent"]["model"] = "future-model-id"
+    manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False))
     service.version_statuses = ["failed"]
     service.version_error = "unsupported_model"
     assert main(["deploy", str(app), "--as", "mcp"]) == 2
     assert "agent.model in agent.yaml" in capsys.readouterr().err
+    assert any(path == "/v1/agent-versions" for _, path, _, _ in service.requests)
     assert not any(path == "/v1/deployments" for _, path, _, _ in service.requests)
 
 
