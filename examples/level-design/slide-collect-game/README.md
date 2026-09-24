@@ -85,7 +85,7 @@ recurse artifacts <run-id> --output results/plain
 | `report.html` | The board drawn with its seats, settlers, and solution length |
 | `history.jsonl` | Every tool call the agent made, with arguments and results |
 
-The example passes when one run ends `SAVED` inside the 15-minute run limit, the artifacts are
+The example passes when one run ends `SAVED` within the account-funded run lifetime, the artifacts are
 present, the layered request produced exactly one layered seat (or the plain request none), and
 `history.jsonl` shows at least one revision made in response to a `critique_design` finding.
 A `FAILED` verdict is an honest result, not a platform error.

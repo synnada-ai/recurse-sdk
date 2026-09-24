@@ -134,7 +134,7 @@ def test_guide_has_only_the_two_ordinary_local_mcp_configuration_commands() -> N
         "command": "recurse",
         "args": ["mcp", "serve", "<deployment-id>"],
         "startup_timeout_sec": 180,
-        "tool_timeout_sec": 1140,
+        "tool_timeout_sec": 87000,
     }
 
 
