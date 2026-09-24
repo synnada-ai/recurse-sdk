@@ -2111,6 +2111,7 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
     ):
         _invalid_run_response()
     returned_run_id = payload.get("run_id")
+    model = payload.get("model")
     status = payload.get("status")
     created_at = payload.get("created_at")
     started_at = payload.get("started_at")
@@ -2119,6 +2120,7 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
     if (
         not isinstance(returned_run_id, str)
         or not _same_run_id(returned_run_id, run_id)
+        or (model is not None and (not isinstance(model, str) or not model))
         or not isinstance(status, str)
         or status not in _PUBLIC_RUN_STATUSES
         or not isinstance(created_at, str)
@@ -2139,6 +2141,7 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
     return {
         "schema_version": 1,
         "run_id": returned_run_id,
+        "model": model,
         "status": status,
         "created_at": created_at,
         "started_at": started_at,
@@ -2193,8 +2196,8 @@ class _RunOutput:
 
     def finish(self, view: dict[str, Any]) -> None:
         """Append fields without repeating an already emitted run ID."""
-        if self.model is not None:
-            view = {"model": self.model, **view}
+        if self.model is not None and view.get("model") is None:
+            view = {**view, "model": self.model}
         if self.started:
             view = {key: value for key, value in view.items() if key != "run_id"}
         elif self.run_id is not None:

@@ -209,10 +209,10 @@ agent:
 ```
 
 Omit `model` to use the service default, currently `gpt-5.6-luna`. Use the usual `recurse run`
-or `recurse deploy --as mcp` command; there is no model CLI flag. When the service supplies the
-resolved model, `run` includes it as a top-level `model` field in its YAML outcome, including on
-failures after preparation. `deploy` prints it during preparation. That selection stays with the
-prepared version even if the service default changes.
+or `recurse deploy --as mcp` command; there is no model CLI flag. Both `run` and `status` report the
+selected model in top-level `model` (`null` when unknown). If a later command error prevents
+retrieving a snapshot, `run` retains any model learned during preparation. `deploy` prints it during
+preparation. That selection stays with the prepared version even if the service default changes.
 To change a deployed specialist's model, edit the declaration and deploy a new version.
 Unsupported selections fail rather than falling back. Model usage is charged at the selected
 model's rates, so the same token count can cost more with Astra.
@@ -431,9 +431,8 @@ The CLI builds and prepares an immutable version, admits that version directly, 
 terminal state. It writes and flushes `run_id` to standard output as soon as admission is confirmed,
 then appends the terminal snapshot and `cli_error: null` to the same YAML document. Routine progress
 messages are suppressed; standard error is reserved for error diagnostics. A later
-`recurse status <run-id>` returns the same remote snapshot and CLI outcome. The `model` field is
-preparation metadata available to `run`; `status` does not include it because the run API does not
-return it. Direct runs do not create an MCP deployment and have a 15-minute execution limit.
+`recurse status <run-id>` returns the same remote snapshot and CLI outcome, including the selected
+model. Direct runs do not create an MCP deployment and have a 15-minute execution limit.
 Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
@@ -547,6 +546,7 @@ For example, a completed run can produce:
 ```yaml
 run_id: 77777777-7777-4777-8777-777777777777
 schema_version: 1
+model: gpt-6-astra
 status: succeeded
 created_at: '2026-09-22T12:00:00Z'
 started_at: '2026-09-22T12:00:02Z'

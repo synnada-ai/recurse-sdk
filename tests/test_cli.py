@@ -43,6 +43,7 @@ def _canonical_successful_run(run_id: str) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "run_id": run_id,
+        "model": None,
         "status": "succeeded",
         "created_at": "2026-09-22T12:00:00Z",
         "started_at": "2026-09-22T12:00:02Z",
@@ -102,6 +103,7 @@ class FakeService:
             {
                 "schema_version": 1,
                 "run_id": self.run_id,
+                "model": None,
                 "status": "queued",
                 "created_at": "2026-09-22T12:00:00Z",
                 "started_at": None,
@@ -120,6 +122,7 @@ class FakeService:
             {
                 "schema_version": 1,
                 "run_id": self.run_id,
+                "model": None,
                 "status": "succeeded",
                 "created_at": "2026-09-22T12:00:00Z",
                 "started_at": "2026-09-22T12:00:02Z",
@@ -797,6 +800,7 @@ def test_run_and_status_emit_the_same_single_canonical_yaml_document(
     assert list(yaml.safe_load(run_output.out)) == [
         "run_id",
         "schema_version",
+        "model",
         "status",
         "created_at",
         "started_at",
@@ -1083,6 +1087,8 @@ def test_status_preserves_canonical_nulls_and_ignores_undeclared_private_fields(
     "change",
     [
         {"schema_version": 2},
+        {"model": 7},
+        {"model": ""},
         {"created_at": None},
         {"resources": {"cpu_limit": True, "memory_limit_mib": 1024}},
         {"cost": {"currency": "USD", "total_microusd": -1}},

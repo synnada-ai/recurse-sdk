@@ -46,7 +46,9 @@ def test_remote_outcome_is_only_in_yaml(  # noqa: PLR0913,PLR0917 - fixtures plu
 ) -> None:
     """A remote failure must not turn successful run observation into a CLI failure."""
     del logged_in
+    service.version_model = "gpt-6-astra"
     view = service.run_views[-1]
+    view["model"] = service.version_model
     view["status"] = state
     view["error"] = None if state == "succeeded" else {"code": state, "message": "Remote failure."}
     service.run_views = [view]
