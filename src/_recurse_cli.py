@@ -361,7 +361,7 @@ _LOGIN_WAIT_SECONDS = 300
 _POLL_ATTEMPTS = 300
 _MIN_CPU_LIMIT = 0.125
 _MAX_CPU_LIMIT = 16.0
-_MIN_MEMORY_LIMIT_MIB = 512
+_MIN_MEMORY_LIMIT_MIB = 768
 _MAX_MEMORY_LIMIT_MIB = 16_384
 
 
@@ -2404,7 +2404,7 @@ def _memory_limit_mib(value: str) -> int:
         raise argparse.ArgumentTypeError("memory must be a whole MiB value") from None
     if not _MIN_MEMORY_LIMIT_MIB <= parsed <= _MAX_MEMORY_LIMIT_MIB or parsed % 128:
         raise argparse.ArgumentTypeError(
-            "memory must be from 512 to 16384 MiB in 128 MiB increments"
+            "memory must be from 768 to 16384 MiB in 128 MiB increments"
         )
     return parsed
 

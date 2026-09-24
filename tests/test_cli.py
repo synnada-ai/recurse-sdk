@@ -2876,6 +2876,8 @@ def test_deploy_sends_and_confirms_selected_resource_defaults(
         ["--cpu", "16.125"],
         ["--memory-mib", "1.5"],
         ["--memory-mib", "129"],
+        ["--memory-mib", "512"],
+        ["--memory-mib", "640"],
         ["--memory-mib", "16512"],
     ],
 )
@@ -2888,6 +2890,11 @@ def test_deploy_rejects_invalid_resource_defaults(
 
     with pytest.raises(SystemExit):
         main(["deploy", str(app), "--as", "mcp", *arguments])
+
+
+def test_deploy_accepts_existing_768_mib_resource_default() -> None:
+    """Keep previously deployed 768 MiB applications representable by the CLI."""
+    assert cli._memory_limit_mib("768") == 768
 
 
 def test_deploy_rejects_malformed_resource_confirmation_before_printing_success(

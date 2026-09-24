@@ -624,7 +624,7 @@ recurse deploy path/to/app --as mcp --cpu 1 --memory-mib 1024 \
 The CLI builds and uploads the application once, waits until it is ready, creates the deployment,
 and prints the deployment identifier, endpoint, and resource defaults. `--cpu` accepts `0.125`
 through `16` CPU in `0.125` increments;
-`--memory-mib` accepts `512` through `16384` MiB in `128` MiB increments. Omitting them uses `1`
+`--memory-mib` accepts `768` through `16384` MiB in `128` MiB increments. Omitting them uses `1`
 CPU and `1024` MiB. These are billable run ceilings, not consumption measurements. A failed build
 reports `build_failed`; an account with too little balance reports the top-up and redemption
 commands needed before retrying.
