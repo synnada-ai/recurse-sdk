@@ -31,7 +31,7 @@ from decimal import Decimal, DecimalException
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, BinaryIO, NoReturn, TextIO, cast
+from typing import Any, BinaryIO, NoReturn, cast
 from uuid import UUID, uuid4
 
 import keyring
@@ -46,9 +46,6 @@ _REQUEST_TIMEOUT_SECONDS = 60
 _AUTH_LOCK_DIRECTORY = Path("~") / ".recurse" / "locks"
 _TOKEN_REFRESH_MARGIN_SECONDS = 30
 _POLL_SECONDS = 2.0
-_RUN_TIMEOUT_SECONDS = 15 * 60
-_MCP_TASK_TIMEOUT_SECONDS = _RUN_TIMEOUT_SECONDS + _REQUEST_TIMEOUT_SECONDS
-_RUN_POLL_ATTEMPTS = int((_RUN_TIMEOUT_SECONDS + 2 * _REQUEST_TIMEOUT_SECONDS) / _POLL_SECONDS)
 _REMOTE_MCP_PROTOCOL = "2026-07-28"
 _TASKS_EXTENSION = "io.modelcontextprotocol/tasks"
 _RUN_RESOURCES_META_KEY = "recurse.run/resources"
@@ -69,17 +66,20 @@ _MIN_TOP_UP_CENTS = 500
 _MAX_TOP_UP_CENTS = 50_000
 
 
-# Every failure produced by the CLI itself, as opposed to a confirmed terminal run state:
-# invalid syntax or option values, local input and packaging errors, authentication and
-# request failures, malformed responses, and unconfirmed observation timeouts.
+# Commands outside run/status retain their existing CLI-error exit code.
+# Run/status use command-level success (0), failure (1), and interruption (130).
 _CLI_ERROR_STATUS = 2
 
 
 class _CliArgumentParser(argparse.ArgumentParser):
-    """Use the CLI-layer error status (2) for invalid command syntax."""
+    """Let the command boundary select the appropriate argument-error output."""
+
+    structured_errors = False
 
     def error(self, message: str) -> NoReturn:
-        """Report invalid arguments with the shared CLI-layer error status."""
+        """Return run/status argument errors for YAML; retain other commands' usage errors."""
+        if self.structured_errors:
+            raise argparse.ArgumentError(None, message)
         self.print_usage(sys.stderr)
         self.exit(_CLI_ERROR_STATUS, f"{self.prog}: error: {message}\n")
 
@@ -742,7 +742,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.0",
+            "version": "0.3.0",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1023,7 +1023,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.0",
+            "User-Agent": "recurse-sdk/0.3.0",
         },
         method="GET",
     )
@@ -1200,7 +1200,6 @@ def _call_mcp_tool(
     task_id = result.get("taskId")
     if not isinstance(task_id, str) or not task_id:
         raise ServiceError("the Recurse service returned an invalid MCP task response")
-    deadline = time.monotonic() + _MCP_TASK_TIMEOUT_SECONDS
     while True:
         if cancelled.is_set():
             response, access_token = _remote_mcp_request(
@@ -1216,17 +1215,6 @@ def _call_mcp_tool(
         if terminal is not None:
             return terminal, access_token
         interval = _poll_interval_seconds(result)
-        if time.monotonic() + interval > deadline:
-            return (
-                _host_error(
-                    request_id,
-                    {
-                        "code": _JSONRPC_SERVER_ERROR,
-                        "message": f"tool call timed out Task: {task_id}",
-                    },
-                ),
-                access_token,
-            )
         if cancelled.wait(interval):
             continue
         response, access_token = _remote_mcp_request(
@@ -1434,7 +1422,7 @@ def _prepare(
     *,
     token: str | None = None,
     billing_retry_target: str = "deployment",
-) -> tuple[str, str]:
+) -> tuple[str, str, str | None]:
     """Build, upload, and prepare one immutable application version.
 
     Args:
@@ -1443,7 +1431,7 @@ def _prepare(
         billing_retry_target: The caller action named after a billing denial.
 
     Returns:
-        The short-lived access token and prepared version identifier.
+        The short-lived access token, prepared version identifier, and resolved model if supplied.
 
     Raises:
         RecurseError: If the application fails authoring validation.
@@ -1506,7 +1494,7 @@ def _prepare(
         time.sleep(_POLL_SECONDS)
     else:
         raise _CliError("the deployment build did not finish; try again later")
-    return token, version_id
+    return token, version_id, model if isinstance(model, str) else None
 
 
 def _deploy(
@@ -1517,7 +1505,7 @@ def _deploy(
 ) -> None:
     """Prepare and create one permanent MCP deployment."""
     resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
-    token, version_id = _prepare(app_directory, token=resolved_token)
+    token, version_id, _model = _prepare(app_directory, token=resolved_token)
     print("Creating MCP deployment...", flush=True)
     request_body: dict[str, Any] = {
         "version_id": version_id,
@@ -1857,19 +1845,19 @@ def _authenticated_request(
     return request(method, path, token=token, json_body=json_body), token
 
 
-_RUN_EXIT_STATUS = {
-    "succeeded": 0,
-    "failed": 1,
-    "timed_out": 1,
-    "cancelled": 1,
-    "preempted": 1,
-    # Retained only for the legacy artifact/cancellation response contracts.
-    "infrastructure_failed": 1,
+_TERMINAL_RUN_STATUSES = {
+    "succeeded",
+    "failed",
+    "timed_out",
+    "cancelled",
+    "preempted",
+    # Retained only for the legacy cancellation response contract.
+    "infrastructure_failed",
 }
-_RUN_STATUSES = {"queued", "running", *_RUN_EXIT_STATUS}
+_RUN_STATUSES = {"queued", "running", *_TERMINAL_RUN_STATUSES}
 _PUBLIC_RUN_STATUSES = _RUN_STATUSES - {"infrastructure_failed"}
 _PUBLIC_RUN_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
-_OUTPUT_AVAILABILITIES = {"pending", "available", "expired", "unavailable"}
+_OUTPUT_AVAILABILITIES = {"pending", "available", "expired"}
 _BIDI_CONTROL_CHARACTERS = (
     "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
 )
@@ -2075,9 +2063,9 @@ def _validated_run_outputs(value: object, status: str) -> dict[str, object]:
         _invalid_run_response()
     if (status in {"queued", "running"}) != (availability == "pending"):
         _invalid_run_response()
-    if availability in {"pending", "expired", "unavailable"} and result is not None:
+    if availability in {"pending", "expired"} and result is not None:
         _invalid_run_response()
-    if availability in {"pending", "unavailable"} and artifacts is not None:
+    if availability == "pending" and artifacts is not None:
         _invalid_run_response()
     if availability in {"available", "expired"} and artifacts is None:
         _invalid_run_response()
@@ -2098,7 +2086,6 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
         "created_at",
         "started_at",
         "completed_at",
-        "elapsed_seconds",
         "resources",
         "cost",
         "error",
@@ -2108,39 +2095,32 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
     ):
         _invalid_run_response()
     returned_run_id = payload.get("run_id")
+    model = payload.get("model")
     status = payload.get("status")
     created_at = payload.get("created_at")
     started_at = payload.get("started_at")
     completed_at = payload.get("completed_at")
-    elapsed_seconds = payload.get("elapsed_seconds")
     if (
         not isinstance(returned_run_id, str)
         or not _same_run_id(returned_run_id, run_id)
+        or (model is not None and (not isinstance(model, str) or not model))
         or not isinstance(status, str)
         or status not in _PUBLIC_RUN_STATUSES
         or not isinstance(created_at, str)
         or not created_at
         or (started_at is not None and not isinstance(started_at, str))
         or (completed_at is not None and not isinstance(completed_at, str))
-        or (
-            elapsed_seconds is not None
-            and (
-                isinstance(elapsed_seconds, bool)
-                or not isinstance(elapsed_seconds, int)
-                or elapsed_seconds < 0
-            )
-        )
     ):
         _invalid_run_response()
 
     return {
         "schema_version": 1,
         "run_id": returned_run_id,
+        "model": model,
         "status": status,
         "created_at": created_at,
         "started_at": started_at,
         "completed_at": completed_at,
-        "elapsed_seconds": elapsed_seconds,
         "resources": _validated_run_resources(payload.get("resources")),
         "cost": _validated_run_cost(payload.get("cost")),
         "error": _validated_run_error(payload.get("error"), status),
@@ -2157,63 +2137,117 @@ def _get_run(run_id: str, token: str) -> dict[str, Any]:
 
 
 def _print_run_view(view: dict[str, Any]) -> None:
-    """Print exactly one canonical YAML run document to standard output."""
+    """Write and flush YAML mapping fields to standard output."""
     rendered = yaml.dump(view, Dumper=_RunViewDumper, sort_keys=False, allow_unicode=True)
     sys.stdout.write(rendered)
+    sys.stdout.flush()
 
 
-def _print_run_recovery(
-    run_id: str | None, admission_reference: str | None = None, *, stream: TextIO
-) -> None:
-    """Retain safe next steps; an unknown run ID requires its admission reference."""
-    print("Remote state is unconfirmed. Execution and charges may continue.", file=stream)
-    if run_id is None:
-        print(f"admission: {admission_reference}", file=stream)
-        print(
-            "Run identity is unknown. Keep this reference and do not blindly retry the run.",
-            file=stream,
-        )
-    else:
-        print(f"run: {run_id}", file=stream)
-        print("Inspect this run before starting another run.", file=stream)
-        print(f"inspect: recurse status {run_id}", file=stream)
-        print(f"cancel: recurse cancel {run_id}", file=stream)
+def _print_run_recovery(run_id: str) -> None:
+    """Keep the cancel command's existing recovery guidance on stdout."""
+    print("Remote state is unconfirmed. Execution and charges may continue.")
+    print(f"run: {run_id}")
+    print("Inspect this run before starting another run.")
+    print(f"inspect: recurse status {run_id}")
+    print(f"cancel: recurse cancel {run_id}")
 
 
-def _run(  # noqa: PLR0912,PLR0915 - explicit admission, polling, reporting and Ctrl-C paths
+class _RunOutput:
+    """Keep an early run ID and the final outcome in one YAML document."""
+
+    def __init__(self, run_id: str | None = None) -> None:
+        """Retain recovery identity even before any output has been written."""
+        self.run_id = run_id
+        self.admission_attempted = False
+        self.model: str | None = None
+        self.started = False
+
+    def start(self, run_id: str) -> None:
+        """Flush the admitted ID before the first status request."""
+        self.run_id = run_id
+        _print_run_view({"run_id": run_id})
+        self.started = True
+
+    def finish(self, view: dict[str, Any]) -> None:
+        """Append fields with one optional typed error and no repeated run ID."""
+        view = dict(view)
+        error = view.get("error")
+        if error is None:
+            view.pop("error", None)
+        else:
+            view["error"] = {"type": "engine", **error}
+        if self.model is not None and view.get("model") is None:
+            view = {**view, "model": self.model}
+        if self.started:
+            view = {key: value for key, value in view.items() if key != "run_id"}
+        elif self.run_id is not None:
+            view = {"run_id": self.run_id, **view}
+        _print_run_view(view)
+
+    def fail(self, error: Exception | KeyboardInterrupt, *, status: str | None = None) -> int:
+        """Finish a command failure without inventing a remote execution outcome."""
+        detail = _run_cli_error(error)
+        view: dict[str, Any] = {}
+        if status is not None:
+            view["status"] = status
+        if (self.run_id is not None or self.admission_attempted) and (
+            status not in _TERMINAL_RUN_STATUSES
+        ):
+            recovery = {
+                "message": "Remote state is unconfirmed. Execution and charges may continue. "
+                "Inspect this run before starting another run."
+            }
+            if self.run_id is not None:
+                recovery["inspect"] = f"recurse status {self.run_id}"
+                recovery["cancel"] = f"recurse cancel {self.run_id}"
+            else:
+                recovery["message"] += " Run identity is unknown; do not blindly retry."
+            view["recovery"] = recovery
+        view["error"] = {"type": "cli", **detail}
+        self.finish(view)
+        print(f"error: {detail['code']}: {detail['message']}", file=sys.stderr)
+        return 130 if isinstance(error, KeyboardInterrupt) else 1
+
+
+def _run(  # noqa: PLR0912,PLR0913 - explicit admission, polling, reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
     memory_limit_mib: int,
     secret_bindings: list[str] | None = None,
+    *,
+    non_preemptible: bool = False,
 ) -> int:
-    """Prepare an application, admit it directly, and wait for terminal state."""
-    inputs = _read_run_inputs(inputs_source)
-    with redirect_stdout(sys.stderr):
-        resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
-        token, version_id = _prepare(
-            app_directory,
-            token=resolved_token,
-            billing_retry_target="the run",
-        )
-    admission_body = {
-        "version_id": version_id,
-        "idempotency_key": f"run_{uuid4().hex}",
-        "inputs": inputs,
-        "timeout_seconds": _RUN_TIMEOUT_SECONDS,
-        "cpu_limit": cpu_limit,
-        "memory_limit_mib": memory_limit_mib,
-    }
-    if resolved_bindings:
-        admission_body["secret_bindings"] = resolved_bindings
-    run_id = None
+    """Prepare, admit, and observe a run; remote outcomes do not set the exit code."""
+    output = _RunOutput()
     try:
+        inputs = _read_run_inputs(inputs_source)
+        with open(os.devnull, "w") as progress, redirect_stdout(progress):
+            resolved_token, resolved_bindings = _resolve_runtime_secret_bindings(secret_bindings)
+            token, version_id, output.model = _prepare(
+                app_directory,
+                token=resolved_token,
+                billing_retry_target="the run",
+            )
+        admission_body = {
+            "version_id": version_id,
+            "idempotency_key": f"run_{uuid4().hex}",
+            "inputs": inputs,
+            "cpu_limit": cpu_limit,
+            "memory_limit_mib": memory_limit_mib,
+        }
+        if resolved_bindings:
+            admission_body["secret_bindings"] = resolved_bindings
+        if non_preemptible:
+            admission_body["execution_mode"] = "non_preemptible"
+        output.admission_attempted = True
         admitted, token = _run_request("POST", "/v1/runs", token=token, json_body=admission_body)
         run_id = required_field(admitted, "run_id")
+        output.run_id = run_id
         if admitted.get("status") != "queued":
             raise ServiceError("the Recurse service returned an invalid run response")
-        print(f"run: {run_id}", file=sys.stderr, flush=True)
-        for _attempt in range(_RUN_POLL_ATTEMPTS):
+        output.start(run_id)
+        while True:
             try:
                 quoted_run_id = urllib.parse.quote(run_id, safe="")
                 payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
@@ -2226,64 +2260,49 @@ def _run(  # noqa: PLR0912,PLR0915 - explicit admission, polling, reporting and 
                     raise
                 time.sleep(_POLL_SECONDS)
                 continue
-            run_status = str(view["status"])
-            if run_status in _RUN_EXIT_STATUS:
-                _print_run_view(view)
-                return _RUN_EXIT_STATUS[run_status]
+            if view["status"] in _TERMINAL_RUN_STATUSES:
+                output.finish(view)
+                return 0
             time.sleep(_POLL_SECONDS)
-    except (RecurseError, ServiceError) as error:
-        if not (
-            run_id is None
+    except KeyboardInterrupt as error:
+        cancelled_status = None
+        if output.admission_attempted:
+            try:
+                cancel_run_id = output.run_id
+                if cancel_run_id is None:
+                    # Recover a possibly accepted admission with its original idempotency key.
+                    admitted, token = _run_request(
+                        "POST", "/v1/runs", token=token, json_body=admission_body
+                    )
+                    cancel_run_id = required_field(admitted, "run_id")
+                    output.start(cancel_run_id)
+                cancelled_status = _request_cancellation(cancel_run_id)
+            except Exception, KeyboardInterrupt:
+                return output.fail(error)
+        return output.fail(error, status=cancelled_status)
+    except Exception as error:
+        if (
+            output.run_id is None
             and isinstance(error, ServiceError)
             and error.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
         ):
-            _print_run_recovery(run_id, str(admission_body["idempotency_key"]), stream=sys.stderr)
-        raise
-    except KeyboardInterrupt:
-        print(
-            "Interrupted. Requesting cancellation; press Ctrl-C again to stop waiting.",
-            file=sys.stderr,
-            flush=True,
-        )
-        try:
-            if run_id is None:
-                # Recover a possibly accepted admission using its original idempotency key.
-                admitted, token = _run_request(
-                    "POST", "/v1/runs", token=token, json_body=admission_body
-                )
-                run_id = required_field(admitted, "run_id")
-            with redirect_stdout(sys.stderr):
-                cancelled_status = _cancel(run_id)
-            if cancelled_status in _RUN_EXIT_STATUS:
-                return 130
-        except RecurseError, ServiceError, KeyboardInterrupt:
-            print("Cancellation could not be confirmed.", file=sys.stderr)
-        print(
-            "Execution and charges may continue until cancellation is confirmed.",
-            file=sys.stderr,
-        )
-        if run_id is not None:
-            print(f"inspect: recurse status {run_id}", file=sys.stderr)
-            print(f"cancel: recurse cancel {run_id}", file=sys.stderr)
-        else:
-            print(f"admission: {admission_body['idempotency_key']}", file=sys.stderr)
-            print(
-                "Run identity is unknown. Keep this reference and do not blindly retry the run.",
-                file=sys.stderr,
-            )
-        return 130
-    _print_run_recovery(run_id, stream=sys.stderr)
-    raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
+            output.admission_attempted = False
+        return output.fail(error)
 
 
-def _status(run_id: str) -> None:
-    """Print the current durable state of one account-owned run."""
-    view = _get_run(run_id, _access_token())
-    _print_run_view(view)
+def _status(run_id: str) -> int:
+    """Report retrieval success separately from the run's state."""
+    output = _RunOutput(run_id)
+    try:
+        view = _get_run(run_id, _access_token())
+    except (Exception, KeyboardInterrupt) as error:
+        return output.fail(error)
+    output.finish(view)
+    return 0
 
 
-def _cancel(run_id: str) -> str:
-    """Request cancellation and return the confirmed state of one account-owned run."""
+def _request_cancellation(run_id: str) -> str:
+    """Request cancellation and validate the returned identity and state."""
     token = _access_token()
     quoted_run_id = urllib.parse.quote(run_id, safe="")
     response = _retry_request("POST", f"/v1/runs/{quoted_run_id}/cancel", token=token)
@@ -2292,6 +2311,12 @@ def _cancel(run_id: str) -> str:
     run_status = required_field(response, "status")
     if run_status not in _RUN_STATUSES:
         raise ServiceError("the Recurse service returned an invalid run response")
+    return run_status
+
+
+def _cancel(run_id: str) -> str:
+    """Request cancellation and print its confirmed state for the cancel command."""
+    run_status = _request_cancellation(run_id)
     print(f"run: {run_id}")
     print(f"status: {run_status}")
     return run_status
@@ -2328,8 +2353,6 @@ def _artifacts(run_id: str, output_directory: str) -> None:
         raise _CliError(
             f"run outputs have expired; inspect retained metadata with recurse status {run_id}"
         )
-    if availability == "unavailable":
-        raise _CliError("artifact inventory is unavailable")
     root = Path(output_directory)
     artifacts = cast(list[dict[str, Any]], outputs["artifacts"])
     for artifact in artifacts:
@@ -2497,11 +2520,12 @@ def _open_hosted_page(url: str, *, open_browser: bool) -> None:
         print(url)
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(*, structured_errors: bool = False) -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     parser = _CliArgumentParser(
         prog="recurse", description="Run, deploy, and manage Recurse applications."
     )
+    parser.structured_errors = structured_errors
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("login", help="log in to Recurse in your browser")
     commands.add_parser("logout", help="revoke this device login")
@@ -2532,7 +2556,17 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ENV=NAME",
         help="bind an environment variable to an account secret (repeatable)",
     )
-    run = commands.add_parser("run", help="run an application to completion")
+    run = commands.add_parser(
+        "run",
+        help="run an application to completion",
+        epilog=(
+            "Runs are preemptible by default. Interruption detection is best-effort; "
+            "some interruptions may not be reported as preempted. The CLI does not "
+            "automatically retry a reported preempted run. Inspect external effects "
+            "before deciding whether to start a new run, which may repeat them."
+        ),
+    )
+    run.structured_errors = structured_errors
     run.add_argument("app", help="application directory containing agent.yaml")
     run.add_argument(
         "--inputs",
@@ -2552,7 +2586,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ENV=NAME",
         help="bind an environment variable to an account secret (repeatable)",
     )
+    run.add_argument(
+        "--non-preemptible",
+        action="store_true",
+        help=(
+            "avoid Modal Function preemption at 3x Function CPU and memory cost; "
+            "other failures can still occur"
+        ),
+    )
     run_status = commands.add_parser("status", help="inspect a run")
+    run_status.structured_errors = structured_errors
     run_status.add_argument("run_id", help="run identifier")
     cancel = commands.add_parser("cancel", help="cancel a run")
     cancel.add_argument("run_id", help="run identifier")
@@ -2602,8 +2645,8 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _print_cli_error(error: RecurseError | ServiceError, arguments: argparse.Namespace) -> None:
-    """Explain request failures without confusing them with confirmed run failures."""
+def _cli_error_message(error: RecurseError | ServiceError) -> str:
+    """Render a public error without exposing private authentication or server details."""
     message = str(error)
     if isinstance(error, ServiceError):
         if error.status_code == HTTPStatus.UNAUTHORIZED:
@@ -2618,23 +2661,51 @@ def _print_cli_error(error: RecurseError | ServiceError, arguments: argparse.Nam
             )
         else:
             message = f"request_failed: {message}"
-    if arguments.command in {"status", "cancel"}:
-        stream = sys.stderr if arguments.command == "status" else sys.stdout
-        _print_run_recovery(arguments.run_id, stream=stream)
+    return message
+
+
+def _run_cli_error(error: Exception | KeyboardInterrupt) -> dict[str, str]:
+    """Separate local errors from the Engine's remote execution error object."""
+    if isinstance(error, KeyboardInterrupt):
+        return {"code": "interrupted", "message": "Interrupted."}
+    if isinstance(error, argparse.ArgumentError):
+        return {"code": "invalid_arguments", "message": str(error)}
+    if isinstance(error, (RecurseError, ServiceError)):
+        message = _cli_error_message(error)
+        code, separator, detail = message.partition(": ")
+        if separator and code in {"request_failed", "authentication_failed"}:
+            return {"code": code, "message": detail}
+        return {"code": "cli_error", "message": message}
+    return {
+        "code": "internal_error",
+        "message": "The CLI encountered an unexpected internal error.",
+    }
+
+
+def _print_cli_error(error: RecurseError | ServiceError, arguments: argparse.Namespace) -> None:
+    """Keep the existing error interface for commands outside run and status."""
+    message = _cli_error_message(error)
+    if arguments.command == "cancel":
+        _print_run_recovery(arguments.run_id)
     print(f"error: {message}", file=sys.stderr)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912 - explicit command dispatch
     """Run the `recurse` command.
 
     Args:
         argv: Command-line arguments; defaults to ``sys.argv[1:]``.
 
     Returns:
-        Process exit status. A successful run exits 0, any confirmed unsuccessful
-        terminal run exits 1, and every CLI-layer error exits 2.
+        Run/status exit 0 when their operation completes, 1 for command errors,
+        or 130 on interruption. Other commands retain their existing exit codes.
     """
-    arguments = _build_parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    parser = _build_parser(structured_errors=bool(argv and argv[0] in {"run", "status"}))
+    try:
+        arguments = parser.parse_args(argv)
+    except argparse.ArgumentError as error:
+        return _RunOutput().fail(error)
     try:
         if arguments.command == "login":
             _login()
@@ -2649,9 +2720,10 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.cpu,
                 arguments.memory_mib,
                 arguments.secret,
+                non_preemptible=arguments.non_preemptible,
             )
         elif arguments.command == "status":
-            _status(arguments.run_id)
+            return _status(arguments.run_id)
         elif arguments.command == "cancel":
             _cancel(arguments.run_id)
         elif arguments.command == "artifacts":

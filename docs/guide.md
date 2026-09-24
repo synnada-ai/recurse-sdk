@@ -178,7 +178,7 @@ Use `tools.defaults` for shared settings and override individual registrations w
 `tools.built_in` defaults to `true` and controls built-in tools such as notes, TODO management,
 and planning. Set per-tool options only when their behavior calls for them.
 
-Each application tool call has a timeout, separate from the 15-minute run limit. It is set by
+Each application tool call has a timeout, separate from the account-funded run lifetime. It is set by
 `agent.timeout_tools` in seconds (default 30); `0` or `null` disables it. A tool timeout is
 reported to the specialist for recovery; it does not necessarily end the run immediately. Design
 individual calls to fit that budget, breaking longer work into smaller steps where practical.
@@ -191,8 +191,10 @@ the count. `0` disables either limit, and omitting a setting keeps its default.
 ### Input and output contracts
 
 Run inputs are declared as a JSON Schema (Draft 2020-12) under `inputs`. The resolved
-`task` property — templated with `{{ input.NAME }}` placeholders — becomes the agent
-task; the remaining values are available to tools at run time.
+`task` property is reserved: declare it as a string with either a non-empty default or a place
+in `inputs.required`. After `{{ input.NAME }}` placeholders are resolved, it becomes the Agentia
+user message and is excluded from `recurse.context().inputs`; the remaining values are available
+to tools at run time.
 
 The successful result is declared as a self-contained object JSON Schema under `outputs`. Finish
 the agent with only a JSON object matching that schema. Files written to the run workspace remain
@@ -209,8 +211,10 @@ agent:
 ```
 
 Omit `model` to use the service default, currently `gpt-5.6-luna`. Use the usual `recurse run`
-or `recurse deploy --as mcp` command; there is no model CLI flag. Preparation prints the resolved
-model. That selection stays with the prepared version even if the service default changes.
+or `recurse deploy --as mcp` command; there is no model CLI flag. Both `run` and `status` report the
+selected model in top-level `model` (`null` when unknown). If a later command error prevents
+retrieving a snapshot, `run` retains any model learned during preparation. `deploy` prints it during
+preparation. That selection stays with the prepared version even if the service default changes.
 To change a deployed specialist's model, edit the declaration and deploy a new version.
 Unsupported selections fail rather than falling back. Model usage is charged at the selected
 model's rates, so the same token count can cost more with Astra.
@@ -385,6 +389,10 @@ recurse secret delete github-token
 recurse secret delete github-token --yes
 ```
 
+You can set the same name again after deletion. This creates a new secret with a new ID and version
+1. Deletion still disables affected MCP deployments; recreate the deployment and reconnect it if
+it needs the new secret.
+
 Bind a logical secret name to an environment name on a direct run or permanent MCP deployment:
 
 ```sh
@@ -426,12 +434,25 @@ recurse run path/to/app --inputs inputs.json --cpu 1 --memory-mib 1024 \
 ```
 
 The CLI builds and prepares an immutable version, admits that version directly, and waits for
-terminal state. Progress and the admitted run ID go to standard error. At terminal state, standard
-output contains exactly one YAML document: the same versioned run snapshot returned by
-`recurse status <run-id>`. It does not create an MCP deployment. Runs have a 15-minute execution
-limit. Inputs must be one JSON object;
-omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
-ranges and defaults as deployment.
+terminal state. It writes and flushes `run_id` to standard output as soon as admission is confirmed,
+then appends the terminal snapshot to the same YAML document. Routine progress messages are
+suppressed; standard error is reserved for error diagnostics. A later `recurse status <run-id>`
+returns the same remote snapshot and CLI outcome, including the selected model. Direct runs do not
+create an MCP deployment. Runs continue while the account can fund them, up to the fixed
+24-hour provider limit with three minutes reserved for finalization. The CLI waits for the remote
+outcome without imposing a separate run duration. Inputs must be one JSON object; omit
+`--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same ranges
+and defaults as deployment.
+
+Direct runs are preemptible by default. When Recurse detects an interruption, it may report
+`preempted`; detection is best-effort, so not every interruption is guaranteed to receive that
+status. The CLI does not automatically retry a run reported `preempted`. Tools may already have
+performed external actions; inspect those effects before deciding whether to start a new run,
+which may repeat them. To avoid Modal Function preemption, use
+`recurse run path/to/app --non-preemptible`. This does not prevent other failures. The option costs
+3× the otherwise-equivalent Function CPU and memory charge, not 3× the total run cost. Sandbox,
+model-token, and preparation charges are unchanged. The option applies to direct runs, not MCP
+deployments.
 
 Ctrl-C during `recurse run` requests cancellation of the admitted run and exits `130`. The CLI
 prints the state confirmed by the service: cancellation can race completion, and a request alone
@@ -447,10 +468,9 @@ recurse artifacts <run-id> --output results
 If Ctrl-C interrupts the admission response, the CLI replays the same admission request with its
 original idempotency key to recover the run ID before cancelling. It does not prepare another
 version or use a new key. If the original request never arrived, this replay can admit the run
-before cancelling it. If recovery also fails, the CLI prints the admission reference and warns that
-the run's identity and state are unknown; keep that reference rather than blindly starting another
-run. Recovery uses the existing finite HTTP retries and request timeouts. A second Ctrl-C stops
-waiting for confirmation without claiming remote execution stopped.
+before cancelling it. If recovery also fails, the CLI warns that the run's identity and state are
+unknown; do not blindly start another run. Recovery uses the existing finite HTTP retries and request
+timeouts. A second Ctrl-C stops waiting for confirmation without claiming remote execution stopped.
 
 Ctrl-C before admission stops local work cleanly; it does not promise that an already submitted
 preparation was cancelled. Interrupting login closes its callback listener. Ctrl-Z retains native
@@ -460,44 +480,101 @@ run cancellation request.
 
 Artifacts are available for 24 hours after completion. `recurse artifacts` downloads only when the
 run snapshot reports `outputs.availability: available`; a finalized `outputs.artifacts: []` exits
-successfully without printing a download. Pending and unavailable inventories fail without claiming
-the run produced no artifacts. After expiration, `recurse status` still shows retained artifact
-metadata, but `recurse artifacts` refuses the unavailable download. Downloads refuse unsafe paths
+successfully without printing a download. Pending inventories fail without claiming the run produced
+no artifacts. After expiration, `recurse status` still shows retained artifact metadata, but
+`recurse artifacts` refuses the expired download. Downloads refuse unsafe paths
 and existing directories, verify size and SHA-256, and only then atomically replace the destination
 file.
 
-For automation, both `recurse run` and `recurse status` write exactly one canonical YAML document
-to standard output after a successful retrieval. Field order and explicit `null` values are stable;
-the complete application return value always stays under `outputs.result`, including an `answer`
-property. Ordinary Unicode remains readable UTF-8; terminal controls and explicit bidirectional
-formatting controls are emitted as YAML escapes. Parsing the YAML restores the original strings.
-Progress, the admitted run ID, and recovery guidance go only to standard error.
+For automation, `recurse run` and `recurse status` write one YAML document to standard output,
+including on handled command errors and Ctrl-C. The early run ID is available through a pipe;
+read until command completion before treating the rest of the document as a complete outcome.
+Each field is written once. The full application return value stays under `outputs.result`,
+including an `answer` property. Ordinary Unicode remains readable UTF-8; terminal controls and
+explicit bidirectional formatting controls are escaped. Parsing restores the original strings.
+Help remains normal CLI help, and an uncatchable termination or broken output stream cannot
+promise a completed document.
 
-`recurse run` exits `0` for `succeeded` and `1` for every confirmed unsuccessful terminal state:
-`failed`, `cancelled`, `timed_out`, or `preempted`. `recurse status` exits `0` whenever it retrieves a
-valid snapshot, including queued, running, and unsuccessful states. Both commands exit `2` for
-invalid syntax or options, local input and packaging errors, authentication failures, request and
-transport failures, malformed service responses, or an observation timeout where remote state is
-unconfirmed. These CLI/API errors leave standard output empty. Ctrl-C retains exit `130`, including
-when cancellation is confirmed.
+The two commands use the same exit-code meaning: whether the **CLI operation** completed.
+YAML `status` describes the **remote execution**. One optional `error` field contains `type`,
+`code`, and `message`: `type: engine` for a remote error or `type: cli` for a command error.
+When neither fails, `error` is omitted. A command error takes precedence if a remote status is
+also known; that confirmed state remains in `status`.
+
+| Exit code | `recurse run` | `recurse status` |
+| --- | --- | --- |
+| `0` | Observed a terminal outcome, including a failed, cancelled, timed-out, or preempted run. | Retrieved a valid snapshot, including queued, running, or unsuccessful runs. |
+| `1` | Command failed: invalid input, packaging/authentication/API/network failure, malformed response, observation timeout, or an internal CLI error. | Command failed: invalid arguments, authentication/API/network failure, malformed response, or an internal CLI error. |
+| `130` | Interrupted by Ctrl-C; cancellation may or may not be confirmed. | Interrupted by Ctrl-C; this lookup does not cancel the run. |
+
+**Breaking change from SDK 0.2.0:** a confirmed unsuccessful `run` now exits `0` instead of `1`;
+handled CLI/API errors in these two commands exit `1` instead of `2`. Other commands retain their
+existing exit codes. `recurse run ... && next-step` alone no longer gates on remote execution success.
+Check the YAML status as well, using Python from an environment containing the SDK and PyYAML:
+
+```sh
+recurse run path/to/app --inputs inputs.json > run.yaml &&
+python -c 'import sys, yaml; run = yaml.safe_load(open("run.yaml")); sys.exit(run.get("status") != "succeeded")' &&
+echo "The remote run succeeded; continue here."
+```
+
+A confirmed failed execution has `error.type: engine` with its original code and message,
+retains any available partial outputs, and exits `0`. For example, its outcome fields are:
+
+```yaml
+run_id: 77777777-7777-4777-8777-777777777777
+status: failed
+error:
+  type: engine
+  code: execution_failed
+  message: The agent execution failed.
+```
+
+On a command failure, the document contains `error.type: cli`, `error.code`, and `error.message`
+instead of an invented remote failure. Before admission, there may be no run ID. For example,
+`recurse run` without an application argument exits `1` with an `invalid_arguments` CLI error. A
+failed observation retains the run ID when available and structured recovery guidance:
+
+```yaml
+run_id: 77777777-7777-4777-8777-777777777777
+recovery:
+  message: Remote state is unconfirmed. Execution and charges may continue. Inspect this run before starting another run.
+  inspect: recurse status 77777777-7777-4777-8777-777777777777
+  cancel: recurse cancel 77777777-7777-4777-8777-777777777777
+error:
+  type: cli
+  code: request_failed
+  message: The Recurse service could not be reached.
+```
+
+For `error.type: cli`, `error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
+`authentication_failed`, `request_failed`, `interrupted`, or `internal_error`.
+These are separate from the remote `error.code` values below. When admission identity is unknown,
+do not blindly resubmit. A confirmed input rejection does not claim that remote execution may
+continue.
+
+Ctrl-C finishes the document with `error.type: cli` and `error.code: interrupted` and exits `130`.
+After admission, it includes the cancellation response's `status` only when validated; this can be a
+terminal state or a still-pending state. It does not invent result, cost, or artifact fields from
+that limited response. If cancellation remains unconfirmed or pending, `recovery` gives the next
+steps. Use `status` to retrieve the complete snapshot later.
 
 For example, a completed run can produce:
 
 ```yaml
-schema_version: 1
 run_id: 77777777-7777-4777-8777-777777777777
+schema_version: 1
+model: gpt-6-astra
 status: succeeded
 created_at: '2026-09-22T12:00:00Z'
 started_at: '2026-09-22T12:00:02Z'
 completed_at: '2026-09-22T12:01:00Z'
-elapsed_seconds: 58
 resources:
   cpu_limit: 1.0
   memory_limit_mib: 1024
 cost:
   currency: USD
   total_microusd: 12345
-error: null
 outputs:
   availability: available
   expires_at: '2026-09-23T12:01:00Z'
@@ -507,10 +584,10 @@ outputs:
   artifacts: []
 ```
 
-`outputs.availability` is `pending`, `available`, `expired`, or `unavailable`. Artifact metadata can
-remain listed after expiration even though `outputs.result` and downloads are no longer available.
-`outputs.artifacts: []` means the finalized run produced no artifacts; `null` means the inventory is
-not yet known or is unavailable.
+`outputs.availability` is `pending`, `available`, or `expired`. Artifact metadata can remain listed
+after expiration even though `outputs.result` and downloads are no longer available.
+`outputs.artifacts: []` means the finalized run produced no artifacts; `null` means the run is still
+queued or running.
 
 | Public reason | Meaning and next step |
 | --- | --- |
@@ -523,18 +600,18 @@ not yet known or is unavailable.
 | `artifact_failed` | Artifacts could not be collected or stored. Check their paths and retain the run ID. |
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
+| `account_balance_exhausted` | The account ran out of available credit. Its active funded runs are stopped; add credit before choosing whether to run again. |
 | `infrastructure_failed` | The public status is `failed`; retain the run ID when asking for help. |
-| `preempted` | Occasional preemption did not restart the run automatically. Inspect external effects before deciding whether to retry. |
+| `preempted` | Reported interruption; the CLI does not automatically retry. Inspect external effects before deciding whether to start a new run. `--non-preemptible` avoids Modal Function preemption at 3× Function CPU and memory cost, but not other failures. |
 
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
-execution stopped. `observation_timeout` means local polling ended without confirmation, not that
-the service reported `timed_out`. These CLI failures exit `2`.
+execution stopped. These CLI failures exit `1` and use `error.type: cli`.
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
-may continue, and prints `recurse status <run-id>` and `recurse cancel <run-id>`. Inspect the existing
-run before starting another. If admission itself lost its response, keep the printed admission
-reference: the CLI does not know whether a run was created and does not automatically resubmit it.
+may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id>` under `recovery`.
+Inspect the existing run before starting another. If admission itself lost its response, the CLI
+does not know whether a run was created and does not automatically resubmit it.
 The Ctrl-C recovery described above is the explicit cancellation path.
 
 ## Deployment
@@ -565,15 +642,15 @@ claude mcp add recurse -- recurse mcp serve <deployment-id>
 ```
 
 For Codex, add the following timeouts to the `recurse` server section created in
-`~/.codex/config.toml`. The 19-minute host timeout outlives bridge startup, the 15-minute execution
-limit, and worst-case request/result delivery:
+`~/.codex/config.toml`. This host timeout allows 24 hours plus ten minutes for startup and
+result delivery. Hosts can impose their own limits; configure enough time for your workload:
 
 ```toml
 [mcp_servers.recurse]
 command = "recurse"
 args = ["mcp", "serve", "<deployment-id>"]
 startup_timeout_sec = 180
-tool_timeout_sec = 1140
+tool_timeout_sec = 87000
 ```
 
 Give other MCP hosts comparable startup and tool-call headroom around the execution limit.

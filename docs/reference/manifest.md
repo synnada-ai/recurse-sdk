@@ -116,11 +116,9 @@ The agent that drives the application's tools: its system prompt, optional model
 
 ### `agent.model`
 
-*choice, optional*
+*string, optional*
 
-Supported specialist model: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, or `gpt-6-astra`. Omit to use the platform default (currently `gpt-5.6-luna`). The service also checks availability; models are never substituted. Preparation records the resolved selection, so existing deployments do not change when the default changes.
-
-Allowed values: `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`
+Specialist model identifier. Omit to use the current service default. The service checks availability and pricing during preparation; unsupported or unavailable models are rejected without substitution. Preparation records the resolved selection, so existing deployments do not change when the default changes.
 
 Example:
 
@@ -186,7 +184,7 @@ timeout_tools: 30
 
 *mapping, required*
 
-JSON Schema (Draft 2020-12) describing run inputs. Supplied values are validated against it and property defaults are applied. The resolved `task` string, templated with `{{ input.NAME }}` placeholders, becomes the agent task; the remaining values are available to tools through `recurse.context().inputs`.
+JSON Schema (Draft 2020-12) describing run inputs. `task` is a reserved string property and must either have a non-empty default or be required from the caller. Supplied values are validated against the schema and property defaults are applied. The resolved `task` string, templated with `{{ input.NAME }}` placeholders, becomes the Agentia user message and is excluded from `recurse.context().inputs`.
 
 Example:
 

@@ -127,7 +127,8 @@ spending cap. Decide your allowance before starting a series of runs. Record the
 model, run ID, resource settings, and service output for each attempt. For matched comparisons,
 set the same explicit `agent.model` in each design's manifest.
 
-The command writes progress to standard error and the terminal run snapshot to `run.yaml`. Read the
+The command writes the run ID early and appends the terminal snapshot to `run.yaml`. Exit `0` confirms
+observation, so check YAML `status: succeeded` before using the result. Read the
 `run_id` field from that YAML document, copy it into this variable, then inspect and download the
 same run. `recurse status` emits the same YAML schema for its current snapshot:
 

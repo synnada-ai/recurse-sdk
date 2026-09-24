@@ -106,7 +106,7 @@ recurse artifacts <run-id> --output results/dragon
 | `diagnostics/` | A snapshot of each candidate and the toolkit's own event trace |
 | `history.jsonl` | Every tool call the agent made, with arguments and results |
 
-The example passes when one run ends `SAVED` inside the 15-minute run limit, the artifacts are
+The example passes when one run ends `SAVED` within the account-funded run lifetime, the artifacts are
 present, the certificate replays to a win with every key collected and every lock opened, and
 `history.jsonl` shows at least one revision made in response to a `configure_gameplay` result.
 Whether the picture in `source-comparison.html` is still recognizable needs a human look.
