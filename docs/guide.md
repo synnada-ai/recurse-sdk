@@ -439,6 +439,16 @@ limit. Inputs must be one JSON object;
 omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
 ranges and defaults as deployment.
 
+Direct runs are preemptible by default. When Recurse detects an interruption, it may report
+`preempted`; detection is best-effort, so not every interruption is guaranteed to receive that
+status. The CLI does not automatically retry a run reported `preempted`. Tools may already have
+performed external actions; inspect those effects before deciding whether to start a new run,
+which may repeat them. To avoid Modal Function preemption, use
+`recurse run path/to/app --non-preemptible`. This does not prevent other failures. The option costs
+3× the otherwise-equivalent Function CPU and memory charge, not 3× the total run cost. Sandbox,
+model-token, and preparation charges are unchanged. The option applies to direct runs, not MCP
+deployments.
+
 Ctrl-C during `recurse run` requests cancellation of the admitted run and exits `130`. The CLI
 prints the state confirmed by the service: cancellation can race completion, and a request alone
 does not prove the run has stopped. If confirmation fails or remains pending, execution and charges
@@ -530,7 +540,7 @@ not yet known or is unavailable.
 | `timed_out` | The service reports that the time limit was reached. Review the workload before starting another run. |
 | `cancelled` | The service confirms cancellation. |
 | `infrastructure_failed` | The public status is `failed`; retain the run ID when asking for help. |
-| `preempted` | Occasional preemption did not restart the run automatically. Inspect external effects before deciding whether to retry. |
+| `preempted` | Reported interruption; the CLI does not automatically retry. Inspect external effects before deciding whether to start a new run. `--non-preemptible` avoids Modal Function preemption at 3× Function CPU and memory cost, but not other failures. |
 
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote

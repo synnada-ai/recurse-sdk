@@ -784,6 +784,34 @@ def test_run_prepares_and_waits_for_one_direct_run(
     ]
 
 
+def test_non_preemptible_run_admits_opt_in_mode(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A direct-run opt-in reaches admission without changing preparation."""
+    del logged_in
+    monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
+
+    assert main(["run", str(write_app(tmp_path / "app")), "--non-preemptible"]) == 0
+
+    admissions = [
+        body for method, path, body, _ in service.requests if (method, path) == ("POST", "/v1/runs")
+    ]
+    assert len(admissions) == 1
+    assert isinstance(admissions[0], dict)
+    assert admissions[0] == {
+        "version_id": "version-1",
+        "idempotency_key": admissions[0]["idempotency_key"],
+        "inputs": {},
+        "timeout_seconds": 900,
+        "cpu_limit": 1.0,
+        "memory_limit_mib": 1024,
+        "execution_mode": "non_preemptible",
+    }
+
+
 def test_run_and_status_emit_the_same_single_canonical_yaml_document(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
@@ -1514,26 +1542,35 @@ def test_secret_binding_rejects_duplicate_environment_names_before_preparation(
     assert "duplicate" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("non_preemptible", [False, True])
 def test_run_retries_admission_with_the_same_idempotency_key(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    non_preemptible: bool,
 ) -> None:
     """A retryable admission failure cannot create a second logical run."""
     app = write_app(tmp_path / "app")
     service.transient_failures["/v1/runs"] = 1
     monkeypatch.setattr("_recurse_cli._POLL_SECONDS", 0)
 
-    assert main(["run", str(app)]) == 0
+    arguments = ["run", str(app)]
+    if non_preemptible:
+        arguments.append("--non-preemptible")
+    assert main(arguments) == 0
 
     admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
     assert len(admissions) == 2
+    assert isinstance(admissions[0], dict)
     assert admissions[0] == admissions[1]
+    assert admissions[0].get("execution_mode") == ("non_preemptible" if non_preemptible else None)
 
 
+@pytest.mark.parametrize("non_preemptible", [False, True])
 def test_run_reauthenticates_once_after_401_during_admission(
     monkeypatch: pytest.MonkeyPatch,
+    non_preemptible: bool,
 ) -> None:
     """A long preparation can refresh auth without changing run admission."""
     run_id = "77777777-7777-4777-8777-777777777777"
@@ -1562,9 +1599,12 @@ def test_run_reauthenticates_once_after_401_during_admission(
 
     monkeypatch.setattr(cli, "_retry_request", respond)
 
-    assert cli._run("app", None, 1.0, 1024) == 0
+    assert cli._run("app", None, 1.0, 1024, non_preemptible=non_preemptible) == 0
     assert [token for token, _body in admissions] == ["access-old", "access-new"]
     assert admissions[0][1] == admissions[1][1]
+    assert admissions[0][1].get("execution_mode") == (
+        "non_preemptible" if non_preemptible else None
+    )
 
 
 def test_run_continues_polling_after_a_transient_status_interruption(
@@ -1691,11 +1731,13 @@ def test_run_interrupt_preserves_recovery_when_cancellation_is_unconfirmed(
     assert "Traceback" not in output.err
 
 
+@pytest.mark.parametrize("non_preemptible", [False, True])
 def test_run_interrupt_during_admission_reuses_the_exact_request(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    non_preemptible: bool,
 ) -> None:
     """A lost admission response is recovered with the same idempotency key before cancellation."""
     monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1"))
@@ -1713,11 +1755,16 @@ def test_run_interrupt_during_admission_reuses_the_exact_request(
 
     monkeypatch.setattr(cli, "request", lose_admission)
 
-    assert main(["run", "app", "--cpu", "2"]) == 130
+    arguments = ["run", "app", "--cpu", "2"]
+    if non_preemptible:
+        arguments.append("--non-preemptible")
+    assert main(arguments) == 130
 
     admissions = [body for method, path, body, _ in service.requests if path == "/v1/runs"]
     assert len(admissions) == 2
+    assert isinstance(admissions[0], dict)
     assert admissions[0] == admissions[1]
+    assert admissions[0].get("execution_mode") == ("non_preemptible" if non_preemptible else None)
     assert sum(path.endswith("/cancel") for _, path, _, _ in service.requests) == 1
     output = capsys.readouterr()
     assert output.out == ""
@@ -3352,6 +3399,23 @@ def test_help_shows_the_public_commands(capsys: pytest.CaptureFixture[str]) -> N
     out = capsys.readouterr().out
     for command in ["login", "logout", "secret", "run", "deploy", "mcp", "billing"]:
         assert command in out
+
+
+def test_run_help_explains_non_preemptible_function_surcharge(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The opt-in and limited CPU/memory surcharge are discoverable before admission."""
+    with pytest.raises(SystemExit) as excinfo:
+        main(["run", "--help"])
+    assert excinfo.value.code == 0
+    output = " ".join(capsys.readouterr().out.split())
+    assert "--non-preemptible" in output
+    assert "preemptible by default" in output
+    assert "best-effort" in output
+    assert "does not automatically retry a reported preempted run" in output
+    assert "3x Function CPU and memory cost" in output
+    assert "other failures can still occur" in output
+    assert "Inspect external effects before deciding whether to start a new run" in output
 
 
 def test_mcp_help_shows_the_serve_command_and_deployment_argument(

@@ -2180,12 +2180,14 @@ def _print_run_recovery(
         print(f"cancel: recurse cancel {run_id}", file=stream)
 
 
-def _run(  # noqa: PLR0912,PLR0915 - explicit admission, polling, reporting and Ctrl-C paths
+def _run(  # noqa: PLR0912,PLR0913,PLR0915 - explicit admission, polling, reporting and Ctrl-C paths
     app_directory: str,
     inputs_source: str | None,
     cpu_limit: float,
     memory_limit_mib: int,
     secret_bindings: list[str] | None = None,
+    *,
+    non_preemptible: bool = False,
 ) -> int:
     """Prepare an application, admit it directly, and wait for terminal state."""
     inputs = _read_run_inputs(inputs_source)
@@ -2206,6 +2208,8 @@ def _run(  # noqa: PLR0912,PLR0915 - explicit admission, polling, reporting and 
     }
     if resolved_bindings:
         admission_body["secret_bindings"] = resolved_bindings
+    if non_preemptible:
+        admission_body["execution_mode"] = "non_preemptible"
     run_id = None
     try:
         admitted, token = _run_request("POST", "/v1/runs", token=token, json_body=admission_body)
@@ -2532,7 +2536,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ENV=NAME",
         help="bind an environment variable to an account secret (repeatable)",
     )
-    run = commands.add_parser("run", help="run an application to completion")
+    run = commands.add_parser(
+        "run",
+        help="run an application to completion",
+        epilog=(
+            "Runs are preemptible by default. Interruption detection is best-effort; "
+            "some interruptions may not be reported as preempted. The CLI does not "
+            "automatically retry a reported preempted run. Inspect external effects "
+            "before deciding whether to start a new run, which may repeat them."
+        ),
+    )
     run.add_argument("app", help="application directory containing agent.yaml")
     run.add_argument(
         "--inputs",
@@ -2551,6 +2564,14 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         metavar="ENV=NAME",
         help="bind an environment variable to an account secret (repeatable)",
+    )
+    run.add_argument(
+        "--non-preemptible",
+        action="store_true",
+        help=(
+            "avoid Modal Function preemption at 3x Function CPU and memory cost; "
+            "other failures can still occur"
+        ),
     )
     run_status = commands.add_parser("status", help="inspect a run")
     run_status.add_argument("run_id", help="run identifier")
@@ -2649,6 +2670,7 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.cpu,
                 arguments.memory_mib,
                 arguments.secret,
+                non_preemptible=arguments.non_preemptible,
             )
         elif arguments.command == "status":
             _status(arguments.run_id)
