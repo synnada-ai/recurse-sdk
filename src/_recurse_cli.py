@@ -2173,7 +2173,7 @@ class _RunOutput:
     def __init__(self, run_id: str | None = None) -> None:
         """Retain recovery identity even before any output has been written."""
         self.run_id = run_id
-        self.admission_reference: str | None = None
+        self.admission_attempted = False
         self.model: str | None = None
         self.started = False
 
@@ -2205,9 +2205,7 @@ class _RunOutput:
         view: dict[str, Any] = {}
         if status is not None:
             view["status"] = status
-        if self.admission_reference is not None:
-            view["admission_reference"] = self.admission_reference
-        if (self.run_id is not None or self.admission_reference is not None) and (
+        if (self.run_id is not None or self.admission_attempted) and (
             status not in _TERMINAL_RUN_STATUSES
         ):
             recovery = {
@@ -2218,10 +2216,7 @@ class _RunOutput:
                 recovery["inspect"] = f"recurse status {self.run_id}"
                 recovery["cancel"] = f"recurse cancel {self.run_id}"
             else:
-                recovery["message"] += (
-                    " Run identity is unknown. Keep the admission reference "
-                    "and do not blindly retry."
-                )
+                recovery["message"] += " Run identity is unknown; do not blindly retry."
             view["recovery"] = recovery
         view["error"] = {"type": "cli", **detail}
         self.finish(view)
@@ -2257,7 +2252,7 @@ def _run(
         }
         if resolved_bindings:
             admission_body["secret_bindings"] = resolved_bindings
-        output.admission_reference = str(admission_body["idempotency_key"])
+        output.admission_attempted = True
         admitted, token = _run_request("POST", "/v1/runs", token=token, json_body=admission_body)
         run_id = required_field(admitted, "run_id")
         output.run_id = run_id
@@ -2284,7 +2279,7 @@ def _run(
         raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
     except KeyboardInterrupt as error:
         cancelled_status = None
-        if output.admission_reference is not None:
+        if output.admission_attempted:
             try:
                 cancel_run_id = output.run_id
                 if cancel_run_id is None:
@@ -2304,7 +2299,7 @@ def _run(
             and isinstance(error, ServiceError)
             and error.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
         ):
-            output.admission_reference = None
+            output.admission_attempted = False
         return output.fail(error)
 
 

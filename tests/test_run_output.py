@@ -31,6 +31,8 @@ def document(text: str) -> dict[str, Any]:
     keys = [key.value for key, _value in node.value]
     assert len(keys) == len(set(keys))
     assert "cli_error" not in keys
+    assert "admission_reference" not in keys
+    assert "idempotency_key" not in keys
     result = yaml.safe_load(text)
     assert isinstance(result, dict)
     return result
@@ -117,7 +119,6 @@ def test_command_failures_preserve_identity_without_inventing_remote_failure(  #
         assert view["run_id"] == service.run_id
         assert view["recovery"]["inspect"] == f"recurse status {service.run_id}"
     elif stage == "admission":
-        assert view["admission_reference"].startswith("run_")
         assert "may continue" in view["recovery"]["message"]
     else:
         assert "run_id" not in view
@@ -248,7 +249,6 @@ def test_internal_error_after_admission_preserves_the_already_printed_id(
     captured = capsys.readouterr()
     view = document(captured.out)
     assert view["run_id"] == service.run_id
-    assert view["admission_reference"].startswith("run_")
     assert view["error"]["type"] == "cli"
     assert view["error"]["code"] == "internal_error"
     assert view["recovery"]["cancel"] == f"recurse cancel {service.run_id}"

@@ -450,10 +450,9 @@ recurse artifacts <run-id> --output results
 If Ctrl-C interrupts the admission response, the CLI replays the same admission request with its
 original idempotency key to recover the run ID before cancelling. It does not prepare another
 version or use a new key. If the original request never arrived, this replay can admit the run
-before cancelling it. If recovery also fails, the CLI prints the admission reference and warns that
-the run's identity and state are unknown; keep that reference rather than blindly starting another
-run. Recovery uses the existing finite HTTP retries and request timeouts. A second Ctrl-C stops
-waiting for confirmation without claiming remote execution stopped.
+before cancelling it. If recovery also fails, the CLI warns that the run's identity and state are
+unknown; do not blindly start another run. Recovery uses the existing finite HTTP retries and request
+timeouts. A second Ctrl-C stops waiting for confirmation without claiming remote execution stopped.
 
 Ctrl-C before admission stops local work cleanly; it does not promise that an already submitted
 preparation was cancelled. Interrupting login closes its callback listener. Ctrl-Z retains native
@@ -516,12 +515,10 @@ error:
 On a command failure, the document contains `error.type: cli`, `error.code`, and `error.message`
 instead of an invented remote failure. Before admission, there may be no run ID. For example,
 `recurse run` without an application argument exits `1` with an `invalid_arguments` CLI error. A
-failed observation retains the run ID, admission reference when available, and structured recovery
-guidance:
+failed observation retains the run ID when available and structured recovery guidance:
 
 ```yaml
 run_id: 77777777-7777-4777-8777-777777777777
-admission_reference: run_example
 recovery:
   message: Remote state is unconfirmed. Execution and charges may continue. Inspect this run before starting another run.
   inspect: recurse status 77777777-7777-4777-8777-777777777777
@@ -535,8 +532,8 @@ error:
 For `error.type: cli`, `error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
 `authentication_failed`, `request_failed`, `observation_timeout`, `interrupted`, or `internal_error`.
 These are separate from the remote `error.code` values below. When admission identity is unknown,
-keep `admission_reference`; do not blindly resubmit. A confirmed input rejection does not claim
-that remote execution may continue.
+do not blindly resubmit. A confirmed input rejection does not claim that remote execution may
+continue.
 
 Ctrl-C finishes the document with `error.type: cli` and `error.code: interrupted` and exits `130`.
 After admission, it includes the cancellation response's `status` only when validated; this can be a
@@ -595,9 +592,8 @@ the service reported `timed_out`. These CLI failures exit `1` and use `error.typ
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
 may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id>` under `recovery`.
-Inspect the existing run before starting another. If admission itself lost its response, keep the
-printed admission reference: the CLI does not know whether a run was created and does not
-automatically resubmit it.
+Inspect the existing run before starting another. If admission itself lost its response, the CLI
+does not know whether a run was created and does not automatically resubmit it.
 The Ctrl-C recovery described above is the explicit cancellation path.
 
 ## Deployment

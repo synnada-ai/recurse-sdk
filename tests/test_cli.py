@@ -1742,7 +1742,7 @@ def test_run_interrupt_with_unknown_admission_preserves_uncertainty(
     capsys: pytest.CaptureFixture[str],
     failure: BaseException,
 ) -> None:
-    """If admission recovery also fails, retain its reference without claiming no run exists."""
+    """If admission recovery also fails, report uncertainty without exposing the request key."""
     monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     attempts: list[dict[str, Any]] = []
 
@@ -1761,7 +1761,9 @@ def test_run_interrupt_with_unknown_admission_preserves_uncertainty(
     output = capsys.readouterr()
     view = yaml.safe_load(output.out)
     assert "run_id" not in view
-    assert view["admission_reference"] == attempts[0]["idempotency_key"]
+    assert "admission_reference" not in view
+    assert "idempotency_key" not in view
+    assert attempts[0]["idempotency_key"] not in output.out + output.err
     assert "may continue" in view["recovery"]["message"]
     assert view["error"]["type"] == "cli"
     assert view["error"]["code"] == "interrupted"
@@ -1999,13 +2001,13 @@ def test_failed_run_observation_preserves_identity_without_resubmission(
     assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
 
 
-def test_lost_admission_response_retains_reference_without_retrying(
+def test_lost_admission_response_keeps_request_key_internal_without_retrying(
     service: FakeService,
     logged_in: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A failed acknowledgement can follow acceptance; preserve its key, not a retry prompt."""
+    """A lost response retains uncertainty without exposing a key or prompting another run."""
     monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("access-1", "version-1", None))
     original = cli.request
 
@@ -2028,9 +2030,11 @@ def test_lost_admission_response_retains_reference_without_retrying(
     admissions = [body for _, path, body, _ in service.requests if path == "/v1/runs"]
     assert len(admissions) == 1
     assert isinstance(admissions[0], dict)
-    assert f"admission_reference: {admissions[0]['idempotency_key']}" in output
+    assert "admission_reference" not in view
+    assert "idempotency_key" not in view
+    assert admissions[0]["idempotency_key"] not in output + captured.err
     assert "may continue" in output
-    assert "do not blindly retry" in output
+    assert "do not blindly retry" in view["recovery"]["message"]
 
 
 def test_rejected_run_admission_does_not_report_uncertain_remote_state(
