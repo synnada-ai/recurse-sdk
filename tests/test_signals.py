@@ -98,7 +98,7 @@ def test_sigint_cancels_or_reports_uncertainty(
         assert all(body == admissions[0] for body in admissions)
         view = yaml.safe_load(stdout)
         assert view["run_id"] == service.run_id
-        assert view["cli_error"]["code"] == "interrupted"
+        assert view["error"] == {"type": "cli", "code": "interrupted", "message": "Interrupted."}
         if stage == "cancellation":
             assert "may continue" in view["recovery"]["message"]
             assert "status" not in view
@@ -136,7 +136,7 @@ def test_sigtstp_and_sigcont_keep_native_job_control(service: FakeService, tmp_p
         assert process.returncode == 0
         assert b"status: succeeded" in stdout
         assert stderr == b""
-        assert yaml.safe_load(stdout)["cli_error"] is None
+        assert "error" not in yaml.safe_load(stdout)
         assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
     finally:
         if process.poll() is None:

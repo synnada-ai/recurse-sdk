@@ -30,6 +30,7 @@ def document(text: str) -> dict[str, Any]:
     assert isinstance(node, yaml.MappingNode)
     keys = [key.value for key, _value in node.value]
     assert len(keys) == len(set(keys))
+    assert "cli_error" not in keys
     result = yaml.safe_load(text)
     assert isinstance(result, dict)
     return result
@@ -55,7 +56,10 @@ def test_remote_outcome_is_only_in_yaml(  # noqa: PLR0913,PLR0917 - fixtures plu
     monkeypatch.setattr(cli, "_POLL_SECONDS", 0)
     assert cli.main(["run", str(write_app(tmp_path / "app"))]) == 0
     captured = capsys.readouterr()
-    assert document(captured.out) == {**view, "cli_error": None}
+    expected = {key: value for key, value in view.items() if key != "error"}
+    if state != "succeeded":
+        expected["error"] = {"type": "engine", "code": state, "message": "Remote failure."}
+    assert document(captured.out) == expected
     assert captured.err == ""
     assert cli.main(["status", service.run_id]) == 0
     status = capsys.readouterr()
@@ -73,7 +77,8 @@ def test_argument_errors_are_yaml_command_failures(
     assert cli.main(argv) == 1
     captured = capsys.readouterr()
     view = document(captured.out)
-    assert view["cli_error"]["code"] == "invalid_arguments"
+    assert view["error"]["type"] == "cli"
+    assert view["error"]["code"] == "invalid_arguments"
     assert "status" not in view
     assert "error:" in captured.err
 
@@ -104,9 +109,9 @@ def test_command_failures_preserve_identity_without_inventing_remote_failure(  #
     assert cli.main(argv) == 1
     captured = capsys.readouterr()
     view = document(captured.out)
-    assert view["cli_error"]["message"]
+    assert view["error"]["message"]
     assert "status" not in view
-    assert "error" not in view
+    assert view["error"]["type"] == "cli"
     assert "private" not in captured.out + captured.err
     if stage in {"observation", "status"}:
         assert view["run_id"] == service.run_id
@@ -134,7 +139,8 @@ def test_unexpected_cli_error_is_structured_and_sanitized(
     assert cli.main([command, "app-or-id"]) == 1
     captured = capsys.readouterr()
     view = document(captured.out)
-    assert view["cli_error"]["code"] == "internal_error"
+    assert view["error"]["type"] == "cli"
+    assert view["error"]["code"] == "internal_error"
     assert "private" not in captured.out + captured.err
     assert "status" not in view
 
@@ -186,7 +192,7 @@ def test_run_id_is_flushed_through_a_pipe_before_terminal_output(
         assert process.returncode == 0
         view = document((early + remaining).decode())
         assert view["status"] == "succeeded"
-        assert view["cli_error"] is None
+        assert "error" not in view
         assert stderr == b""
     finally:
         release.set()
@@ -213,7 +219,8 @@ def test_status_interruption_is_yaml_and_does_not_cancel(
     captured = capsys.readouterr()
     view = document(captured.out)
     assert view["run_id"] == service.run_id
-    assert view["cli_error"]["code"] == "interrupted"
+    assert view["error"]["type"] == "cli"
+    assert view["error"]["code"] == "interrupted"
     assert "status" not in view
     assert view["recovery"]["inspect"] == f"recurse status {service.run_id}"
     assert not any(path.endswith("/cancel") for _, path, _, _ in service.requests)
@@ -242,7 +249,8 @@ def test_internal_error_after_admission_preserves_the_already_printed_id(
     view = document(captured.out)
     assert view["run_id"] == service.run_id
     assert view["admission_reference"].startswith("run_")
-    assert view["cli_error"]["code"] == "internal_error"
+    assert view["error"]["type"] == "cli"
+    assert view["error"]["code"] == "internal_error"
     assert view["recovery"]["cancel"] == f"recurse cancel {service.run_id}"
     assert "status" not in view
     assert "private" not in captured.out + captured.err
@@ -295,10 +303,17 @@ def test_run_preserves_service_resolved_model_in_yaml(  # noqa: PLR0913,PLR0917 
     assert "model:" not in captured.err
     if expected_exit == 0:
         assert view["status"] == outcome
-        assert view["cli_error"] is None
+        if outcome == "succeeded":
+            assert "error" not in view
+        else:
+            assert view["error"] == {
+                "type": "engine",
+                "code": "execution_failed",
+                "message": "Remote failure.",
+            }
         assert captured.err == ""
     else:
-        assert view["cli_error"] is not None
+        assert view["error"]["type"] == "cli"
         assert "error:" in captured.err
         if outcome == "admission_error":
             assert "run_id" not in view

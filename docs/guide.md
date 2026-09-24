@@ -429,13 +429,12 @@ recurse run path/to/app --inputs inputs.json --cpu 1 --memory-mib 1024 \
 
 The CLI builds and prepares an immutable version, admits that version directly, and waits for
 terminal state. It writes and flushes `run_id` to standard output as soon as admission is confirmed,
-then appends the terminal snapshot and `cli_error: null` to the same YAML document. Routine progress
-messages are suppressed; standard error is reserved for error diagnostics. A later
-`recurse status <run-id>` returns the same remote snapshot and CLI outcome, including the selected
-model. Direct runs do not create an MCP deployment and have a 15-minute execution limit.
-Inputs must be one JSON object;
-omit `--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same
-ranges and defaults as deployment.
+then appends the terminal snapshot to the same YAML document. Routine progress messages are
+suppressed; standard error is reserved for error diagnostics. A later `recurse status <run-id>`
+returns the same remote snapshot and CLI outcome, including the selected model. Direct runs do not
+create an MCP deployment and have a 15-minute execution limit. Inputs must be one JSON object; omit
+`--inputs` for `{}`, or use `--inputs -` to read standard input. Resource limits use the same ranges
+and defaults as deployment.
 
 Ctrl-C during `recurse run` requests cancellation of the admitted run and exits `130`. The CLI
 prints the state confirmed by the service: cancellation can race completion, and a request alone
@@ -480,8 +479,10 @@ Help remains normal CLI help, and an uncatchable termination or broken output st
 promise a completed document.
 
 The two commands use the same exit-code meaning: whether the **CLI operation** completed.
-The YAML `status` and `error` describe the **remote execution**; top-level `cli_error` describes
-a command failure and is `null` when the command succeeds.
+YAML `status` describes the **remote execution**. One optional `error` field contains `type`,
+`code`, and `message`: `type: engine` for a remote error or `type: cli` for a command error.
+When neither fails, `error` is omitted. A command error takes precedence if a remote status is
+also known; that confirmed state remains in `status`.
 
 | Exit code | `recurse run` | `recurse status` |
 | --- | --- | --- |
@@ -500,22 +501,23 @@ python -c 'import sys, yaml; run = yaml.safe_load(open("run.yaml")); sys.exit(ru
 echo "The remote run succeeded; continue here."
 ```
 
-A confirmed failed execution still has its original remote `error` and any available partial
-outputs in the snapshot, with `cli_error: null`, and exits `0`. For example, its outcome fields are:
+A confirmed failed execution has `error.type: engine` with its original code and message,
+retains any available partial outputs, and exits `0`. For example, its outcome fields are:
 
 ```yaml
 run_id: 77777777-7777-4777-8777-777777777777
 status: failed
 error:
+  type: engine
   code: execution_failed
   message: The agent execution failed.
-cli_error: null
 ```
 
-On a command failure, the document contains `cli_error.code` and `cli_error.message` instead of an
-invented remote failure. Before admission, there may be no run ID. For example, `recurse run` without
-an application argument exits `1` with an `invalid_arguments` CLI error. A failed observation retains
-the run ID, admission reference when available, and structured recovery guidance:
+On a command failure, the document contains `error.type: cli`, `error.code`, and `error.message`
+instead of an invented remote failure. Before admission, there may be no run ID. For example,
+`recurse run` without an application argument exits `1` with an `invalid_arguments` CLI error. A
+failed observation retains the run ID, admission reference when available, and structured recovery
+guidance:
 
 ```yaml
 run_id: 77777777-7777-4777-8777-777777777777
@@ -524,22 +526,23 @@ recovery:
   message: Remote state is unconfirmed. Execution and charges may continue. Inspect this run before starting another run.
   inspect: recurse status 77777777-7777-4777-8777-777777777777
   cancel: recurse cancel 77777777-7777-4777-8777-777777777777
-cli_error:
+error:
+  type: cli
   code: request_failed
   message: The Recurse service could not be reached.
 ```
 
-`cli_error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
+For `error.type: cli`, `error.code` is `invalid_arguments`, `cli_error` for other expected local errors,
 `authentication_failed`, `request_failed`, `observation_timeout`, `interrupted`, or `internal_error`.
 These are separate from the remote `error.code` values below. When admission identity is unknown,
 keep `admission_reference`; do not blindly resubmit. A confirmed input rejection does not claim
 that remote execution may continue.
 
-Ctrl-C finishes the document with `cli_error.code: interrupted` and exits `130`. After admission,
-it includes the cancellation response's `status` only when validated; this can be a terminal state
-or a still-pending state. It does not invent result, cost, or artifact fields from that limited
-response. If cancellation remains unconfirmed or pending, `recovery` gives the next steps.
-Use `status` to retrieve the complete snapshot later.
+Ctrl-C finishes the document with `error.type: cli` and `error.code: interrupted` and exits `130`.
+After admission, it includes the cancellation response's `status` only when validated; this can be a
+terminal state or a still-pending state. It does not invent result, cost, or artifact fields from
+that limited response. If cancellation remains unconfirmed or pending, `recovery` gives the next
+steps. Use `status` to retrieve the complete snapshot later.
 
 For example, a completed run can produce:
 
@@ -558,7 +561,6 @@ resources:
 cost:
   currency: USD
   total_microusd: 12345
-error: null
 outputs:
   availability: available
   expires_at: '2026-09-23T12:01:00Z'
@@ -566,7 +568,6 @@ outputs:
     answer: done
     score: 0.9
   artifacts: []
-cli_error: null
 ```
 
 `outputs.availability` is `pending`, `available`, `expired`, or `unavailable`. Artifact metadata can
@@ -591,7 +592,7 @@ not yet known or is unavailable.
 Failure to observe a run is different from a failed run. `authentication_failed` directs you to
 `recurse login`; `request_failed` means the CLI could not complete a service request, not that remote
 execution stopped. `observation_timeout` means local polling ended without confirmation, not that
-the service reported `timed_out`. These CLI failures exit `1` and appear under `cli_error`.
+the service reported `timed_out`. These CLI failures exit `1` and use `error.type: cli`.
 
 After an admitted run loses observation, the CLI retains its ID, warns that execution and charges
 may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id>` under `recovery`.

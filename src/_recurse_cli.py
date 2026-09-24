@@ -2195,7 +2195,13 @@ class _RunOutput:
         self.started = True
 
     def finish(self, view: dict[str, Any]) -> None:
-        """Append fields without repeating an already emitted run ID."""
+        """Append fields with one optional typed error and no repeated run ID."""
+        view = dict(view)
+        error = view.get("error")
+        if error is None:
+            view.pop("error", None)
+        else:
+            view["error"] = {"type": "engine", **error}
         if self.model is not None and view.get("model") is None:
             view = {**view, "model": self.model}
         if self.started:
@@ -2228,7 +2234,7 @@ class _RunOutput:
                     "and do not blindly retry."
                 )
             view["recovery"] = recovery
-        view["cli_error"] = detail
+        view["error"] = {"type": "cli", **detail}
         self.finish(view)
         print(f"error: {detail['code']}: {detail['message']}", file=sys.stderr)
         return 130 if isinstance(error, KeyboardInterrupt) else 1
@@ -2283,7 +2289,7 @@ def _run(
                 time.sleep(_POLL_SECONDS)
                 continue
             if view["status"] in _TERMINAL_RUN_STATUSES:
-                output.finish({**view, "cli_error": None})
+                output.finish(view)
                 return 0
             time.sleep(_POLL_SECONDS)
         raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
@@ -2320,7 +2326,7 @@ def _status(run_id: str) -> int:
         view = _get_run(run_id, _access_token())
     except (Exception, KeyboardInterrupt) as error:
         return output.fail(error)
-    output.finish({**view, "cli_error": None})
+    output.finish(view)
     return 0
 
 
