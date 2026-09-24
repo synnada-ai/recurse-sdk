@@ -385,6 +385,10 @@ recurse secret delete github-token
 recurse secret delete github-token --yes
 ```
 
+You can set the same name again after deletion. This creates a new secret with a new ID and version
+1. Deletion still disables affected MCP deployments; recreate the deployment and reconnect it if
+it needs the new secret.
+
 Bind a logical secret name to an environment name on a direct run or permanent MCP deployment:
 
 ```sh
