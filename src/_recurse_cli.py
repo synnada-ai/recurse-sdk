@@ -1872,7 +1872,7 @@ _TERMINAL_RUN_STATUSES = {
 _RUN_STATUSES = {"queued", "running", *_TERMINAL_RUN_STATUSES}
 _PUBLIC_RUN_STATUSES = _RUN_STATUSES - {"infrastructure_failed"}
 _PUBLIC_RUN_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{0,127}$")
-_OUTPUT_AVAILABILITIES = {"pending", "available", "expired", "unavailable"}
+_OUTPUT_AVAILABILITIES = {"pending", "available", "expired"}
 _BIDI_CONTROL_CHARACTERS = (
     "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
 )
@@ -2078,9 +2078,9 @@ def _validated_run_outputs(value: object, status: str) -> dict[str, object]:
         _invalid_run_response()
     if (status in {"queued", "running"}) != (availability == "pending"):
         _invalid_run_response()
-    if availability in {"pending", "expired", "unavailable"} and result is not None:
+    if availability in {"pending", "expired"} and result is not None:
         _invalid_run_response()
-    if availability in {"pending", "unavailable"} and artifacts is not None:
+    if availability == "pending" and artifacts is not None:
         _invalid_run_response()
     if availability in {"available", "expired"} and artifacts is None:
         _invalid_run_response()
@@ -2101,7 +2101,6 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
         "created_at",
         "started_at",
         "completed_at",
-        "elapsed_seconds",
         "resources",
         "cost",
         "error",
@@ -2116,7 +2115,6 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
     created_at = payload.get("created_at")
     started_at = payload.get("started_at")
     completed_at = payload.get("completed_at")
-    elapsed_seconds = payload.get("elapsed_seconds")
     if (
         not isinstance(returned_run_id, str)
         or not _same_run_id(returned_run_id, run_id)
@@ -2127,14 +2125,6 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
         or not created_at
         or (started_at is not None and not isinstance(started_at, str))
         or (completed_at is not None and not isinstance(completed_at, str))
-        or (
-            elapsed_seconds is not None
-            and (
-                isinstance(elapsed_seconds, bool)
-                or not isinstance(elapsed_seconds, int)
-                or elapsed_seconds < 0
-            )
-        )
     ):
         _invalid_run_response()
 
@@ -2146,7 +2136,6 @@ def _validated_public_run_view(payload: dict[str, Any], run_id: str) -> dict[str
         "created_at": created_at,
         "started_at": started_at,
         "completed_at": completed_at,
-        "elapsed_seconds": elapsed_seconds,
         "resources": _validated_run_resources(payload.get("resources")),
         "cost": _validated_run_cost(payload.get("cost")),
         "error": _validated_run_error(payload.get("error"), status),
@@ -2382,8 +2371,6 @@ def _artifacts(run_id: str, output_directory: str) -> None:
         raise _CliError(
             f"run outputs have expired; inspect retained metadata with recurse status {run_id}"
         )
-    if availability == "unavailable":
-        raise _CliError("artifact inventory is unavailable")
     root = Path(output_directory)
     artifacts = cast(list[dict[str, Any]], outputs["artifacts"])
     for artifact in artifacts:

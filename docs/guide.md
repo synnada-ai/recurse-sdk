@@ -463,9 +463,9 @@ run cancellation request.
 
 Artifacts are available for 24 hours after completion. `recurse artifacts` downloads only when the
 run snapshot reports `outputs.availability: available`; a finalized `outputs.artifacts: []` exits
-successfully without printing a download. Pending and unavailable inventories fail without claiming
-the run produced no artifacts. After expiration, `recurse status` still shows retained artifact
-metadata, but `recurse artifacts` refuses the unavailable download. Downloads refuse unsafe paths
+successfully without printing a download. Pending inventories fail without claiming the run produced
+no artifacts. After expiration, `recurse status` still shows retained artifact metadata, but
+`recurse artifacts` refuses the expired download. Downloads refuse unsafe paths
 and existing directories, verify size and SHA-256, and only then atomically replace the destination
 file.
 
@@ -554,7 +554,6 @@ status: succeeded
 created_at: '2026-09-22T12:00:00Z'
 started_at: '2026-09-22T12:00:02Z'
 completed_at: '2026-09-22T12:01:00Z'
-elapsed_seconds: 58
 resources:
   cpu_limit: 1.0
   memory_limit_mib: 1024
@@ -570,10 +569,10 @@ outputs:
   artifacts: []
 ```
 
-`outputs.availability` is `pending`, `available`, `expired`, or `unavailable`. Artifact metadata can
-remain listed after expiration even though `outputs.result` and downloads are no longer available.
-`outputs.artifacts: []` means the finalized run produced no artifacts; `null` means the inventory is
-not yet known or is unavailable.
+`outputs.availability` is `pending`, `available`, or `expired`. Artifact metadata can remain listed
+after expiration even though `outputs.result` and downloads are no longer available.
+`outputs.artifacts: []` means the finalized run produced no artifacts; `null` means the run is still
+queued or running.
 
 | Public reason | Meaning and next step |
 | --- | --- |

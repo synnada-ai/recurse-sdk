@@ -48,7 +48,6 @@ def _canonical_successful_run(run_id: str) -> dict[str, Any]:
         "created_at": "2026-09-22T12:00:00Z",
         "started_at": "2026-09-22T12:00:02Z",
         "completed_at": "2026-09-22T12:01:00Z",
-        "elapsed_seconds": 58,
         "resources": {"cpu_limit": 1.0, "memory_limit_mib": 1024},
         "cost": {"currency": "USD", "total_microusd": 12_345},
         "error": None,
@@ -108,7 +107,6 @@ class FakeService:
                 "created_at": "2026-09-22T12:00:00Z",
                 "started_at": None,
                 "completed_at": None,
-                "elapsed_seconds": None,
                 "resources": {"cpu_limit": 1.0, "memory_limit_mib": 1024},
                 "cost": {"currency": "USD", "total_microusd": None},
                 "error": None,
@@ -127,7 +125,6 @@ class FakeService:
                 "created_at": "2026-09-22T12:00:00Z",
                 "started_at": "2026-09-22T12:00:02Z",
                 "completed_at": "2026-09-22T12:01:00Z",
-                "elapsed_seconds": 58,
                 "resources": {"cpu_limit": 1.0, "memory_limit_mib": 1024},
                 "cost": {"currency": "USD", "total_microusd": 12_345},
                 "error": None,
@@ -809,7 +806,6 @@ def test_run_and_status_emit_the_same_single_canonical_yaml_document(
         "created_at",
         "started_at",
         "completed_at",
-        "elapsed_seconds",
         "resources",
         "cost",
         "outputs",
@@ -989,7 +985,7 @@ def test_status_prints_every_canonical_lifecycle_state_and_exits_zero(
     view = service.run_views[0] if nonterminal else service.run_views[-1]
     view = {**view, "status": run_status, "error": error}
     if run_status == "running":
-        view.update(started_at="2026-09-22T12:00:02Z", elapsed_seconds=8)
+        view.update(started_at="2026-09-22T12:00:02Z")
     if run_status not in {"queued", "running", "succeeded"}:
         view["outputs"] = {**view["outputs"], "result": None, "artifacts": []}
     service.run_views = [view]
@@ -1078,7 +1074,6 @@ def test_status_preserves_canonical_nulls_and_ignores_undeclared_private_fields(
     document = yaml.safe_load(output.out)
     assert document["started_at"] is None
     assert document["completed_at"] is None
-    assert document["elapsed_seconds"] is None
     assert document["cost"]["total_microusd"] is None
     assert "error" not in document
     assert document["outputs"] == {
@@ -1133,9 +1128,6 @@ def test_status_rejects_malformed_canonical_snapshots_with_cli_error(
         {"created_at": ""},
         {"started_at": 7},
         {"completed_at": 7},
-        {"elapsed_seconds": True},
-        {"elapsed_seconds": 1.5},
-        {"elapsed_seconds": -1},
     ],
 )
 def test_canonical_run_validation_rejects_invalid_top_level_fields(
@@ -1339,7 +1331,7 @@ def test_canonical_run_validation_rejects_invalid_artifact_metadata(
             "running",
         ),
         (
-            {"availability": "unavailable", "expires_at": None, "result": None, "artifacts": []},
+            {"availability": "unavailable", "expires_at": None, "result": None, "artifacts": None},
             "failed",
         ),
         (
@@ -1876,8 +1868,8 @@ def test_artifacts_download_available_partial_outputs_from_a_failed_run(
     [
         pytest.param(("pending", None, "run outputs are not finalized"), id="pending-inventory"),
         pytest.param(
-            ("unavailable", None, "artifact inventory is unavailable"),
-            id="unavailable-inventory",
+            ("unavailable", None, "invalid run response"),
+            id="unsupported-availability",
         ),
         pytest.param(
             (
@@ -1912,12 +1904,6 @@ def test_artifacts_refuse_nondownloadable_output_states_without_claiming_zero_ar
     else:
         view = {
             **service.artifact_run_view,
-            "status": "failed" if availability == "unavailable" else "succeeded",
-            "error": (
-                {"code": "artifact_failed", "message": "Artifact inventory is unavailable."}
-                if availability == "unavailable"
-                else None
-            ),
             "outputs": {
                 **service.artifact_run_view["outputs"],
                 "availability": availability,
