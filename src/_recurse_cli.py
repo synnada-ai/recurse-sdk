@@ -46,9 +46,6 @@ _REQUEST_TIMEOUT_SECONDS = 60
 _AUTH_LOCK_DIRECTORY = Path("~") / ".recurse" / "locks"
 _TOKEN_REFRESH_MARGIN_SECONDS = 30
 _POLL_SECONDS = 2.0
-_RUN_TIMEOUT_SECONDS = 15 * 60
-_MCP_TASK_TIMEOUT_SECONDS = _RUN_TIMEOUT_SECONDS + _REQUEST_TIMEOUT_SECONDS
-_RUN_POLL_ATTEMPTS = int((_RUN_TIMEOUT_SECONDS + 2 * _REQUEST_TIMEOUT_SECONDS) / _POLL_SECONDS)
 _REMOTE_MCP_PROTOCOL = "2026-07-28"
 _TASKS_EXTENSION = "io.modelcontextprotocol/tasks"
 _RUN_RESOURCES_META_KEY = "recurse.run/resources"
@@ -1203,7 +1200,6 @@ def _call_mcp_tool(
     task_id = result.get("taskId")
     if not isinstance(task_id, str) or not task_id:
         raise ServiceError("the Recurse service returned an invalid MCP task response")
-    deadline = time.monotonic() + _MCP_TASK_TIMEOUT_SECONDS
     while True:
         if cancelled.is_set():
             response, access_token = _remote_mcp_request(
@@ -1219,17 +1215,6 @@ def _call_mcp_tool(
         if terminal is not None:
             return terminal, access_token
         interval = _poll_interval_seconds(result)
-        if time.monotonic() + interval > deadline:
-            return (
-                _host_error(
-                    request_id,
-                    {
-                        "code": _JSONRPC_SERVER_ERROR,
-                        "message": f"tool call timed out Task: {task_id}",
-                    },
-                ),
-                access_token,
-            )
         if cancelled.wait(interval):
             continue
         response, access_token = _remote_mcp_request(
@@ -2246,7 +2231,6 @@ def _run(
             "version_id": version_id,
             "idempotency_key": f"run_{uuid4().hex}",
             "inputs": inputs,
-            "timeout_seconds": _RUN_TIMEOUT_SECONDS,
             "cpu_limit": cpu_limit,
             "memory_limit_mib": memory_limit_mib,
         }
@@ -2259,7 +2243,7 @@ def _run(
         if admitted.get("status") != "queued":
             raise ServiceError("the Recurse service returned an invalid run response")
         output.start(run_id)
-        for _attempt in range(_RUN_POLL_ATTEMPTS):
+        while True:
             try:
                 quoted_run_id = urllib.parse.quote(run_id, safe="")
                 payload, token = _run_request("GET", f"/v1/runs/{quoted_run_id}", token=token)
@@ -2276,7 +2260,6 @@ def _run(
                 output.finish(view)
                 return 0
             time.sleep(_POLL_SECONDS)
-        raise _CliError("observation_timeout: polling did not finish; remote state is unconfirmed")
     except KeyboardInterrupt as error:
         cancelled_status = None
         if output.admission_attempted:
@@ -2669,7 +2652,7 @@ def _run_cli_error(error: Exception | KeyboardInterrupt) -> dict[str, str]:
     if isinstance(error, (RecurseError, ServiceError)):
         message = _cli_error_message(error)
         code, separator, detail = message.partition(": ")
-        if separator and code in {"request_failed", "authentication_failed", "observation_timeout"}:
+        if separator and code in {"request_failed", "authentication_failed"}:
             return {"code": code, "message": detail}
         return {"code": "cli_error", "message": message}
     return {

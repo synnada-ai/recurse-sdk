@@ -768,7 +768,6 @@ def test_run_prepares_and_waits_for_one_direct_run(
         "version_id": "version-1",
         "idempotency_key": admission["idempotency_key"],
         "inputs": {"message": "hello"},
-        "timeout_seconds": 900,
         "cpu_limit": 2.0,
         "memory_limit_mib": 2048,
     }
@@ -2543,11 +2542,11 @@ def test_artifacts_accept_the_canonical_form_of_an_uppercase_uuid() -> None:
     )
 
 
-def test_run_rejects_malformed_admission_and_poll_timeout(
+def test_run_rejects_malformed_admission_and_missing_run(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Admission acknowledgement and bounded polling both fail clearly."""
+    """Malformed admission acknowledgement and missing runs fail clearly."""
     monkeypatch.setattr(cli, "_prepare", lambda _app, **_kwargs: ("token", "version", None))
     monkeypatch.setattr(
         cli,
@@ -2556,17 +2555,6 @@ def test_run_rejects_malformed_admission_and_poll_timeout(
     )
     assert cli._run("app", None, 1.0, 1024) == 1
     assert "invalid run response" in yaml.safe_load(capsys.readouterr().out)["error"]["message"]
-
-    monkeypatch.setattr(
-        cli,
-        "_retry_request",
-        lambda *args, **kwargs: {"run_id": "run-id", "status": "queued"},
-    )
-    monkeypatch.setattr(cli, "_RUN_POLL_ATTEMPTS", 0)
-    assert cli._run("app", None, 1.0, 1024) == 1
-    assert "did not finish" in yaml.safe_load(capsys.readouterr().out)["error"]["message"]
-
-    monkeypatch.setattr(cli, "_RUN_POLL_ATTEMPTS", 1)
 
     def missing_run(
         method: str,
@@ -4474,7 +4462,6 @@ def test_mcp_bridge_forwards_host_cancellation_to_the_remote_task(
             },
         ),
     ]
-    monkeypatch.setattr(cli, "_MCP_TASK_TIMEOUT_SECONDS", 0.3)
     input_stream = _StreamingInput()
     output_stream = io.BytesIO()
     errors: list[BaseException] = []
@@ -4715,7 +4702,6 @@ def test_mcp_bridge_cancels_active_calls_before_a_fatal_dispatch_exit(
             },
         ),
     ]
-    monkeypatch.setattr(cli, "_MCP_TASK_TIMEOUT_SECONDS", 0.2)
 
     def fail_list(*args: object) -> tuple[dict[str, Any], str]:
         """Simulate a malformed remote response on the dispatch thread."""
@@ -5084,51 +5070,13 @@ def test_mcp_bridge_returns_terminal_task_errors_with_the_host_id(
     }
 
 
-def test_mcp_bridge_bounds_task_polling(
-    service: FakeService,
-    logged_in: dict[tuple[str, str], str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A task cannot keep a local host call waiting beyond the public timeout."""
-    task_id = "task_" + "d" * 32
-    service.mcp_responses = [
-        _remote_discovery_reply(1),
-        _remote_reply(
-            2,
-            {
-                "resultType": "task",
-                "taskId": task_id,
-                "status": "working",
-                "pollIntervalMs": 1000,
-            },
-        ),
-    ]
-    monkeypatch.setattr(cli, "_MCP_TASK_TIMEOUT_SECONDS", 0, raising=False)
-    input_stream, output_stream = _bridge_frames(
-        _initialize_frame(1),
-        {
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {"name": "tune", "arguments": {}},
-        },
-    )
-
-    cli._serve_mcp("mcp_1234", input_stream, output_stream)
-
-    assert json.loads(output_stream.getvalue().splitlines()[-1]) == {
-        "jsonrpc": "2.0",
-        "id": 2,
-        "error": {"code": -32000, "message": f"tool call timed out Task: {task_id}"},
-    }
-    assert len(service.mcp_bodies) == 2
-
-
+@pytest.mark.parametrize("elapsed_seconds", [899.0, 86_400.0])
 def test_mcp_bridge_waits_through_the_platform_run_deadline(
+    elapsed_seconds: float,
     service: FakeService,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The bridge remains attached near the end of a fifteen-minute run."""
+    """The bridge remains attached until the remote task finishes, including a full-day run."""
     task_id = "task_" + "d" * 32
     service.mcp_responses = [
         _remote_reply(
@@ -5151,7 +5099,7 @@ def test_mcp_bridge_waits_through_the_platform_run_deadline(
         ),
     ]
 
-    moments = iter([0.0, 899.0])
+    moments = iter([0.0, elapsed_seconds])
     monkeypatch.setattr("_recurse_cli.time.monotonic", lambda: next(moments))
 
     response, token = cli._call_mcp_tool(
@@ -5740,3 +5688,41 @@ def test_mcp_bridge_never_outputs_or_forwards_the_device_credential(
     assert b"device-1" not in output_stream.getvalue()
     assert all(b"device-1" not in body for body in service.mcp_bodies)
     assert all("device-1" not in json.dumps(headers) for headers in service.mcp_headers)
+
+
+def test_direct_run_observes_until_terminal_without_selecting_a_duration(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A funded run outlives the old polling budget and reports its actual outcome."""
+    run_id = "77777777-7777-4777-8777-777777777777"
+    polls = 0
+    monkeypatch.setattr(cli, "_prepare", lambda *_args, **_kwargs: ("token", "version", None))
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+
+    def observe(
+        method: str, path: str, *, token: str, json_body: dict[str, Any] | None = None
+    ) -> tuple[dict[str, Any], str]:
+        """Keep the same run active beyond the former polling budget, then finish."""
+        nonlocal polls
+        if method == "POST":
+            assert json_body is not None
+            assert "timeout_seconds" not in json_body
+            return {"run_id": run_id, "status": "queued"}, token
+        polls += 1
+        view = _canonical_successful_run(run_id)
+        if polls <= 1_000:
+            view["status"] = "running"
+            view["completed_at"] = None
+            view["outputs"] = {
+                "availability": "pending",
+                "expires_at": None,
+                "result": None,
+                "artifacts": None,
+            }
+        return view, token
+
+    monkeypatch.setattr(cli, "_run_request", observe)
+    assert cli._run("app", None, 1.0, 1024) == 0
+    assert polls == 1_001
+    assert yaml.safe_load(capsys.readouterr().out)["status"] == "succeeded"
