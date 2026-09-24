@@ -16,7 +16,7 @@ This installs both the `recurse` command and the Python API. Check the installat
 recurse --help
 ```
 
-Version 0.3.0 is required for account-funded runs on the current Engine. Version 0.2.0 submits a
+Version 0.2.1 is required for account-funded runs on the current Engine. Version 0.2.0 submits a
 900-second duration that the service no longer accepts. Upgrade the SDK before starting new runs.
 
 If you prefer uv, install the CLI as an isolated tool:
