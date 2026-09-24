@@ -2876,8 +2876,6 @@ def test_deploy_sends_and_confirms_selected_resource_defaults(
         ["--cpu", "16.125"],
         ["--memory-mib", "1.5"],
         ["--memory-mib", "129"],
-        ["--memory-mib", "512"],
-        ["--memory-mib", "640"],
         ["--memory-mib", "16512"],
     ],
 )
@@ -2892,9 +2890,10 @@ def test_deploy_rejects_invalid_resource_defaults(
         main(["deploy", str(app), "--as", "mcp", *arguments])
 
 
-def test_deploy_accepts_existing_768_mib_resource_default() -> None:
-    """Keep previously deployed 768 MiB applications representable by the CLI."""
-    assert cli._memory_limit_mib("768") == 768
+@pytest.mark.parametrize("memory_limit_mib", [512, 640, 768])
+def test_deploy_accepts_supported_memory_resource_defaults(memory_limit_mib: int) -> None:
+    """Accept each supported low-memory ceiling for runs and deployments."""
+    assert cli._memory_limit_mib(str(memory_limit_mib)) == memory_limit_mib
 
 
 def test_deploy_rejects_malformed_resource_confirmation_before_printing_success(
@@ -4036,7 +4035,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.2.2",
+                    "version": "0.2.3",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -4325,7 +4324,7 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     )
     assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.2.2"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.2.3"
 
 
 @pytest.mark.parametrize(

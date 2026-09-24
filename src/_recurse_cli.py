@@ -361,7 +361,7 @@ _LOGIN_WAIT_SECONDS = 300
 _POLL_ATTEMPTS = 300
 _MIN_CPU_LIMIT = 0.125
 _MAX_CPU_LIMIT = 16.0
-_MIN_MEMORY_LIMIT_MIB = 768
+_MIN_MEMORY_LIMIT_MIB = 512
 _MAX_MEMORY_LIMIT_MIB = 16_384
 
 
@@ -742,7 +742,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.2",
+            "version": "0.2.3",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1023,7 +1023,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.2",
+            "User-Agent": "recurse-sdk/0.2.3",
         },
         method="GET",
     )
@@ -2404,7 +2404,7 @@ def _memory_limit_mib(value: str) -> int:
         raise argparse.ArgumentTypeError("memory must be a whole MiB value") from None
     if not _MIN_MEMORY_LIMIT_MIB <= parsed <= _MAX_MEMORY_LIMIT_MIB or parsed % 128:
         raise argparse.ArgumentTypeError(
-            "memory must be from 768 to 16384 MiB in 128 MiB increments"
+            "memory must be from 512 to 16384 MiB in 128 MiB increments"
         )
     return parsed
 
