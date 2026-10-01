@@ -331,9 +331,11 @@ as shown in [Passing values between tools](#passing-values-between-tools).
 recurse login
 ```
 
-Your browser opens the hosted Recurse login page; sign in with GitHub or Google. The
-CLI listens on `http://127.0.0.1:8765/callback`, protects the flow with a PKCE
-challenge and a single-use state value, and stores one opaque device credential in your
+Your browser opens the Recurse website login (`recurse.run/login`); sign in with email and
+password, Google or GitHub, the same account you use for gallery apps. If you are already signed
+in there, confirm the account to continue. The CLI listens on `http://127.0.0.1:8765/callback`,
+protects the flow with a PKCE challenge and a single-use state value, and stores one opaque
+device credential in your
 operating system keychain (service `recurse-cli`). Commands and MCP processes sharing that
 login reuse a short-lived access token stored in the same keychain. A local lock coordinates
 refreshes, so concurrent callers do not each exchange the device credential. Tokens are scoped

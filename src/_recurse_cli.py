@@ -128,12 +128,13 @@ def required_field(payload: dict[str, Any], name: str) -> str:
     return value
 
 
-def request(
+def request(  # noqa: PLR0913 - one transport for JSON and OAuth form bodies
     method: str,
     path: str,
     *,
     token: str | None = None,
     json_body: dict[str, Any] | None = None,
+    form_body: dict[str, str] | None = None,
     json_response: bool = True,
 ) -> dict[str, Any]:
     """Send one request to the Recurse service and return its JSON body.
@@ -143,6 +144,7 @@ def request(
         path: Absolute request path, for example ``/v1/account``.
         token: Bearer access token, when the route requires authentication.
         json_body: JSON request body.
+        form_body: Form-encoded request body, used by the OAuth token endpoints.
         json_response: Whether the successful response must contain a JSON object.
 
     Returns:
@@ -157,6 +159,9 @@ def request(
     if json_body is not None:
         body = json.dumps(json_body).encode()
         headers["Content-Type"] = "application/json"
+    if form_body is not None:
+        body = urllib.parse.urlencode(form_body).encode()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     prepared = urllib.request.Request(  # noqa: S310 - scheme validated above
@@ -196,7 +201,11 @@ def _error_detail(raw: bytes, fallback: object) -> str:
         The service detail or fallback text.
     """
     try:
-        detail = json.loads(raw)["detail"]
+        payload = json.loads(raw)
+        # OAuth endpoints report RFC 6749 errors; every other route uses ``detail``.
+        detail = (
+            payload["error_description"] if "error_description" in payload else payload["detail"]
+        )
     except KeyError, TypeError, ValueError:
         detail = fallback
     return str(detail)
@@ -355,6 +364,8 @@ def _login_result_page(accepted: bool) -> str:
 
 
 _KEYCHAIN_SERVICE = "recurse-cli"
+# The OAuth client registered with Recurse for this CLI and its loopback callback.
+_CLIENT_ID = "recurse-cli"
 _KEYCHAIN_DEVICE_CREDENTIAL = "device-credential"
 _CALLBACK_PORT = 8765
 _LOGIN_WAIT_SECONDS = 300
@@ -440,12 +451,13 @@ def _store_device_credential(tokens: dict[str, object]) -> None:
     """Persist the opaque device credential from an authorization grant.
 
     Args:
-        tokens: An authorization-code token grant response.
+        tokens: An authorization-code token grant response; its refresh token is the
+            durable device credential.
 
     Raises:
         _CliError: If the operating system keychain rejects the write.
     """
-    credential = required_field(tokens, "device_credential")
+    credential = required_field(tokens, "refresh_token")
     with _auth_lock():
         _clear_cached_access()
         keyring.set_password(_KEYCHAIN_SERVICE, _keychain_credential_name(), credential)
@@ -540,8 +552,12 @@ def _exchange_device_credential(credential: str) -> dict[str, Any]:
     """
     return request(
         "POST",
-        "/v1/auth/token",
-        json_body={"grant_type": "device_credential", "device_credential": credential},
+        "/v1/oauth/token",
+        form_body={
+            "grant_type": "refresh_token",
+            "client_id": _CLIENT_ID,
+            "refresh_token": credential,
+        },
     )
 
 
@@ -603,8 +619,9 @@ def _access_token(rejected_token: str | None = None) -> str:
 def _login() -> None:
     """Run the browser login flow and store the device credential.
 
-    The flow waits on the fixed loopback callback ``127.0.0.1:8765`` that the
-    Recurse login page is allowed to redirect to.
+    The browser opens the website login named by the service's OAuth metadata, so
+    every sign-in method works. The flow waits on the fixed loopback callback
+    ``127.0.0.1:8765`` registered for this CLI.
 
     Raises:
         _CliError: If the browser flow does not complete.
@@ -615,23 +632,34 @@ def _login() -> None:
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     )
     state = secrets.token_urlsafe(32)
+    metadata = request("GET", "/.well-known/oauth-authorization-server")
+    login_page = required_field(metadata, "authorization_endpoint")
+    if not login_page.startswith(("https://", "http://")):
+        raise ServiceError(
+            "the Recurse service returned an invalid response: authorization_endpoint"
+        )
     try:
         server = _LoginServer(state)
     except OSError as error:
         raise _CliError(
             f"the login callback address 127.0.0.1:{_CALLBACK_PORT} is unavailable: {error}"
         ) from error
+    # The token request must repeat the exact callback the website was given.
+    redirect_uri = f"http://127.0.0.1:{server.server_port}/callback"
     try:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             login_url = (
-                api_base_url()
-                + "/login?"
+                login_page
+                + "?"
                 + urllib.parse.urlencode(
                     {
-                        "redirect_to": f"http://127.0.0.1:{server.server_port}/callback",
+                        "response_type": "code",
+                        "client_id": _CLIENT_ID,
+                        "redirect_uri": redirect_uri,
                         "code_challenge": challenge,
+                        "code_challenge_method": "S256",
                         "state": state,
                     }
                 )
@@ -651,8 +679,14 @@ def _login() -> None:
         raise _CliError("login was not completed in the browser")
     tokens = request(
         "POST",
-        "/v1/auth/token",
-        json_body={"grant_type": "authorization_code", "code": code, "code_verifier": verifier},
+        "/v1/oauth/token",
+        form_body={
+            "grant_type": "authorization_code",
+            "client_id": _CLIENT_ID,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": verifier,
+        },
     )
     access_token = required_field(tokens, "access_token")
     account = request("GET", "/v1/account", token=access_token)
@@ -668,16 +702,14 @@ def _logout() -> None:
 
     Raises:
         _CliError: If the keychain cannot be read or changed.
-        ServiceError: If the credential cannot be exchanged or revoked.
+        ServiceError: If the credential cannot be revoked.
     """
     with _auth_lock():
         credential = _device_credential()
-        access_token = required_field(_exchange_device_credential(credential), "access_token")
         request(
             "POST",
-            "/v1/auth/logout",
-            token=access_token,
-            json_body={"device_credential": credential},
+            "/v1/oauth/revoke",
+            form_body={"token": credential, "client_id": _CLIENT_ID},
             json_response=False,
         )
         _clear_cached_access()

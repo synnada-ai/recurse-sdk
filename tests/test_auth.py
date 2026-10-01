@@ -43,7 +43,7 @@ def test_login_changes_clear_cached_access(
         with pytest.raises(cli._CliError, match="not logged in"):
             cli._access_token()
     else:
-        cli._store_device_credential({"device_credential": "device-2"})
+        cli._store_device_credential({"refresh_token": "device-2"})
         assert cli._device_credential() == "device-2"
     assert cache_key(service.url) not in logged_in
 
@@ -54,7 +54,7 @@ def test_failed_logout_preserves_both_credentials(
     """A failed revocation must not destroy the login or usable cached bearer."""
     cli._access_token()
     before = dict(logged_in)
-    service.fail_detail["/v1/auth/logout"] = (503, "unavailable")
+    service.fail_detail["/v1/oauth/revoke"] = (503, "unavailable")
     with pytest.raises(cli.ServiceError):
         cli._logout()
     assert logged_in == before
@@ -289,7 +289,7 @@ def test_invalid_lifetime_is_not_cached(
     service: FakeService, logged_in: dict[tuple[str, str], str], value: Any
 ) -> None:
     """An unbounded or untrusted lifetime must never produce a reusable bearer."""
-    service.malformed["/v1/auth/token"] = {"access_token": "test-token", "expires_in": value}
+    service.malformed["/v1/oauth/token"] = {"access_token": "test-token", "expires_in": value}
     with pytest.raises(cli.ServiceError, match="expires_in"):
         cli._access_token()
     assert cache_key(service.url) not in logged_in
@@ -349,7 +349,7 @@ def test_remote_revocation_is_observed_at_refresh(
 ) -> None:
     """Remote PAT revocation does not revoke an already-issued bearer immediately."""
     assert cli._access_token() == "access-1"
-    service.fail_detail["/v1/auth/token"] = (401, "credential revoked")
+    service.fail_detail["/v1/oauth/token"] = (401, "credential revoked")
     assert cli._access_token() == "access-1"
     with pytest.raises(cli.ServiceError, match="revoked"):
         cli._access_token(rejected_token="access-1")  # noqa: S106 - fake bearer
@@ -369,7 +369,7 @@ def test_api_origins_and_logins_cannot_share_tokens(
     other = FakeService()
     try:
         monkeypatch.setenv("RECURSE_API_URL", other.url)
-        cli._store_device_credential({"device_credential": "device-2"})
+        cli._store_device_credential({"refresh_token": "device-2"})
         cli._access_token()
         assert other.device_grants == ["device-2"]
     finally:

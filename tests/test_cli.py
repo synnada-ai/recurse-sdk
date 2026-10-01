@@ -11,6 +11,7 @@ import http.client
 import io
 import json
 import queue
+import re
 import socket
 import subprocess
 import sys
@@ -253,7 +254,12 @@ class FakeService:
                     service.direct_upload_user_agent = self.headers.get("User-Agent")
                 token = self.headers.get("Authorization")
                 body: dict[str, Any] | bytes | None
-                body = json.loads(raw) if content_type == "application/json" else raw or None
+                if content_type == "application/json":
+                    body = json.loads(raw)
+                elif content_type == "application/x-www-form-urlencoded":
+                    body = dict(urllib.parse.parse_qsl(raw.decode(), keep_blank_values=True))
+                else:
+                    body = raw or None
                 service.requests.append((self.command, path, body, token))
                 if path == "/direct-upload" and service.direct_upload_response_losses:
                     service.direct_upload_response_losses -= 1
@@ -300,12 +306,18 @@ class FakeService:
         self.server.shutdown()
         self.server.server_close()
 
-    def route(  # noqa: PLR0911,PLR0912 - one table-like public API double
-        self, method: str, path: str, body: dict[str, Any] | bytes | None, token: str | None
-    ) -> tuple[int, dict[str, Any]]:
-        """Answer one request following the public service contract."""
-        if path == "/v1/auth/token":
+    def oauth(self, path: str, body: dict[str, Any] | bytes | None) -> tuple[int, dict[str, Any]]:
+        """Answer the standard OAuth metadata, token and revocation endpoints."""
+        if path == "/.well-known/oauth-authorization-server":
+            return 200, {
+                "issuer": self.url,
+                "authorization_endpoint": f"{self.url}/website/login",
+                "token_endpoint": f"{self.url}/v1/oauth/token",
+                "revocation_endpoint": f"{self.url}/v1/oauth/revoke",
+            }
+        if path == "/v1/oauth/token":
             assert isinstance(body, dict)
+            assert body["client_id"] == "recurse-cli"
             access_token = (
                 self.token_responses.pop(0)
                 if len(self.token_responses) > 1
@@ -313,24 +325,30 @@ class FakeService:
             )
             response: dict[str, Any] = {
                 "access_token": access_token,
-                "token_type": "bearer",
+                "token_type": "Bearer",
                 "expires_in": 900,
             }
             if body["grant_type"] == "authorization_code":
-                response.update(
-                    {
-                        "device_credential": "device-1",
-                        "credential_expires_at": "2027-08-31T00:00:00Z",
-                    }
-                )
-            elif body["grant_type"] == "device_credential":
-                self.device_grants.append(body["device_credential"])
+                assert re.fullmatch(r"http://127\.0\.0\.1:\d+/callback", body["redirect_uri"])
+                response["refresh_token"] = "device-1"  # noqa: S105 - fake credential
+            elif body["grant_type"] == "refresh_token":
+                self.device_grants.append(body["refresh_token"])
             else:
                 raise AssertionError(f"unexpected grant {body['grant_type']}")
             return 200, response
-        if (method, path) == ("POST", "/v1/auth/logout"):
-            assert body == {"device_credential": "device-1"}
-            return 204, {}
+        assert body == {"token": "device-1", "client_id": "recurse-cli"}
+        return 200, {}
+
+    def route(  # noqa: PLR0911,PLR0912 - one table-like public API double
+        self, method: str, path: str, body: dict[str, Any] | bytes | None, token: str | None
+    ) -> tuple[int, dict[str, Any]]:
+        """Answer one request following the public service contract."""
+        if path in {
+            "/.well-known/oauth-authorization-server",
+            "/v1/oauth/token",
+            "/v1/oauth/revoke",
+        }:
+            return self.oauth(path, body)
         if (method, path) == ("POST", "/direct-upload"):
             assert token in {"Bearer source-upload", "Bearer lockfile-upload"}
             if self.direct_upload_failures:
@@ -483,12 +501,16 @@ def _browser_completing_login(query: dict[str, str] | None = None) -> Callable[[
     def open_browser(url: str) -> bool:
         """Follow the login URL and call back with the given query."""
         parsed = urllib.parse.urlparse(url)
+        assert parsed.path == "/website/login"
         request = dict(urllib.parse.parse_qsl(parsed.query))
+        assert request["response_type"] == "code"
+        assert request["client_id"] == "recurse-cli"
+        assert request["code_challenge_method"] == "S256"
         challenge = request["code_challenge"]
         assert len(challenge) == 43
         callback = dict(query or {"code": "code-1", "state": request["state"]})
         with urllib.request.urlopen(  # noqa: S310 - test-generated loopback URL
-            request["redirect_to"] + "?" + urllib.parse.urlencode(callback)
+            request["redirect_uri"] + "?" + urllib.parse.urlencode(callback)
         ) as response:
             assert response.status == 200
         return True
@@ -509,7 +531,7 @@ def test_login_completes_pkce_and_stores_only_the_device_credential(
 
     assert keychain == {_credential_key(service.url): "device-1"}
     assert all("refresh" not in name for _, name in keychain)
-    exchange = next(body for _, path, body, _ in service.requests if path == "/v1/auth/token")
+    exchange = next(body for _, path, body, _ in service.requests if path == "/v1/oauth/token")
     assert isinstance(exchange, dict)
     assert exchange["grant_type"] == "authorization_code"
     assert exchange["code"] == "code-1"
@@ -523,16 +545,75 @@ def test_login_completes_pkce_and_stores_only_the_device_credential(
     assert f"Account: {'a' * 32}" in output
 
 
+def test_login_redeems_the_code_with_the_callback_the_website_was_given(
+    service: FakeService,
+    keychain: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The website login gets a standard request and the code is redeemed with the same callback."""
+    opened: list[str] = []
+    complete = _browser_completing_login()
+
+    def browser(url: str) -> bool:
+        """Record the login URL, then complete the callback."""
+        opened.append(url)
+        return complete(url)
+
+    monkeypatch.setattr("webbrowser.open", browser)
+
+    assert main(["login"]) == 0
+
+    assert service.requests[0][:2] == ("GET", "/.well-known/oauth-authorization-server")
+    exchange = next(body for _, path, body, _ in service.requests if path == "/v1/oauth/token")
+    assert isinstance(exchange, dict)
+    assert exchange["client_id"] == "recurse-cli"
+    [login_url] = opened
+    login = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(login_url).query))
+    assert exchange["redirect_uri"] == login["redirect_uri"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ({"authorization_endpoint": "javascript:alert(1)"}, "authorization_endpoint"),
+        ({}, "missing authorization_endpoint"),
+    ],
+)
+def test_login_refuses_an_unusable_login_page_before_opening_a_browser(
+    service: FakeService,
+    keychain: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    case: tuple[dict[str, str], str],
+) -> None:
+    """Login stops before listening or opening anything the service did not describe."""
+    metadata, message = case
+    service.malformed["/.well-known/oauth-authorization-server"] = metadata
+    monkeypatch.setattr("webbrowser.open", lambda _url: pytest.fail("no browser may open"))
+    monkeypatch.setattr(cli, "_LoginServer", lambda _state: pytest.fail("no listener may start"))
+
+    assert main(["login"]) == 2
+    assert message in capsys.readouterr().err
+    assert keychain == {}
+
+
+def test_oauth_errors_reach_the_user_in_plain_words() -> None:
+    """Token endpoint errors carry an RFC 6749 description rather than ``detail``."""
+    raw = b'{"error": "invalid_grant", "error_description": "log in again"}'
+    assert cli._error_detail(raw, "Bad Request") == "log in again"
+    assert cli._error_detail(b'{"detail": "not found"}', "Not Found") == "not found"
+
+
 def test_device_credentials_are_scoped_to_the_api_endpoint(
     keychain: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """DEV and PROD logins coexist without overwriting one another."""
     monkeypatch.setenv("RECURSE_API_URL", "https://api.dev.example.test")
-    cli._store_device_credential({"device_credential": "device-dev"})
+    cli._store_device_credential({"refresh_token": "device-dev"})
 
     monkeypatch.setenv("RECURSE_API_URL", "https://api.recurse.run")
-    cli._store_device_credential({"device_credential": "device-prod"})
+    cli._store_device_credential({"refresh_token": "device-prod"})
     assert cli._device_credential() == "device-prod"
 
     monkeypatch.setenv("RECURSE_API_URL", "https://api.dev.example.test")
@@ -588,6 +669,7 @@ def test_login_times_out_without_a_callback(
 
 
 def test_login_interrupt_stops_callback_server_without_saving_credentials(
+    service: FakeService,
     keychain: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -682,7 +764,7 @@ def test_deploy_builds_uploads_and_prints_only_public_results(
     ]
     methods_and_paths = [(method, path) for method, path, _, _ in service.requests]
     assert methods_and_paths == [
-        ("POST", "/v1/auth/token"),
+        ("POST", "/v1/oauth/token"),
         ("POST", "/v1/agent-versions"),
         ("POST", "/direct-upload"),
         ("POST", "/v1/agent-versions/version-1/complete"),
@@ -2134,7 +2216,7 @@ def test_follow_up_authentication_failure_keeps_run_recovery(
     command: str,
 ) -> None:
     """Failed authentication cannot establish whether a previously admitted run stopped."""
-    service.fail_detail["/v1/auth/token"] = (401, "private authentication detail")
+    service.fail_detail["/v1/oauth/token"] = (401, "private authentication detail")
 
     assert main([command, service.run_id]) == (1 if command == "status" else 2)
 
@@ -3372,7 +3454,7 @@ def test_stray_browser_requests_do_not_finish_the_login(
     def open_with_stray_request(url: str) -> bool:
         """Hit a non-callback path first, then complete the login."""
         parsed = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
-        base = parsed["redirect_to"].rsplit("/", 1)[0]
+        base = parsed["redirect_uri"].rsplit("/", 1)[0]
         with urllib.request.urlopen(  # noqa: S310 - test-generated loopback URL
             f"{base}/favicon.ico"
         ) as response:
@@ -3456,7 +3538,7 @@ def test_login_callback_page_is_served_to_the_browser(
         """Complete the callback and keep the served page."""
         parsed = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
         callback = (
-            parsed["redirect_to"]
+            parsed["redirect_uri"]
             + "?"
             + urllib.parse.urlencode({"code": "code-1", "state": parsed["state"]})
         )
@@ -3563,7 +3645,7 @@ def test_callbacks_are_accepted_only_on_the_callback_path(
     def open_with_wrong_path(url: str) -> bool:
         """Deliver a valid code and state to a non-callback path."""
         parsed = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
-        base = parsed["redirect_to"].rsplit("/", 1)[0]
+        base = parsed["redirect_uri"].rsplit("/", 1)[0]
         query = urllib.parse.urlencode({"code": "code-1", "state": parsed["state"]})
         with urllib.request.urlopen(  # noqa: S310 - test-generated loopback URL
             f"{base}/other?{query}"
@@ -3616,20 +3698,20 @@ def test_malformed_service_success_bodies_are_service_errors(
         server.server_close()
 
 
-def test_login_rejects_a_token_response_without_a_device_credential(
+def test_login_rejects_a_token_response_without_a_refresh_token(
     service: FakeService,
     keychain: dict[tuple[str, str], str],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A token grant missing device_credential is a concise error and stores nothing."""
+    """A code grant missing its refresh token is a concise error and stores nothing."""
     monkeypatch.setattr("webbrowser.open", _browser_completing_login())
-    service.malformed["/v1/auth/token"] = {"access_token": "access-1", "token_type": "bearer"}
+    service.malformed["/v1/oauth/token"] = {"access_token": "access-1", "token_type": "bearer"}
 
     assert main(["login"]) == 2
 
     assert keychain == {}
-    assert "missing device_credential" in capsys.readouterr().err
+    assert "missing refresh_token" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -3748,8 +3830,12 @@ def test_device_credential_is_exchanged_without_rotation(
     assert service.requests == [
         (
             "POST",
-            "/v1/auth/token",
-            {"grant_type": "device_credential", "device_credential": "device-1"},
+            "/v1/oauth/token",
+            {
+                "grant_type": "refresh_token",
+                "client_id": "recurse-cli",
+                "refresh_token": "device-1",
+            },
             None,
         )
     ]
@@ -3810,12 +3896,10 @@ def test_logout_revokes_then_removes_the_device_credential(
     assert main(["logout"]) == 0
 
     assert logged_in == {}
-    assert service.requests[-1] == (
-        "POST",
-        "/v1/auth/logout",
-        {"device_credential": "device-1"},
-        "Bearer access-1",
-    )
+    # Revocation needs only the credential itself, so logout makes no token exchange first.
+    assert service.requests == [
+        ("POST", "/v1/oauth/revoke", {"token": "device-1", "client_id": "recurse-cli"}, None)
+    ]
     output = capsys.readouterr().out
     assert f"Logged out of Recurse at {service.url}." in output
     assert "saved CLI login was removed from your keychain" in output
@@ -3827,7 +3911,7 @@ def test_logout_preserves_the_device_credential_when_revocation_fails(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A rejected revocation is reported and leaves the usable local credential intact."""
-    service.fail_detail["/v1/auth/logout"] = (503, "logout is temporarily unavailable")
+    service.fail_detail["/v1/oauth/revoke"] = (503, "logout is temporarily unavailable")
 
     assert main(["logout"]) == 2
 
@@ -3855,7 +3939,7 @@ def test_logout_preserves_the_device_credential_after_a_transport_failure(
 
     def malformed_logout(request: Any, *, timeout: int) -> Any:
         """Return real responses except for the failed logout transport."""
-        if request.full_url.endswith("/v1/auth/logout"):
+        if request.full_url.endswith("/v1/oauth/revoke"):
             raise transport_error
         return real_urlopen(request, timeout=timeout)
 
@@ -4079,7 +4163,7 @@ def test_mcp_bridge_reports_a_rejected_saved_login_in_the_initialize_response(
     logged_in: dict[tuple[str, str], str],
 ) -> None:
     """A revoked saved login produces actionable host output instead of startup EOF."""
-    service.fail_detail["/v1/auth/token"] = (401, "login was rejected")
+    service.fail_detail["/v1/oauth/token"] = (401, "login was rejected")
     input_stream, output_stream = _bridge_frames(_initialize_frame("host-init"))
 
     cli._serve_mcp("mcp_1234", input_stream, output_stream)
