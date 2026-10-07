@@ -71,6 +71,10 @@ claude mcp add recurse -- recurse mcp serve <deployment-id>
 For Codex, apply the startup and tool timeout settings shown in the
 [guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) after adding the server.
 
+To connect all published gallery apps through one server, use `recurse mcp serve`
+without a deployment ID. The shared connection exposes `apps.<gallery-slug>` tools;
+private deployments still use their individual IDs. Runs use the caller's wallet.
+
 ## Documentation
 
 - [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.
