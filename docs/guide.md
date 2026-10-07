@@ -634,7 +634,16 @@ then replace the deployment ID in the MCP host configuration and reconnect to us
 
 ## Local MCP access
 
-Run `recurse login` once, then configure each local MCP host with the deployment identifier:
+Run `recurse login` once. Use `recurse mcp serve` without a deployment identifier to
+connect all active, published gallery apps through one server. Each tool is named
+`apps.<gallery-slug>` and retains its own input schema. Runs and outputs belong to
+the caller and consume that caller's wallet. Private apps are not included.
+
+The bridge targets `/mcp/all`. Direct HTTP clients authorize that exact resource
+through OAuth; consent includes current and future published apps. An existing
+individual-app OAuth grant is not automatically widened.
+
+To connect only one deployment, configure a local MCP host with its identifier:
 
 ```sh
 codex mcp add recurse -- recurse mcp serve <deployment-id>

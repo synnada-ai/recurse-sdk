@@ -742,7 +742,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.3",
+            "version": "0.2.4",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1023,7 +1023,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.3",
+            "User-Agent": "recurse-sdk/0.2.4",
         },
         method="GET",
     )
@@ -2619,10 +2619,15 @@ def _build_parser(*, structured_errors: bool = False) -> argparse.ArgumentParser
     secret_delete.add_argument(
         "--yes", action="store_true", help="skip the destructive confirmation"
     )
-    mcp = commands.add_parser("mcp", help="connect an MCP host to a deployment")
+    mcp = commands.add_parser("mcp", help="connect an MCP host to Recurse apps")
     mcp_commands = mcp.add_subparsers(dest="mcp_command", required=True)
-    serve = mcp_commands.add_parser("serve", help="serve a deployment over local stdio")
-    serve.add_argument("deployment_id", help="deployment identifier")
+    serve = mcp_commands.add_parser("serve", help="serve all published apps over local stdio")
+    serve.add_argument(
+        "deployment_id",
+        nargs="?",
+        default="all",
+        help="optional deployment identifier; defaults to all published apps",
+    )
     billing = commands.add_parser("billing", help="manage your Recurse balance")
     billing_commands = billing.add_subparsers(dest="billing_command", required=True)
     billing_commands.add_parser("balance", help="show total and available balance")

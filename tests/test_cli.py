@@ -4035,7 +4035,7 @@ def test_mcp_bridge_translates_standard_initialize_and_consumes_initialized(
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
                     "name": "recurse-sdk",
-                    "version": "0.2.3",
+                    "version": "0.2.4",
                 },
                 "io.modelcontextprotocol/clientCapabilities": {
                     "extensions": {"io.modelcontextprotocol/tasks": {}}
@@ -4324,7 +4324,7 @@ def test_mcp_bridge_reads_and_verifies_an_artifact_resource(
     )
     assert service.device_grants == ["device-1"]
     assert service.artifact_download_authorization == "Bearer artifact-token"
-    assert service.artifact_download_user_agent == "recurse-sdk/0.2.3"
+    assert service.artifact_download_user_agent == "recurse-sdk/0.2.4"
 
 
 @pytest.mark.parametrize(
@@ -5721,6 +5721,23 @@ def test_mcp_cli_dispatches_standard_input_and_output(
 
     assert main(["mcp", "serve", "mcp_1234"]) == 0
     assert received == [("mcp_1234", standard_input.buffer, standard_output.buffer)]
+
+
+def test_mcp_serve_without_a_deployment_connects_to_the_shared_gallery(
+    service: FakeService,
+    logged_in: dict[tuple[str, str], str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default public command reaches the shared endpoint through a real HTTP socket."""
+    frames, output = _bridge_frames(_initialize_frame("shared-init"))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(frames))
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(output))
+
+    assert main(["mcp", "serve"]) == 0
+    assert json.loads(output.getvalue())["id"] == "shared-init"
+    assert [path for method, path, _, _ in service.requests if path.startswith("/mcp/")] == [
+        "/mcp/all"
+    ]
 
 
 def test_twelve_bridge_processes_share_one_access_token(
