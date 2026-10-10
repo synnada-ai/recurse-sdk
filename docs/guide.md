@@ -421,6 +421,10 @@ model input: if a tool returns the token, that text could reach the model. Keep 
 manifest, command arguments, application archive, returned text, logs, artifacts, and other model
 input. Credential isolation does not prevent your application code from disclosing a user secret.
 
+Native run traces expose original tool arguments, results, and errors without redaction. If a
+published application's tool emits a publisher-owned credential into those values, the caller who
+owns the run can read it. See [Native run traces](#native-run-traces).
+
 A run keeps the secret versions selected when it started, so rotation affects future runs without
 changing one already in progress. Deleting a bound secret disables affected MCP deployments and
 blocks future runs that need it. If a required value is deleted before use, the run ends with
@@ -613,6 +617,74 @@ may continue, and includes `recurse status <run-id>` and `recurse cancel <run-id
 Inspect the existing run before starting another. If admission itself lost its response, the CLI
 does not know whether a run was created and does not automatically resubmit it.
 The Ctrl-C recovery described above is the explicit cancellation path.
+
+### Native run traces
+
+Retrieve the original model and tool events for an existing run through the REST API. This works
+for direct runs and published-app runs, while execution is running and for 24 hours after completion.
+Reading a trace does not start another billable run. `recurse status` remains a run snapshot; the
+CLI has no trace command, and no SDK upgrade is required to call this endpoint.
+
+Set `RUN_ID` to the existing run ID and `RECURSE_ACCESS_TOKEN` to a current account access token
+for its owner. Use that token as a bearer credential, not a runtime secret or the device credential
+stored by `recurse login`. The CLI does not provide a public token-export command.
+
+API clients obtain `access_token` from `POST https://api.recurse.run/v1/auth/token`: exchange
+a login code with `{"grant_type":"authorization_code","code":"...","code_verifier":"..."}`,
+or renew an existing device credential with
+`{"grant_type":"device_credential","device_credential":"..."}`. Send these as JSON request
+bodies and keep credentials private. See the [login contract](https://github.com/synnada-ai/recurse-engine/blob/main/docs/reference/control-service.md#public-deployment-example)
+for the browser login and PKCE exchange. App-scoped MCP OAuth tokens cannot access this account API.
+
+```sh
+curl --fail --silent --show-error \
+  -H "Authorization: Bearer $RECURSE_ACCESS_TOKEN" \
+  "https://api.recurse.run/v1/runs/$RUN_ID/trace?after=0&limit=20"
+```
+
+The JSON response contains `run_id`, `availability`, `expires_at`, `events`, and `next_after`.
+Each record has `id`, `dispatch_id`, `sequence`, `producer`, `recorded_at`, and an `event` with
+its native `type` and `payload`. For example, a successful tool event retains:
+
+```json
+{
+  "type": "framework.agent.events.ToolSuccessEvent",
+  "payload": {
+    "event_type": "tool_success",
+    "tool_name": "write_receipt",
+    "tool_call_id": "call_123",
+    "arguments": {"item": "tea", "count": 2},
+    "result": "2 x tea"
+  }
+}
+```
+
+For a nonempty page, pass `next_after` as `after` in the next request. An empty page returns
+`next_after: null`: keep the previous cursor. While the run is active, an empty page means you
+are caught up; poll again with that cursor and inspect the run snapshot for completion.
+`after` defaults to `0`; `limit` defaults to `20` and can be at most `100`. Pages stop around
+1 MB of event payload, but a single larger event is returned whole. `id` orders records across
+attempts, `dispatch_id` identifies the attempt, and `sequence` orders its records.
+
+Trace `availability` is `pending` for queued or running execution, even if events exist;
+`available` after completion with captured records; `unavailable` when no records were captured;
+and `expired` after the 24-hour retention window. Expired trace rows are deleted. Cancelled or
+interrupted runs retain only their committed prefix, which may be incomplete. Traces discarded
+by earlier runtime releases cannot be recovered. Another account's run returns HTTP 404.
+
+Events use the pinned producer's native serialization, including model request context, model
+results, original tool arguments, results, errors, and cause chains. Preserve their payloads;
+there is no Recurse field mapping or content redaction. Native named tuples serialize as arrays.
+Unsupported values retain `payload: null` and `serialization_error`. Python traceback frames
+and individual provider HTTP retries are not captured; this is not an HTTP wire dump. Runtime
+environments and provider authorization headers are not dumped.
+
+The run owner can read these values. For published apps, that owner is the caller; publishing
+the app does not give its author access to callers' traces. Any application credential emitted
+into a tool argument, result, or error is visible to the caller. Inspect sensitive content before
+sharing a trace. The safe public snapshot error and declared application result remain separate.
+See the [native trace API reference](https://github.com/synnada-ai/recurse-engine/blob/main/docs/reference/runtime-results.md#native-run-traces)
+for the complete response example and serialization details.
 
 ## Deployment
 
