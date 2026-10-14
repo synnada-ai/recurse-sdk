@@ -4,6 +4,8 @@ The public surface is intentionally small:
 
 - :func:`build_bundle` validates an application directory and produces one
   standard source distribution containing its exact dependency lockfile.
+- :func:`load_tools_manifest` validates a tools-only declaration.
+- :func:`build_tools_bundle` builds tools-only source without a prompt or agent.
 - :func:`context` gives application tool code access to the active run's
   validated inputs and writable workspace.
 - :class:`RecurseError` and its subclasses report every SDK failure.
@@ -41,7 +43,9 @@ __all__ = [
     "RunContext",
     "RunContextError",
     "build_bundle",
+    "build_tools_bundle",
     "context",
+    "load_tools_manifest",
 ]
 
 
@@ -52,7 +56,7 @@ class RecurseError(Exception):
 class ManifestError(RecurseError):
     """The application manifest or declared application content is invalid.
 
-    The message names the offending ``agent.yaml`` field or declared file so
+    The message names the offending ``agent.yaml`` or ``tools.yaml`` field or file so
     the author can correct it directly.
     """
 
@@ -385,6 +389,79 @@ def load_manifest(app_directory: str | Path) -> dict[str, Any]:
             raise ManifestError(f"{field} must contain only JSON-portable values")
     _validate_manifest(manifest)
     return manifest
+
+
+_TOOLS_MANIFEST_SCHEMA = json.loads(
+    files(__name__).joinpath("tools.schema.json").read_text(encoding="utf-8")
+)
+jsonschema.Draft202012Validator.check_schema(_TOOLS_MANIFEST_SCHEMA)
+_TOOLS_MANIFEST_VALIDATOR = jsonschema.Draft202012Validator(_TOOLS_MANIFEST_SCHEMA)
+
+
+def load_tools_manifest(service_directory: str | Path) -> dict[str, Any]:
+    """Read a tools-only declaration without importing its Python source.
+
+    Args:
+        service_directory: Directory containing ``tools.yaml``.
+
+    Returns:
+        The validated, JSON-portable manifest exactly as authored.
+
+    Raises:
+        ManifestError: If the manifest is unreadable, malformed, or violates
+            the tools-only contract, including schema and fixture pricing.
+    """
+    try:
+        text = (Path(service_directory) / "tools.yaml").read_text(encoding="utf-8")
+    except FileNotFoundError as error:
+        raise ManifestError(f"tools.yaml was not found in {service_directory}") from error
+    except UnicodeDecodeError as error:
+        raise ManifestError("tools.yaml must contain valid UTF-8 text") from error
+    except OSError as error:
+        raise ManifestError("tools.yaml could not be read") from error
+    try:
+        manifest = yaml.load(
+            text,
+            Loader=_UniqueKeyLoader,  # noqa: S506 - subclass of yaml.SafeLoader
+        )
+    except ManifestError as error:
+        raise ManifestError(str(error).replace("agent.yaml", "tools.yaml")) from error
+    except (yaml.YAMLError, TypeError) as error:
+        raise ManifestError("tools.yaml is not valid YAML") from error
+    if not isinstance(manifest, dict):
+        raise ManifestError("tools.yaml must be a mapping")
+    if not _is_json_portable(manifest):
+        raise ManifestError("tools.yaml must contain only JSON-portable values")
+    try:
+        json.dumps(manifest, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ManifestError("tools.yaml must contain only UTF-8 encodable text") from error
+    schema_error = next(_TOOLS_MANIFEST_VALIDATOR.iter_errors(manifest), None)
+    if schema_error is not None:
+        field = _error_path(schema_error) or "tools.yaml"
+        detail = (
+            "unknown field"
+            if schema_error.validator == "additionalProperties"
+            else schema_error.message
+        )
+        raise ManifestError(f"{field}: {detail}")
+    _validate_tools_registration_schemas(manifest)
+    return manifest
+
+
+def _validate_tools_registration_schemas(manifest: dict[str, Any]) -> None:
+    """Validate both explicit schemas of every tools registration."""
+    for name, registration in manifest["tools"]["register"].items():
+        for field in ("input_schema", "output_schema"):
+            schema = registration[field]
+            try:
+                jsonschema.Draft202012Validator.check_schema(schema)
+            except jsonschema.exceptions.SchemaError as error:
+                raise ManifestError(
+                    f"tools.register.{name}.{field} is not a valid Draft 2020-12 schema"
+                ) from error
+            if _has_external_schema_reference(schema):
+                raise ManifestError(f"tools.register.{name}.{field} must be self-contained")
 
 
 _MAX_SOURCE_BYTES = 64 * 1024 * 1024
@@ -735,3 +812,148 @@ def build_bundle(app_directory: str | Path) -> tuple[dict[str, bytes], dict[str,
     """
     bundle_bytes, record, _manifest = _build_bundle(app_directory)
     return bundle_bytes, record
+
+
+def _validate_tools_signature(
+    function: ast.FunctionDef | ast.AsyncFunctionDef, input_schema: dict[str, Any]
+) -> None:
+    """Require a closed named-input schema to agree with the Python signature."""
+    name = function.name
+    arguments = function.args
+    if arguments.posonlyargs:
+        raise ManifestError(f"tool {name} must accept named arguments")
+    if arguments.vararg is not None or arguments.kwarg is not None:
+        raise ManifestError(f"tool {name} must not have variadic arguments")
+    parameters = [*arguments.args, *arguments.kwonlyargs]
+    properties = input_schema["properties"]
+    if set(properties) != {parameter.arg for parameter in parameters}:
+        raise ManifestError(f"tool {name} input properties must match its Python signature")
+    defaults: list[ast.expr | None] = [None] * (len(arguments.args) - len(arguments.defaults))
+    defaults.extend(arguments.defaults)
+    defaults.extend(arguments.kw_defaults)
+    required = {
+        parameter.arg
+        for parameter, default in zip(parameters, defaults, strict=True)
+        if default is None
+    }
+    if set(input_schema.get("required", [])) != required:
+        raise ManifestError(f"tool {name} input required must match its Python signature")
+    validator = jsonschema.Draft202012Validator(input_schema)
+    for parameter, expression in zip(parameters, defaults, strict=True):
+        _validate_tools_default(
+            name, parameter.arg, expression, properties[parameter.arg], validator
+        )
+
+
+def _validate_tools_default(
+    name: str,
+    parameter: str,
+    expression: ast.expr | None,
+    declaration: Any,
+    validator: jsonschema.Draft202012Validator,
+) -> None:
+    """Ensure omitted inputs have one literal value agreed by Python and schema."""
+    prefix = f"tool {name} default for {parameter}"
+    has_declared_default = isinstance(declaration, dict) and "default" in declaration
+    if expression is None:
+        if has_declared_default:
+            raise ManifestError(
+                f"tool {name} required parameter {parameter} must not have a default"
+            )
+        return
+    try:
+        default = ast.literal_eval(expression)
+    except (ValueError, TypeError) as error:
+        raise ManifestError(f"{prefix} must be literal JSON") from error
+    if not _is_json_portable(default):
+        raise ManifestError(f"{prefix} must be literal JSON")
+    if has_declared_default:
+        declared_default = declaration["default"]
+        if not validator.evolve(schema=declaration).is_valid(declared_default):
+            raise ManifestError(f"{prefix} must satisfy its schema")
+        if json.dumps(declared_default, sort_keys=True) != json.dumps(default, sort_keys=True):
+            raise ManifestError(f"{prefix} must match Python")
+    if not validator.evolve(schema=declaration).is_valid(default):
+        raise ManifestError(f"tool {name} Python default for {parameter} must satisfy its schema")
+
+
+def _validate_tools_contract_source(source_path: Path, registered: dict[str, Any]) -> None:
+    """Parse tool definitions without importing code or running its decorators."""
+    try:
+        source_bytes = source_path.read_bytes()
+    except OSError as error:
+        raise ManifestError("tools.source could not be read") from error
+    try:
+        module = ast.parse(source_bytes)
+    except (SyntaxError, ValueError) as error:
+        raise ManifestError("tools.source is not valid Python") from error
+    functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+    for node in module.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and not node.name.startswith(
+            "_"
+        ):
+            if node.name in functions:
+                raise ManifestError(f"duplicate public tool: {node.name}")
+            functions[node.name] = node
+    missing = sorted(set(registered) - set(functions))
+    if missing:
+        raise ManifestError(f"registered tool does not exist: {missing[0]}")
+    undeclared = sorted(set(functions) - set(registered))
+    if undeclared:
+        raise ManifestError(f"public tool is not registered: {undeclared[0]}")
+    for name, registration in registered.items():
+        function = functions[name]
+        _validate_tools_signature(function, registration["input_schema"])
+        _validate_tool(function)
+
+
+def build_tools_bundle(service_directory: str | Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+    """Validate tools-only source and build one immutable standard distribution.
+
+    Tools are parsed without importing them on the author's machine. The
+    distribution contains ``tools.yaml``, its source, project metadata, and
+    the exact dependency lockfile. No agent manifest or prompt is required.
+
+    Args:
+        service_directory: Directory containing ``tools.yaml`` and project files.
+
+    Returns:
+        Source-distribution bytes keyed by ``source`` and a portable record
+        with ``apiVersion`` set to ``recurse.tools.application/v1alpha1``.
+        The record's ``source`` contains the exact SHA-256 and byte size.
+
+    Raises:
+        ManifestError: If declarations, files, schemas, or signatures are invalid.
+        BundleError: If the directory, build metadata, backend output, or
+            dependency lockfile does not satisfy the tools artifact contract.
+    """
+    service = Path(service_directory)
+    if not service.is_dir():
+        raise BundleError(f"{service} is not a directory")
+    manifest = load_tools_manifest(service)
+    lockfile = _declared_file(service, manifest, "runtime.lockfile")
+    source = _declared_file(service, manifest, "tools.source")
+    _project_metadata(service)
+    _validate_tools_contract_source(source, manifest["tools"]["register"])
+    try:
+        lockfile_bytes = lockfile.read_bytes()
+    except OSError as error:
+        raise BundleError("runtime.lockfile could not be read") from error
+    if len(lockfile_bytes) > _MAX_LOCKFILE_BYTES:
+        raise BundleError(f"lockfile exceeds {_MAX_LOCKFILE_BYTES} bytes")
+    source_bytes = _build_sdist(
+        service,
+        {"tools.yaml", "pyproject.toml", "PKG-INFO", "uv.lock", manifest["tools"]["source"]},
+    )
+    if _sdist_file(source_bytes, "uv.lock") != lockfile_bytes:
+        raise BundleError("build backend changed uv.lock")
+    return (
+        {"source": source_bytes},
+        {
+            "apiVersion": "recurse.tools.application/v1alpha1",
+            "source": {
+                "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "size_bytes": len(source_bytes),
+            },
+        },
+    )

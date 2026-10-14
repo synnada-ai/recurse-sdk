@@ -31,6 +31,7 @@ def test_distributions_contain_only_runtime_and_package_metadata(tmp_path: Path)
         "src/recurse.py",
         "src/_recurse_cli.py",
         "src/agent.schema.json",
+        "src/tools.schema.json",
         "README.md",
         "LICENSE",
         "pyproject.toml",
@@ -39,6 +40,11 @@ def test_distributions_contain_only_runtime_and_package_metadata(tmp_path: Path)
 
     with zipfile.ZipFile(next(tmp_path.glob("*.whl"))) as wheel:
         runtime_files = {name for name in wheel.namelist() if ".dist-info/" not in name}
-        assert runtime_files == {"recurse.py", "_recurse_cli.py", "agent.schema.json"}
+        assert runtime_files == {
+            "recurse.py",
+            "_recurse_cli.py",
+            "agent.schema.json",
+            "tools.schema.json",
+        }
         for name in runtime_files:
             assert wheel.read(name) == (root / "src" / name).read_bytes()
