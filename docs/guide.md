@@ -878,12 +878,11 @@ print(manifest["metadata"]["name"], record["apiVersion"], len(artifacts["source"
 The record's API version is `recurse.tools.application/v1alpha1`. Local validation parses the tool
 source without importing it.
 
-## Tools API (unreleased)
+## Tools API
 
-These APIs and commands are available on the Stage 41 branch wheel, not the published PyPI 0.2.4
-package. For TEST, set `RECURSE_API_URL=https://api.dev.recurse.run` and
-`RECURSE_TOOLS_URL=https://tools.dev.recurse.run` before login or invocation. Defaults target the
-production origins after a separately approved release.
+These APIs and commands require Recurse SDK 0.2.5 or newer. Defaults target the production
+origins. For TEST, set `RECURSE_API_URL=https://api.dev.recurse.run` and
+`RECURSE_TOOLS_URL=https://tools.dev.recurse.run` before login or invocation.
 
 ### Catalog and calls
 
@@ -1004,8 +1003,7 @@ claude mcp add recurse-tools -- recurse tools mcp serve
 The bridge exposes `catalog_search`, `catalog_get`, `call`, `get_call`, and `cancel_call`, with
 ordinary MCP results. It advertises no Tasks. A pending call returns its receipt; the host reads
 `get_call` until completion. stdout contains only MCP frames. Existing `recurse mcp serve`
-continues to serve agent apps through its original bridge. Plugin packaging is a later milestone.
+continues to serve agent apps through its original bridge.
 
-The unreleased branch includes SDK OAuth PR #70 as a dependency. A release containing that login
-migration must precede Engine #286's legacy-route retirement; TEST deployment does not authorize
-either package publication or route retirement.
+`recurse login` uses the website login and standard OAuth code, refresh and revocation endpoints.
+Existing saved login credentials continue to work after upgrading.
