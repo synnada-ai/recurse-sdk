@@ -15,23 +15,30 @@ login, deployment, and billing; see the package documentation.
 """
 
 import ast
+import base64
 import copy
 import hashlib
+import http.client
 import io
 import json
 import math
+import os
 import re
 import subprocess
 import tarfile
+import time
 import tomllib
 import unicodedata
-from collections.abc import Mapping
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
-from typing import Any, cast
+from typing import Any, cast, override
 
 import jsonschema
 import yaml
@@ -42,6 +49,8 @@ __all__ = [
     "RecurseError",
     "RunContext",
     "RunContextError",
+    "ToolsClient",
+    "ToolsError",
     "build_bundle",
     "build_tools_bundle",
     "context",
@@ -71,6 +80,28 @@ class BundleError(RecurseError):
 
 class RunContextError(RecurseError):
     """The Recurse run context was used outside an active run."""
+
+
+class ToolsError(RecurseError):
+    """A tools request, local login, or publication could not complete.
+
+    Execution failures are returned as durable call receipts instead of exceptions.
+
+    Attributes:
+        status_code: HTTP rejection status, or ``None`` for a local/transport failure.
+        version_id: Allocated publication version to inspect or resume, when known.
+    """
+
+    status_code: int | None
+    version_id: str | None
+
+    def __init__(
+        self, message: str, status_code: int | None = None, version_id: str | None = None
+    ) -> None:
+        """Retain a safe failure message and optional resumable publication identity."""
+        super().__init__(message)
+        self.status_code = status_code
+        self.version_id = version_id
 
 
 @dataclass(frozen=True)
@@ -957,3 +988,419 @@ def build_tools_bundle(service_directory: str | Path) -> tuple[dict[str, bytes],
             },
         },
     )
+
+
+_TOOLS_HTTP_TIMEOUT_SECONDS = 60
+_TOOLS_MAX_RESPONSE_BYTES = 8_388_608
+
+
+class _ToolsNoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects carrying a customer bearer or a Storage capability."""
+
+    @override
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        response: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> None:
+        """Leave redirected requests rejected at their original HTTP boundary."""
+
+
+def _tools_origin(base_url: str | None) -> str:
+    """Resolve one HTTP origin without credentials, path, query, or fragment."""
+    origin = (
+        base_url
+        if base_url is not None
+        else os.environ.get("RECURSE_TOOLS_URL", "https://tools.recurse.run")
+    )
+    try:
+        if not isinstance(origin, str) or any(character.isspace() for character in origin):
+            raise ValueError("invalid origin")
+        parsed = urllib.parse.urlsplit(origin)
+        if (
+            parsed.scheme not in {"https", "http"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or not origin.isascii()
+            or not origin.isprintable()
+        ):
+            raise ValueError("invalid origin")
+        _port = parsed.port
+    except ValueError as error:
+        raise ToolsError(
+            "tools base URL must be an http(s) origin without a path or credentials"
+        ) from error
+    return origin.rstrip("/")
+
+
+def _tools_bearer(access_token: str) -> str:
+    """Require an explicit nonempty bearer safe for one Authorization header."""
+    if (
+        not isinstance(access_token, str)
+        or not access_token
+        or not access_token.isascii()
+        or not access_token.isprintable()
+        or any(character.isspace() for character in access_token)
+    ):
+        raise ToolsError("a nonempty tools access token is required")
+    return access_token
+
+
+def _tools_json(payload: object) -> bytes:
+    """Encode an ordinary finite JSON object without changing its value types."""
+    try:
+        if not isinstance(payload, dict) or not _is_json_portable(payload):
+            raise ValueError("invalid JSON object")
+        return json.dumps(
+            payload, allow_nan=False, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    except (ValueError, TypeError, UnicodeError, RecursionError) as error:
+        raise ToolsError("tools requests must contain ordinary finite JSON objects") from error
+
+
+def _tools_http_error(error: urllib.error.HTTPError) -> ToolsError:
+    """Retain useful public rejection detail without printing raw transport data."""
+    status = error.code
+    message = f"the tools service rejected the request (HTTP {status})"
+    if status >= http.client.INTERNAL_SERVER_ERROR:
+        message = f"the tools service could not complete the request (HTTP {status})"
+    elif status == http.client.UNAUTHORIZED:
+        message = "the tools access token was rejected (HTTP 401)"
+    else:
+        try:
+            payload = json.loads(error.read(_TOOLS_MAX_RESPONSE_BYTES + 1))
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            if isinstance(detail, str) and detail:
+                message = detail
+        except ValueError, OSError, RecursionError:
+            pass
+    return ToolsError(message, status_code=status)
+
+
+def _tools_field(payload: dict[str, Any], name: str) -> str:
+    """Read one mandatory response string before authorizing the next step."""
+    value = payload.get(name)
+    if not isinstance(value, str) or not value:
+        raise ToolsError(f"the tools service returned an invalid response: missing {name}")
+    return value
+
+
+class ToolsClient:
+    """Call the tools service from a local login or an explicit server bearer.
+
+    The explicit constructor never reads a keychain or opens a browser. Supply a
+    short-lived bearer for the exact tools ``/mcp`` resource; renew it in the calling
+    server process. Use :meth:`from_login` explicitly for the saved local CLI login.
+    Methods return the service's ordinary JSON objects and durable call receipts.
+
+    ``catalog_search`` pages the catalog; ``catalog_get`` inspects schemas, versions
+    and price. ``call`` requires those versions, JSON inputs, a stable idempotency
+    key and an explicit cost cap. ``get_call`` reads status/results/charges without
+    another admission; ``cancel_call`` requests cancellation. Execution failures
+    and unresolved billing remain receipt data. ``publish`` builds and publishes
+    source for the authorized publisher; ``get_version`` inspects preparation and
+    ``publish_version`` activates an already prepared version. ``from_login`` uses
+    the saved local login and can refresh one rejected resource bearer. An explicit
+    server bearer is never refreshed or read from local credentials automatically.
+    """
+
+    def __init__(self, access_token: str, *, base_url: str | None = None) -> None:
+        """Construct a client without discovering or refreshing server credentials.
+
+        Args:
+            access_token: Explicit bearer for the tools resource.
+            base_url: Tools HTTP origin; defaults to ``RECURSE_TOOLS_URL`` or
+                ``https://tools.recurse.run``.
+
+        Raises:
+            ToolsError: If the bearer or HTTP origin is invalid.
+        """
+        self._access_token = _tools_bearer(access_token)
+        self._base_url = _tools_origin(base_url)
+        self._local_token: Callable[[str | None], str] | None = None
+        self._opener = urllib.request.build_opener(_ToolsNoRedirect())
+
+    @property
+    def base_url(self) -> str:
+        """Return the resolved tools HTTP origin."""
+        return self._base_url
+
+    @classmethod
+    def from_login(cls, *, base_url: str | None = None) -> ToolsClient:
+        """Use the saved CLI login with resource-scoped refresh and no browser prompt.
+
+        Args:
+            base_url: Tools HTTP origin; uses the same default as the constructor.
+
+        Returns:
+            A client that can refresh a rejected local bearer once per request.
+
+        Raises:
+            ToolsError: If the origin, saved login, keychain, or refresh grant is invalid.
+        """
+        from _recurse_cli import ServiceError, _access_token  # noqa: PLC0415 - explicit local login
+
+        origin = _tools_origin(base_url)
+
+        def token(rejected: str | None) -> str:
+            """Obtain the exact Tools-resource bearer through the existing CLI lock."""
+            try:
+                return _tools_bearer(
+                    _access_token(rejected_token=rejected, resource=origin + "/mcp")
+                )
+            except RecurseError as error:
+                raise ToolsError(str(error)) from error
+            except ServiceError as error:
+                raise ToolsError(
+                    "the local tools login could not be refreshed; run: recurse login",
+                    error.status_code,
+                ) from error
+
+        client = cls(token(None), base_url=origin)
+        client._local_token = token
+        return client
+
+    def _send(self, method: str, path: str, body: bytes | None) -> dict[str, Any]:
+        """Send one bounded HTTP request with no transport retries or redirects."""
+        headers = {
+            "Authorization": "Bearer " + self._access_token,
+            "Accept": "application/json",
+            "User-Agent": "recurse-sdk",
+        }
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            if path == "/mcp":
+                message = json.loads(body)
+                headers["MCP-Protocol-Version"] = "2026-07-28"
+                mcp_method = message.get("method")
+                if isinstance(mcp_method, str):
+                    headers["Mcp-Method"] = mcp_method
+                params = message.get("params")
+                name = params.get("name") if isinstance(params, dict) else None
+                if mcp_method == "tools/call" and isinstance(name, str):
+                    headers["Mcp-Name"] = name
+        request = urllib.request.Request(  # noqa: S310 - validated Tools origin
+            self._base_url + path,
+            data=body,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with self._opener.open(request, timeout=_TOOLS_HTTP_TIMEOUT_SECONDS) as response:
+                raw = response.read(_TOOLS_MAX_RESPONSE_BYTES + 1)
+        except urllib.error.HTTPError as error:
+            raise _tools_http_error(error) from error
+        except (http.client.HTTPException, OSError, ValueError) as error:
+            raise ToolsError(
+                "the tools service could not be reached; check your connection and tools base URL"
+            ) from error
+        try:
+            payload = json.loads(raw)
+            if (
+                len(raw) > _TOOLS_MAX_RESPONSE_BYTES
+                or not isinstance(payload, dict)
+                or not _is_json_portable(payload)
+            ):
+                raise ValueError("invalid JSON response")
+        except (ValueError, UnicodeError, RecursionError) as error:
+            raise ToolsError("the tools service returned an invalid response") from error
+        return cast("dict[str, Any]", payload)
+
+    def _request(
+        self, method: str, path: str, json_body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Send one request, permitting only one explicit local authentication refresh."""
+        body = _tools_json(json_body) if json_body is not None else None
+        try:
+            return self._send(method, path, body)
+        except ToolsError as error:
+            if error.status_code != http.client.UNAUTHORIZED or self._local_token is None:
+                raise
+        self._access_token = self._local_token(self._access_token)
+        return self._send(method, path, body)
+
+    def catalog_search(
+        self, search: str = "", limit: int = 20, cursor: str | None = None
+    ) -> dict[str, Any]:
+        """Search the active catalog and return one page with its opaque next cursor."""
+        query: dict[str, str | int] = {"search": search, "limit": limit}
+        if cursor is not None:
+            query["cursor"] = cursor
+        return self._request("GET", "/v1/catalog?" + urllib.parse.urlencode(query))
+
+    def catalog_get(self, tool_id: str) -> dict[str, Any]:
+        """Inspect one tool's immutable versions, schemas and published price."""
+        return self._request("GET", "/v1/catalog/" + urllib.parse.quote(tool_id, safe=""))
+
+    def call(  # noqa: PLR0913 - explicit inspected versions, retry identity and customer cap
+        self,
+        tool_id: str,
+        *,
+        tool_version: str,
+        price_version: str,
+        inputs: dict[str, Any],
+        idempotency_key: str,
+        max_cost_micro_usd: int,
+    ) -> dict[str, Any]:
+        """Admit one bounded call; retrieve pending results through ``get_call``.
+
+        All versions, the retry key and maximum total customer cost are explicit.
+        Reuse identical arguments and key if a transport outcome is unknown.
+        """
+        if not isinstance(inputs, dict):
+            raise ToolsError("tools inputs must be a JSON object")
+        return self._request(
+            "POST",
+            "/v1/calls",
+            {
+                "tool_id": tool_id,
+                "tool_version": tool_version,
+                "price_version": price_version,
+                "inputs": inputs,
+                "idempotency_key": idempotency_key,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+        )
+
+    def get_call(self, call_id: str) -> dict[str, Any]:
+        """Read your stored call status, result and charges without another admission."""
+        return self._request("GET", "/v1/calls/" + urllib.parse.quote(call_id, safe=""))
+
+    def cancel_call(self, call_id: str) -> dict[str, Any]:
+        """Request cancellation; execution and billing may close independently."""
+        return self._request(
+            "POST", "/v1/calls/" + urllib.parse.quote(call_id, safe="") + "/cancel", {}
+        )
+
+    def get_version(self, version_id: str) -> dict[str, Any]:
+        """Read the publisher's stored preparation state for one source version."""
+        return self._request("GET", "/v1/tool-versions/" + urllib.parse.quote(version_id, safe=""))
+
+    def publish_version(
+        self, version_id: str, publication_config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Publish a known prepared version with its immutable publisher policy."""
+        return self._request(
+            "POST",
+            "/v1/tool-versions/" + urllib.parse.quote(version_id, safe="") + "/publication",
+            publication_config,
+        )
+
+    def _upload_source(self, descriptor: dict[str, Any], source: bytes) -> None:
+        """Upload once; let completion prove storage after a lost transfer acknowledgment."""
+        url = _tools_field(descriptor, "upload_url")
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+            ):
+                raise ValueError("invalid upload URL")
+            prefix = base64.b64decode(_tools_field(descriptor, "upload_prefix"), validate=True)
+            suffix = base64.b64decode(_tools_field(descriptor, "upload_suffix"), validate=True)
+            request = urllib.request.Request(  # noqa: S310 - validated capability URL
+                url,
+                data=prefix + source + suffix,
+                headers={
+                    "Authorization": _tools_field(descriptor, "upload_authorization"),
+                    "Content-Type": _tools_field(descriptor, "upload_content_type"),
+                    "User-Agent": "recurse-sdk",
+                },
+                method="POST",
+            )
+        except ValueError as error:
+            raise ToolsError(
+                "the tools service returned an invalid source upload descriptor"
+            ) from error
+        try:
+            with self._opener.open(request, timeout=_TOOLS_HTTP_TIMEOUT_SECONDS):
+                return
+        except urllib.error.HTTPError as error:
+            if error.code >= http.client.INTERNAL_SERVER_ERROR:
+                # A proxy may fail after Storage committed. The completion request
+                # checks that exact uploaded object without repeating its transfer.
+                error.close()
+                return
+            raise ToolsError("the tools source upload was rejected", error.code) from error
+        except http.client.HTTPException, OSError:
+            # A lost acknowledgment can follow a stored source. Completion checks its
+            # durable upload identity; do not resend the source or allocate a new version.
+            return
+        except ValueError as error:
+            raise ToolsError("the tools source upload could not complete") from error
+
+    def publish(
+        self,
+        service_directory: str | Path,
+        *,
+        publication_config: dict[str, Any] | None = None,
+        timeout_seconds: float = 600,
+    ) -> dict[str, Any]:
+        """Build, upload, prepare and publish one source version without restaging.
+
+        Publisher policy is separate from ``tools.yaml``. Failures after staging
+        retain ``ToolsError.version_id``; use ``get_version`` and ``publish_version``
+        to inspect or publish that same prepared version.
+        """
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ToolsError("publication timeout must be a positive finite number")
+        config = publication_config if publication_config is not None else {"tools": {}}
+        _tools_json(config)
+        artifacts, record = build_tools_bundle(service_directory)
+        manifest = load_tools_manifest(service_directory)
+        staged = self._request(
+            "POST",
+            "/v1/tool-versions",
+            {"service_name": manifest["metadata"]["name"], "application_record": record},
+        )
+        version_id = _tools_field(staged, "version_id")
+        try:
+            descriptor = staged.get("source_upload")
+            if not isinstance(descriptor, dict):
+                raise ToolsError("the tools service returned an invalid source upload descriptor")
+            self._upload_source(descriptor, artifacts["source"])
+            self._request(
+                "POST",
+                "/v1/tool-versions/" + urllib.parse.quote(version_id, safe="") + "/complete",
+                {"source_upload_id": _tools_field(descriptor, "upload_id")},
+            )
+            deadline = time.monotonic() + timeout_seconds
+            while True:
+                version = self.get_version(version_id)
+                status = _tools_field(version, "status")
+                if status in {"prepared", "published"}:
+                    return self.publish_version(version_id, config)
+                if status in {
+                    "failed",
+                    "cancelled",
+                    "timed_out",
+                    "infrastructure_failed",
+                    "retired",
+                }:
+                    raise ToolsError("tools preparation did not succeed: " + status)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ToolsError("tools preparation did not finish before the timeout")
+                time.sleep(min(2, remaining))
+        except ToolsError as error:
+            raise ToolsError(
+                f"{error}. Version: {version_id}; inspect with get_version and resume "
+                "with publish_version when prepared.",
+                error.status_code,
+                version_id,
+            ) from error

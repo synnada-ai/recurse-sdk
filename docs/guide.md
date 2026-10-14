@@ -356,9 +356,11 @@ recurse logout
 
 The local login and cached token are removed only after revocation succeeds, so a temporary
 service failure can be retried safely. Logging in again replaces the previous login's cache.
-Remote revocation of a device credential does not immediately invalidate an already-issued
-access token: local commands can reuse it until refresh is due (currently within fifteen
-minutes). A running request may already hold that token. Local logout prevents further cache reuse.
+Remote revocation of a device credential prevents further refresh. Already issued access tokens
+remain valid until expiry: general API sessions currently last fifteen minutes, while Tools
+resource tokens last one hour. A running request may already hold its token. Local logout prevents
+further cache reuse and clears both the general API and Tools caches.
+
 
 ## Runtime-secret management
 
@@ -858,8 +860,9 @@ applications keep their manifest and builder.
 Declare a description, JSON input/output schemas, and explicit fixture pricing for each registered
 function. Inputs are closed objects whose properties and required/default declarations match the
 Python signature. Use named parameters, annotations, and Google-style docstrings. The current
-fixture contract requires zero provider and compute bases and records separate `1×` provider and
-`4×` compute multipliers; paid execution is a later milestone.
+authoring contract requires zero provider and compute bases. The service selects trusted billing
+rates at publication, applying `1×` provider and `4×` compute pricing. Authors cannot supply provider
+prices or measurement evidence through the source bundle.
 
 Include `tools.yaml`, the declared source, and `uv.lock` in your standard build backend's source
 distribution. Build it with the public Python SDK:
@@ -873,5 +876,136 @@ print(manifest["metadata"]["name"], record["apiVersion"], len(artifacts["source"
 ```
 
 The record's API version is `recurse.tools.application/v1alpha1`. Local validation parses the tool
-source without importing it. The M1 authoring API builds an artifact; authenticated catalog access,
-CLI publication, and consumption ship in later milestones.
+source without importing it.
+
+## Tools API (unreleased)
+
+These APIs and commands are available on the Stage 41 branch wheel, not the published PyPI 0.2.4
+package. For TEST, set `RECURSE_API_URL=https://api.dev.recurse.run` and
+`RECURSE_TOOLS_URL=https://tools.dev.recurse.run` before login or invocation. Defaults target the
+production origins after a separately approved release.
+
+### Catalog and calls
+
+Local Python explicitly reuses a saved `recurse login` credential:
+
+```python
+import uuid
+
+import recurse
+
+client = recurse.ToolsClient.from_login()
+page = client.catalog_search("search", limit=20)
+tool = client.catalog_get(page["tools"][0]["id"])
+receipt = client.call(
+    tool["id"],
+    tool_version=tool["version"],
+    price_version=tool["price_version"],
+    inputs={"query": "example"},  # Match the inspected input schema.
+    idempotency_key=str(uuid.uuid4()),
+    max_cost_micro_usd=100_000,
+)
+receipt = client.get_call(receipt["call_id"])
+# If still pending and no longer needed:
+# receipt = client.cancel_call(receipt["call_id"])
+```
+
+Prices and charges are integer micro-USD (`1,000,000` is one US dollar). Inspect the service quote
+before choosing a cap. The service rejects stale versions, invalid inputs, insufficient funds, or
+an inadequate cap before admission. Preserve the same inputs, versions, cap, and idempotency key
+when checking an ambiguous submission. Repeated `get_call` reads do not execute or charge again.
+Accepted calls return durable receipts immediately; read again for results, errors, billing, and
+retention status. A failed execution remains receipt data. Request failures raise `ToolsError`,
+with `status_code` when an HTTP response exists.
+
+The CLI exposes the same operations and prints JSON:
+
+```sh
+recurse tools search "search" --limit 20
+recurse tools inspect <tool-id>
+recurse tools call <tool-id> --tool-version <version> --price-version <price-version> \
+  --inputs inputs.json --idempotency-key <stable-request-key> --max-cost-micro-usd 100000
+recurse tools get <call-id>
+recurse tools cancel <call-id>
+```
+
+Use `--inputs -` to read JSON from stdin. Accepted and retrieved receipts exit with code 0,
+including failed execution receipts; argument and request failures exit with code 2. Neither the
+CLI nor Python automatically retries an uncertain network submission or waits for execution.
+
+### Server authentication
+
+Server Python takes an explicit short-lived bearer scoped to the exact Tools resource
+`https://tools.recurse.run/mcp` (or the configured TEST resource):
+
+```python
+import os
+
+import recurse
+
+client = recurse.ToolsClient(
+    access_token=os.environ["TOOLS_ACCESS_TOKEN"],
+    base_url=os.environ["RECURSE_TOOLS_URL"],
+)
+print(client.catalog_search())
+```
+
+Obtain this bearer through the configured issuer's existing OAuth grant. The registered
+`recurse-cli` refresh grant accepts `resource=<Tools origin>/mcp` with its durable CLI credential;
+the existing MCP OAuth account-linking flow also issues a resource bearer. A general API session,
+agent MCP bearer, provider key, or account ID is not a Tools credential. Server clients use no
+browser or keychain and do not refresh automatically; replace an expired bearer explicitly.
+M4 adds no long-lived API-key management or public CLI token-export command.
+
+`ToolsClient.from_login()` obtains this resource bearer through the shared keychain and API-origin
+refresh lock, without opening a browser. Its cache is separate from agent/API tokens and tied to
+the saved login and exact Tools resource. A rejected bearer refreshes once with the original
+request body and idempotency key. Network failures are not retried. Logout revokes the durable
+credential and clears local caches; already issued resource bearers expire after one hour.
+
+### Publication
+
+Only the service's configured `agent@recurse.run` publisher account may stage and publish tools.
+Other accounts can discover and consume published tools. The publisher uploads a standard
+`tools.yaml` bundle, waits for that version's preparation, and activates its catalog entries:
+
+```sh
+recurse tools publish path/to/app-tools --config publication.json --timeout-seconds 600
+recurse tools version <version-id>
+recurse tools publish-version <version-id> --config publication.json
+```
+
+Python uses `client.publish(directory, publication_config=...)`, `client.get_version(version_id)`,
+and `client.publish_version(version_id, publication_config)`. Configuration defaults to
+`{"tools": {}}`, which publishes validated functions with free fixture billing. Paid compute uses
+the existing `provider-none-v1` selection, for example:
+
+```json
+{"tools": {"compute": {"billing": {"provider_rate_version": "provider-none-v1"}}}}
+```
+
+Supported external providers require service-approved rate versions and publisher-owned logical
+secret bindings. Keep credential values out of the manifest and publication JSON. Provider
+coverage beyond M3's supported adapter belongs to Stage 42.
+
+An upload, preparation, or activation failure after staging raises `ToolsError` with `version_id`.
+Inspect that version before retrying publication; the SDK does not stage another version
+automatically. A timeout stops local waiting and leaves the remote version available for inspection.
+
+### Tools MCP bridge
+
+Configure an MCP host to launch `recurse tools mcp serve` after local login:
+
+```sh
+codex mcp add recurse-tools -- recurse tools mcp serve
+claude mcp add recurse-tools -- recurse tools mcp serve
+```
+
+The bridge exposes `catalog_search`, `catalog_get`, `call`, `get_call`, and `cancel_call`, with
+ordinary MCP results. It advertises no Tasks. A pending call returns its receipt; the host reads
+`get_call` until completion. stdout contains only MCP frames. Existing `recurse mcp serve`
+continues to serve agent apps through its original bridge. Plugin packaging is a later milestone.
+
+The unreleased branch includes SDK OAuth PR #70 as a dependency. A release containing that login
+migration must precede Engine #286's legacy-route retirement; TEST deployment does not authorize
+either package publication or route retirement.
