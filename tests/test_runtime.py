@@ -69,7 +69,9 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "RunContext",
         "RunContextError",
         "build_bundle",
+        "build_tools_bundle",
         "context",
+        "load_tools_manifest",
     ]
     for name in recurse.__all__:
         assert getattr(recurse, name) is not None

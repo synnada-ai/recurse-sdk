@@ -10,6 +10,8 @@ The public surface is intentionally small:
 
 - :func:`build_bundle` validates an application directory and produces one
   standard source distribution containing its exact dependency lockfile.
+- :func:`load_tools_manifest` validates a tools-only declaration.
+- :func:`build_tools_bundle` builds tools-only source without a prompt or agent.
 - :func:`context` gives application tool code access to the active run's
   validated inputs and writable workspace.
 - :class:`RecurseError` and its subclasses report every SDK failure.
@@ -28,7 +30,7 @@ source archive does not satisfy the Recurse application contract.
 
 The application manifest or declared application content is invalid.
 
-The message names the offending ``agent.yaml`` field or declared file so
+The message names the offending ``agent.yaml`` or ``tools.yaml`` field or file so
 the author can correct it directly.
 
 ## `recurse.RecurseError`
@@ -81,6 +83,31 @@ Raises:
     BundleError: If project metadata, the build, or its source distribution
         is invalid.
 
+## `recurse.build_tools_bundle`
+
+```python
+build_tools_bundle(service_directory: str | pathlib.Path) -> tuple[dict[str, bytes], dict[str, typing.Any]]
+```
+
+Validate tools-only source and build one immutable standard distribution.
+
+Tools are parsed without importing them on the author's machine. The
+distribution contains ``tools.yaml``, its source, project metadata, and
+the exact dependency lockfile. No agent manifest or prompt is required.
+
+Args:
+    service_directory: Directory containing ``tools.yaml`` and project files.
+
+Returns:
+    Source-distribution bytes keyed by ``source`` and a portable record
+    with ``apiVersion`` set to ``recurse.tools.application/v1alpha1``.
+    The record's ``source`` contains the exact SHA-256 and byte size.
+
+Raises:
+    ManifestError: If declarations, files, schemas, or signatures are invalid.
+    BundleError: If the directory, build metadata, backend output, or
+        dependency lockfile does not satisfy the tools artifact contract.
+
 ## `recurse.context`
 
 ```python
@@ -95,3 +122,21 @@ Returns:
 Raises:
     RunContextError: If no Recurse run is active, for example when the
         application module is imported or executed outside the platform.
+
+## `recurse.load_tools_manifest`
+
+```python
+load_tools_manifest(service_directory: str | pathlib.Path) -> dict[str, typing.Any]
+```
+
+Read a tools-only declaration without importing its Python source.
+
+Args:
+    service_directory: Directory containing ``tools.yaml``.
+
+Returns:
+    The validated, JSON-portable manifest exactly as authored.
+
+Raises:
+    ManifestError: If the manifest is unreadable, malformed, or violates
+        the tools-only contract, including schema and fixture pricing.

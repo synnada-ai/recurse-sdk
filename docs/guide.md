@@ -846,3 +846,30 @@ recurse run examples/predictive-modeler \
 ```
 
 Or deploy with `recurse deploy examples/predictive-modeler --as mcp --memory-mib 2048`.
+
+## Tools-only packaging
+
+A tools-only service has a separate [`tools.yaml` manifest](reference/tools-manifest.md) and runs
+registered functions directly. It does not require `agent.yaml` or a prompt. Existing agent
+applications keep their manifest and builder.
+
+Declare a description, JSON input/output schemas, and explicit fixture pricing for each registered
+function. Inputs are closed objects whose properties and required/default declarations match the
+Python signature. Use named parameters, annotations, and Google-style docstrings. The current
+fixture contract requires zero provider and compute bases and records separate `1×` provider and
+`4×` compute multipliers; paid execution is a later milestone.
+
+Include `tools.yaml`, the declared source, and `uv.lock` in your standard build backend's source
+distribution. Build it with the public Python SDK:
+
+```python
+import recurse
+
+manifest = recurse.load_tools_manifest("path/to/app-tools")
+artifacts, record = recurse.build_tools_bundle("path/to/app-tools")
+print(manifest["metadata"]["name"], record["apiVersion"], len(artifacts["source"]))
+```
+
+The record's API version is `recurse.tools.application/v1alpha1`. Local validation parses the tool
+source without importing it. The M1 authoring API builds an artifact; authenticated catalog access,
+CLI publication, and consumption ship in later milestones.

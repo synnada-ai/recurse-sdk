@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recurse.run/schema/tools.yaml.json",
+  "title": "Recurse tools service manifest",
+  "description": "A tools-only service with direct JSON calls and no agent configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "runtime", "tools"],
+  "properties": {
+    "apiVersion": {"const": "recurse.tools/v1alpha1"},
+    "kind": {"const": "ToolService"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "summary"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "lockfile"],
+      "properties": {
+        "python": {"const": "3.14"},
+        "lockfile": {"const": "uv.lock"}
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "register"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "register": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["description", "input_schema", "output_schema", "pricing"],
+            "properties": {
+              "description": {"type": "string", "minLength": 1},
+              "input_schema": {
+                "type": "object",
+                "required": ["type", "properties", "additionalProperties"],
+                "properties": {
+                  "type": {"const": "object"},
+                  "properties": {"type": "object"},
+                  "additionalProperties": {"const": false}
+                }
+              },
+              "output_schema": {"type": "object"},
+              "pricing": {
+                "description": "M1 fixture pricing is free. Independent launch multipliers are recorded for M3.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["provider_basis_micro_usd", "compute_basis_micro_usd", "provider_multiplier", "compute_multiplier"],
+                "properties": {
+                  "provider_basis_micro_usd": {"const": 0},
+                  "compute_basis_micro_usd": {"const": 0},
+                  "provider_multiplier": {"const": 1},
+                  "compute_multiplier": {"const": 4}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
