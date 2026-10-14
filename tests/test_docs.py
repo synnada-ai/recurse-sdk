@@ -8,6 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_tools_client import ToolsService
+from tests.test_tools_client import (
+    tools_service as tools_service,  # noqa: PLC0414 - re-export shared pytest fixture
+)
+
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
@@ -113,7 +118,7 @@ def test_every_public_member_requires_a_docstring(monkeypatch: pytest.MonkeyPatc
         generate_docs.render_api_reference()
 
 
-def test_guide_has_only_the_two_ordinary_local_mcp_configuration_commands() -> None:
+def test_guide_has_separate_agent_and_tools_local_mcp_configuration_commands() -> None:
     """The guide configures hosts with the CLI bridge and no embedded credential."""
     guide = (ROOT / "docs" / "guide.md").read_text()
     commands = [line for line in guide.splitlines() if "mcp add recurse" in line]
@@ -121,6 +126,8 @@ def test_guide_has_only_the_two_ordinary_local_mcp_configuration_commands() -> N
     assert commands == [
         "codex mcp add recurse -- recurse mcp serve <deployment-id>",
         "claude mcp add recurse -- recurse mcp serve <deployment-id>",
+        "codex mcp add recurse-tools -- recurse tools mcp serve",
+        "claude mcp add recurse-tools -- recurse tools mcp serve",
     ]
     assert all("--env" not in command and "token" not in command for command in commands)
     codex_blocks = [
@@ -139,12 +146,19 @@ def test_guide_has_only_the_two_ordinary_local_mcp_configuration_commands() -> N
 
 
 def test_guide_python_examples_run_against_the_installed_package(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tools_service: ToolsService
 ) -> None:
     """Every runnable guide example executes against the installed package."""
     guide = (ROOT / "docs" / "guide.md").read_text()
     blocks = re.findall(r"```python\n(.*?)```", guide, re.S)
     assert blocks
+    import _recurse_cli  # noqa: PLC0415 - local login source for runnable HTTP examples
+
+    monkeypatch.setenv("RECURSE_TOOLS_URL", tools_service.url)
+    monkeypatch.setenv("TOOLS_ACCESS_TOKEN", "documentation-tools-bearer")
+    monkeypatch.setattr(
+        _recurse_cli, "_access_token", lambda **kwargs: "documentation-local-bearer"
+    )
     monkeypatch.chdir(ROOT)
     executed = 0
     for block in blocks:
@@ -155,6 +169,13 @@ def test_guide_python_examples_run_against_the_installed_package(
         )
         executed += 1
     assert executed >= 2
+    assert [request[:2] for request in tools_service.requests] == [
+        ("GET", "/v1/catalog?search=search&limit=20"),
+        ("GET", "/v1/catalog/fixture-tools.echo"),
+        ("POST", "/v1/calls"),
+        ("GET", "/v1/calls/call-1"),
+        ("GET", "/v1/catalog?search=&limit=20"),
+    ]
 
 
 def test_tools_run_as_commands(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -55,6 +55,39 @@ Attributes:
 
 The Recurse run context was used outside an active run.
 
+## `recurse.ToolsClient`
+
+```python
+class ToolsClient(access_token: str, *, base_url: str | None = None) -> None
+```
+
+Call the tools service from a local login or an explicit server bearer.
+
+The explicit constructor never reads a keychain or opens a browser. Supply a
+short-lived bearer for the exact tools ``/mcp`` resource; renew it in the calling
+server process. Use :meth:`from_login` explicitly for the saved local CLI login.
+Methods return the service's ordinary JSON objects and durable call receipts.
+
+``catalog_search`` pages the catalog; ``catalog_get`` inspects schemas, versions
+and price. ``call`` requires those versions, JSON inputs, a stable idempotency
+key and an explicit cost cap. ``get_call`` reads status/results/charges without
+another admission; ``cancel_call`` requests cancellation. Execution failures
+and unresolved billing remain receipt data. ``publish`` builds and publishes
+source for the authorized publisher; ``get_version`` inspects preparation and
+``publish_version`` activates an already prepared version. ``from_login`` uses
+the saved local login and can refresh one rejected resource bearer. An explicit
+server bearer is never refreshed or read from local credentials automatically.
+
+## `recurse.ToolsError`
+
+A tools request, local login, or publication could not complete.
+
+Execution failures are returned as durable call receipts instead of exceptions.
+
+Attributes:
+    status_code: HTTP rejection status, or ``None`` for a local/transport failure.
+    version_id: Allocated publication version to inspect or resume, when known.
+
 ## `recurse.build_bundle`
 
 ```python

@@ -68,6 +68,8 @@ def test_public_api_is_exactly_the_declared_surface() -> None:
         "RecurseError",
         "RunContext",
         "RunContextError",
+        "ToolsClient",
+        "ToolsError",
         "build_bundle",
         "build_tools_bundle",
         "context",

@@ -75,6 +75,23 @@ To connect all published gallery apps through one server, use `recurse mcp serve
 without a deployment ID. The shared connection exposes `apps.<gallery-slug>` tools;
 private deployments still use their individual IDs. Runs use the caller's wallet.
 
+## Tools API
+
+Recurse SDK 0.2.5 adds catalog access, direct tool calls, publisher-only publication, and a
+separate local MCP bridge. Install or upgrade `recurse-sdk` to use these commands.
+
+```sh
+recurse login
+recurse tools search
+recurse tools inspect <tool-id>
+recurse tools mcp serve
+```
+
+Python callers use `recurse.ToolsClient.from_login()` locally or supply an audience-scoped bearer
+to `recurse.ToolsClient(access_token=...)` on a server. Calls require the inspected tool and price
+versions, an idempotency key, and a maximum charge. See the
+[Tools guide](docs/guide.md#tools-api) for invocation, publication, and authentication.
+
 ## Documentation
 
 - [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.

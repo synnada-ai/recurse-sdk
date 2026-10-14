@@ -39,7 +39,7 @@ import keyring.errors
 import yaml
 from filelock import FileLock, Timeout
 
-from recurse import RecurseError, _build_bundle
+from recurse import RecurseError, ToolsClient, _build_bundle
 
 _DEFAULT_API_URL = "https://api.recurse.run"
 _REQUEST_TIMEOUT_SECONDS = 60
@@ -128,12 +128,13 @@ def required_field(payload: dict[str, Any], name: str) -> str:
     return value
 
 
-def request(
+def request(  # noqa: PLR0913 - one transport for JSON and OAuth form bodies
     method: str,
     path: str,
     *,
     token: str | None = None,
     json_body: dict[str, Any] | None = None,
+    form_body: dict[str, str] | None = None,
     json_response: bool = True,
 ) -> dict[str, Any]:
     """Send one request to the Recurse service and return its JSON body.
@@ -143,6 +144,7 @@ def request(
         path: Absolute request path, for example ``/v1/account``.
         token: Bearer access token, when the route requires authentication.
         json_body: JSON request body.
+        form_body: Form-encoded request body, used by the OAuth token endpoints.
         json_response: Whether the successful response must contain a JSON object.
 
     Returns:
@@ -157,6 +159,9 @@ def request(
     if json_body is not None:
         body = json.dumps(json_body).encode()
         headers["Content-Type"] = "application/json"
+    if form_body is not None:
+        body = urllib.parse.urlencode(form_body).encode()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     prepared = urllib.request.Request(  # noqa: S310 - scheme validated above
@@ -196,7 +201,11 @@ def _error_detail(raw: bytes, fallback: object) -> str:
         The service detail or fallback text.
     """
     try:
-        detail = json.loads(raw)["detail"]
+        payload = json.loads(raw)
+        # OAuth endpoints report RFC 6749 errors; every other route uses ``detail``.
+        detail = (
+            payload["error_description"] if "error_description" in payload else payload["detail"]
+        )
     except KeyError, TypeError, ValueError:
         detail = fallback
     return str(detail)
@@ -355,6 +364,8 @@ def _login_result_page(accepted: bool) -> str:
 
 
 _KEYCHAIN_SERVICE = "recurse-cli"
+# The OAuth client registered with Recurse for this CLI and its loopback callback.
+_CLIENT_ID = "recurse-cli"
 _KEYCHAIN_DEVICE_CREDENTIAL = "device-credential"
 _CALLBACK_PORT = 8765
 _LOGIN_WAIT_SECONDS = 300
@@ -440,12 +451,13 @@ def _store_device_credential(tokens: dict[str, object]) -> None:
     """Persist the opaque device credential from an authorization grant.
 
     Args:
-        tokens: An authorization-code token grant response.
+        tokens: An authorization-code token grant response; its refresh token is the
+            durable device credential.
 
     Raises:
         _CliError: If the operating system keychain rejects the write.
     """
-    credential = required_field(tokens, "device_credential")
+    credential = required_field(tokens, "refresh_token")
     with _auth_lock():
         _clear_cached_access()
         keyring.set_password(_KEYCHAIN_SERVICE, _keychain_credential_name(), credential)
@@ -486,13 +498,14 @@ def _auth_lock() -> Iterator[None]:
 
 def _clear_cached_access() -> None:
     """Remove the endpoint's cached bearer while the caller holds its auth lock."""
-    name = f"access-token:{api_base_url()}"
-    if keyring.get_password(_KEYCHAIN_SERVICE, name) is not None:
-        keyring.delete_password(_KEYCHAIN_SERVICE, name)
+    for prefix in ("access-token", "tools-access-token"):
+        name = f"{prefix}:{api_base_url()}"
+        if keyring.get_password(_KEYCHAIN_SERVICE, name) is not None:
+            keyring.delete_password(_KEYCHAIN_SERVICE, name)
 
 
 def _cached_access_token(
-    raw: str | None, credential: str, rejected_token: str | None
+    raw: str | None, credential: str, rejected_token: str | None, *, resource: str | None = None
 ) -> str | None:
     """Return a valid cached bearer only for the current saved login.
 
@@ -500,6 +513,7 @@ def _cached_access_token(
         raw: Serialized keychain cache entry, if present.
         credential: Currently saved device credential.
         rejected_token: Bearer rejected by the server, which must not be reused.
+        resource: Exact resource URI required for the Tools audience, or the default session.
 
     Returns:
         A usable token, or ``None`` for missing, malformed, stale or mismatched data.
@@ -512,6 +526,7 @@ def _cached_access_token(
         expires_at = cached.get("expires_at")
         if (
             cached.get("credential_sha256") != hashlib.sha256(credential.encode()).hexdigest()
+            or cached.get("resource") != resource
             or not isinstance(token, str)
             or not token
             or token == rejected_token
@@ -526,11 +541,12 @@ def _cached_access_token(
         return None
 
 
-def _exchange_device_credential(credential: str) -> dict[str, Any]:
+def _exchange_device_credential(credential: str, *, resource: str | None = None) -> dict[str, Any]:
     """Exchange one durable credential for a short-lived access token.
 
     Args:
         credential: Opaque device credential read from the keychain.
+        resource: Optional exact Tools resource URI for a resource-scoped bearer.
 
     Returns:
         The token response, including its lifetime.
@@ -538,18 +554,22 @@ def _exchange_device_credential(credential: str) -> dict[str, Any]:
     Raises:
         ServiceError: If the service rejects the exchange.
     """
-    return request(
-        "POST",
-        "/v1/auth/token",
-        json_body={"grant_type": "device_credential", "device_credential": credential},
-    )
+    form_body = {
+        "grant_type": "refresh_token",
+        "client_id": _CLIENT_ID,
+        "refresh_token": credential,
+    }
+    if resource is not None:
+        form_body["resource"] = resource
+    return request("POST", "/v1/oauth/token", form_body=form_body)
 
 
-def _access_token(rejected_token: str | None = None) -> str:
+def _access_token(rejected_token: str | None = None, *, resource: str | None = None) -> str:
     """Reuse the saved login's bearer, coordinating a refresh when necessary.
 
     Args:
         rejected_token: Bearer rejected by the service; a newer cached bearer is reusable.
+        resource: Exact Tools resource URI; omitted for the existing agent session.
 
     Returns:
         A cached or freshly issued access token. If saving the cache fails, the
@@ -561,15 +581,16 @@ def _access_token(rejected_token: str | None = None) -> str:
     """
     with _auth_lock():
         credential = _device_credential()
-        cache_name = f"access-token:{api_base_url()}"
+        prefix = "access-token" if resource is None else "tools-access-token"
+        cache_name = f"{prefix}:{api_base_url()}"
         raw = keyring.get_password(_KEYCHAIN_SERVICE, cache_name)
-        cached = _cached_access_token(raw, credential, rejected_token)
+        cached = _cached_access_token(raw, credential, rejected_token, resource=resource)
         if cached is not None:
             return cached
         if raw is not None:
             keyring.delete_password(_KEYCHAIN_SERVICE, cache_name)
         started_at = time.time()
-        tokens = _exchange_device_credential(credential)
+        tokens = _exchange_device_credential(credential, resource=resource)
         token = required_field(tokens, "access_token")
         expires_in = tokens.get("expires_in")
         if (
@@ -588,6 +609,7 @@ def _access_token(rejected_token: str | None = None) -> str:
                         "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
                         "access_token": token,
                         "expires_at": started_at + expires_in,
+                        **({"resource": resource} if resource is not None else {}),
                     }
                 ),
             )
@@ -603,8 +625,9 @@ def _access_token(rejected_token: str | None = None) -> str:
 def _login() -> None:
     """Run the browser login flow and store the device credential.
 
-    The flow waits on the fixed loopback callback ``127.0.0.1:8765`` that the
-    Recurse login page is allowed to redirect to.
+    The browser opens the website login named by the service's OAuth metadata, so
+    every sign-in method works. The flow waits on the fixed loopback callback
+    ``127.0.0.1:8765`` registered for this CLI.
 
     Raises:
         _CliError: If the browser flow does not complete.
@@ -615,23 +638,34 @@ def _login() -> None:
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     )
     state = secrets.token_urlsafe(32)
+    metadata = request("GET", "/.well-known/oauth-authorization-server")
+    login_page = required_field(metadata, "authorization_endpoint")
+    if not login_page.startswith(("https://", "http://")):
+        raise ServiceError(
+            "the Recurse service returned an invalid response: authorization_endpoint"
+        )
     try:
         server = _LoginServer(state)
     except OSError as error:
         raise _CliError(
             f"the login callback address 127.0.0.1:{_CALLBACK_PORT} is unavailable: {error}"
         ) from error
+    # The token request must repeat the exact callback the website was given.
+    redirect_uri = f"http://127.0.0.1:{server.server_port}/callback"
     try:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
             login_url = (
-                api_base_url()
-                + "/login?"
+                login_page
+                + "?"
                 + urllib.parse.urlencode(
                     {
-                        "redirect_to": f"http://127.0.0.1:{server.server_port}/callback",
+                        "response_type": "code",
+                        "client_id": _CLIENT_ID,
+                        "redirect_uri": redirect_uri,
                         "code_challenge": challenge,
+                        "code_challenge_method": "S256",
                         "state": state,
                     }
                 )
@@ -651,8 +685,14 @@ def _login() -> None:
         raise _CliError("login was not completed in the browser")
     tokens = request(
         "POST",
-        "/v1/auth/token",
-        json_body={"grant_type": "authorization_code", "code": code, "code_verifier": verifier},
+        "/v1/oauth/token",
+        form_body={
+            "grant_type": "authorization_code",
+            "client_id": _CLIENT_ID,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": verifier,
+        },
     )
     access_token = required_field(tokens, "access_token")
     account = request("GET", "/v1/account", token=access_token)
@@ -668,16 +708,14 @@ def _logout() -> None:
 
     Raises:
         _CliError: If the keychain cannot be read or changed.
-        ServiceError: If the credential cannot be exchanged or revoked.
+        ServiceError: If the credential cannot be revoked.
     """
     with _auth_lock():
         credential = _device_credential()
-        access_token = required_field(_exchange_device_credential(credential), "access_token")
         request(
             "POST",
-            "/v1/auth/logout",
-            token=access_token,
-            json_body={"device_credential": credential},
+            "/v1/oauth/revoke",
+            form_body={"token": credential, "client_id": _CLIENT_ID},
             json_response=False,
         )
         _clear_cached_access()
@@ -742,7 +780,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.4",
+            "version": "0.2.5",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1023,7 +1061,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.4",
+            "User-Agent": "recurse-sdk/0.2.5",
         },
         method="GET",
     )
@@ -2520,6 +2558,212 @@ def _open_hosted_page(url: str, *, open_browser: bool) -> None:
         print(url)
 
 
+def _read_tools_object(source: str) -> dict[str, Any]:
+    """Read a finite JSON object used for Tools inputs or publication configuration."""
+    try:
+        text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+        value = json.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError
+        json.dumps(value, allow_nan=False)
+    except (OSError, UnicodeError, ValueError, RecursionError) as error:
+        raise _CliError("tools input/config must be a readable JSON object") from error
+    return value
+
+
+def _manage_tools(arguments: argparse.Namespace) -> None:
+    """Run one Tools operation with explicit versions and cost cap; print its raw JSON receipt."""
+    if arguments.tools_command == "mcp":
+        _serve_tools_mcp(sys.stdin.buffer, sys.stdout.buffer)
+        return
+    inputs = _read_tools_object(arguments.inputs) if arguments.tools_command == "call" else None
+    config = _read_tools_object(arguments.config) if getattr(arguments, "config", None) else None
+    client = ToolsClient.from_login()
+    if arguments.tools_command == "search":
+        result = client.catalog_search(arguments.search, arguments.limit, arguments.cursor)
+    elif arguments.tools_command == "inspect":
+        result = client.catalog_get(arguments.tool_id)
+    elif arguments.tools_command == "call":
+        result = client.call(
+            arguments.tool_id,
+            tool_version=arguments.tool_version,
+            price_version=arguments.price_version,
+            inputs=cast(dict[str, Any], inputs),
+            idempotency_key=arguments.idempotency_key,
+            max_cost_micro_usd=arguments.max_cost_micro_usd,
+        )
+    elif arguments.tools_command == "get":
+        result = client.get_call(arguments.call_id)
+    elif arguments.tools_command == "cancel":
+        result = client.cancel_call(arguments.call_id)
+    elif arguments.tools_command == "version":
+        result = client.get_version(arguments.version_id)
+    elif arguments.tools_command == "publish-version":
+        result = client.publish_version(arguments.version_id, cast(dict[str, Any], config))
+    else:
+        result = client.publish(
+            arguments.directory,
+            publication_config=config,
+            timeout_seconds=arguments.timeout_seconds,
+        )
+    print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+
+
+def _tools_mcp_response(client: ToolsClient, message: dict[str, Any]) -> dict[str, Any]:
+    """Adapt one standard host request to modern ordinary MCP and validate its reply."""
+    request_id = message["id"]
+    method = message["method"]
+    params = message.get("params", {})
+    version = params.get("protocolVersion")
+    if method == "initialize" and (not isinstance(version, str) or not version):
+        raise _CliError("malformed JSON-RPC initialize frame on standard input")
+    remote_params = {} if method == "initialize" else dict(params)
+    remote_params["_meta"] = {
+        "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
+        "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.5"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    response = client._request(
+        "POST",
+        "/mcp",
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "server/discover" if method == "initialize" else method,
+            "params": remote_params,
+        },
+    )
+    result, error_response = _response_parts(response, request_id)
+    if (
+        response.get("jsonrpc") != "2.0"
+        or response.get("id") != request_id
+        or type(response.get("id")) is not type(request_id)
+        or ("result" in response and "error" in response)
+    ):
+        raise ServiceError("the Tools service returned an invalid MCP response")
+    if error_response is not None:
+        remote_error = error_response["error"]
+        if (
+            isinstance(remote_error.get("code"), bool)
+            or not isinstance(remote_error.get("code"), int)
+            or not isinstance(remote_error.get("message"), str)
+            or not remote_error["message"]
+        ):
+            raise ServiceError("the Tools service returned an invalid MCP response")
+        return error_response
+    result = cast(dict[str, Any], result)
+    if method == "initialize":
+        capabilities = result.get("capabilities")
+        remote_meta = result.get("_meta")
+        tools = capabilities.get("tools") if isinstance(capabilities, dict) else None
+        server_info = (
+            remote_meta.get("io.modelcontextprotocol/serverInfo")
+            if isinstance(remote_meta, dict)
+            else None
+        )
+        if not isinstance(tools, dict) or not isinstance(server_info, dict):
+            raise ServiceError("the Tools service returned an invalid MCP discovery response")
+        result = {
+            "protocolVersion": version,
+            "capabilities": {"tools": tools},
+            "serverInfo": server_info,
+        }
+    return _host_result(request_id, result)
+
+
+def _serve_tools_mcp(  # noqa: PLR0912 - explicit ordinary MCP protocol dispatch
+    input_stream: Iterable[bytes], output_stream: BinaryIO
+) -> None:
+    """Bridge ordinary stdio MCP directly to the separately authenticated Tools service.
+
+    Args:
+        input_stream: Binary newline-delimited JSON-RPC requests.
+        output_stream: Binary newline-delimited JSON-RPC responses.
+
+    Raises:
+        _CliError: If the host supplies a malformed frame or omits initialization.
+    """
+    client: ToolsClient | None = None
+    initialized = False
+    for line in input_stream:
+        try:
+            message = json.loads(line)
+        except (UnicodeDecodeError, ValueError) as error:
+            raise _CliError("malformed JSON-RPC frame on standard input") from error
+        method, message = _mcp_message(message)
+        if "id" not in message:
+            if not initialized:
+                raise _CliError("the first MCP frame must be initialize")
+            continue
+        request_id = message["id"]
+        if isinstance(request_id, bool) or not isinstance(request_id, (str, int)):
+            raise _CliError("malformed JSON-RPC request id on standard input")
+        if method != "initialize" and not initialized:
+            raise _CliError("the first MCP frame must be initialize")
+        if method not in {"initialize", "tools/list", "tools/call"}:
+            response = _host_error(request_id, {"code": -32601, "message": "method not found"})
+        elif not isinstance(message.get("params", {}), dict):
+            response = _host_error(
+                request_id, {"code": _JSONRPC_INVALID_PARAMS, "message": "params must be an object"}
+            )
+        else:
+            try:
+                if client is None:
+                    client = ToolsClient.from_login()
+                response = _tools_mcp_response(client, message)
+                if method == "initialize":
+                    initialized = "result" in response
+            except (RecurseError, ServiceError) as error:
+                response = _host_error(
+                    request_id, {"code": _JSONRPC_SERVER_ERROR, "message": str(error)}
+                )
+            except Exception:
+                response = _host_error(
+                    request_id, {"code": _JSONRPC_INTERNAL_ERROR, "message": "internal error"}
+                )
+        _write_mcp_response(output_stream, response)
+        if method == "initialize" and not initialized:
+            return
+
+
+def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) -> None:
+    """Add the explicit Tools service commands without changing agent CLI commands."""
+    tools = commands.add_parser("tools", help="use and publish the separate Tools service")
+    operations = tools.add_subparsers(dest="tools_command", required=True)
+    search = operations.add_parser("search", help="search the published tool catalog")
+    search.add_argument("search", nargs="?", default="", help="catalog search text")
+    search.add_argument("--limit", type=int, default=20)
+    search.add_argument("--cursor", help="opaque catalog page cursor")
+    inspect = operations.add_parser("inspect", help="inspect tool schemas and prices")
+    inspect.add_argument("tool_id")
+    call = operations.add_parser("call", help="admit one durable tool call")
+    call.add_argument("tool_id")
+    call.add_argument("--tool-version", required=True)
+    call.add_argument("--price-version", required=True)
+    call.add_argument("--inputs", required=True, metavar="FILE|-", help="JSON object inputs")
+    call.add_argument("--idempotency-key", required=True)
+    call.add_argument("--max-cost-micro-usd", required=True, type=int)
+    get = operations.add_parser("get", help="read a durable call receipt")
+    get.add_argument("call_id")
+    cancel = operations.add_parser("cancel", help="request cancellation of a tool call")
+    cancel.add_argument("call_id")
+    publish = operations.add_parser(
+        "publish", help="build, prepare, and publish a tools.yaml service"
+    )
+    publish.add_argument("directory")
+    publish.add_argument("--config", metavar="FILE|-", help="JSON publication configuration")
+    publish.add_argument("--timeout-seconds", type=float, default=600)
+    version = operations.add_parser("version", help="inspect a staged or prepared source version")
+    version.add_argument("version_id")
+    publish_version = operations.add_parser("publish-version", help="publish a prepared version")
+    publish_version.add_argument("version_id")
+    publish_version.add_argument("--config", required=True, metavar="FILE|-")
+    mcp = operations.add_parser("mcp", help="connect an MCP host to Recurse Tools")
+    mcp.add_subparsers(dest="tools_mcp_command", required=True).add_parser(
+        "serve", help="serve ordinary Tools MCP over local stdio"
+    )
+
+
 def _build_parser(*, structured_errors: bool = False) -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     parser = _CliArgumentParser(
@@ -2529,6 +2773,7 @@ def _build_parser(*, structured_errors: bool = False) -> argparse.ArgumentParser
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("login", help="log in to Recurse in your browser")
     commands.add_parser("logout", help="revoke this device login")
+    _add_tools_parser(commands)
     deploy = commands.add_parser("deploy", help="build and deploy an application")
     deploy.add_argument("app", help="application directory containing agent.yaml")
     deploy.add_argument(
@@ -2735,6 +2980,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: PLR0912 - explicit comm
             _artifacts(arguments.run_id, arguments.output)
         elif arguments.command == "secret":
             _manage_secret(arguments)
+        elif arguments.command == "tools":
+            _manage_tools(arguments)
         elif arguments.command == "mcp":
             _serve_mcp(arguments.deployment_id, sys.stdin.buffer, sys.stdout.buffer)
         else:
