@@ -35,14 +35,33 @@ _OPERATIONS = (
 )
 
 
+@pytest.mark.parametrize("login_kind", ["cli", "key"])
 def test_native_mcp_transports_the_private_source_workflow_and_dynamic_api_catalog(  # noqa: PLR0915 - complete source HTTP transfer and thirteen MCP operations
     tools_service: FakeService,
     logged_in: dict[tuple[str, str], str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    login_kind: str,
 ) -> None:
     """One unchanged bridge discovers thirteen operations and uploads a larger bundle over HTTP."""
-    del logged_in
+    if login_kind == "key":
+        logged_in.clear()
+        key = "rck_" + "a" * 43
+
+        def oauth(path: str, body: dict[str, Any] | bytes | None) -> tuple[int, dict[str, Any]]:
+            """Issue the customer key's Tools bearer through the actual HTTP exchange."""
+            assert path == "/v1/oauth/token"
+            assert body == {
+                "grant_type": "refresh_token",
+                "client_id": "recurse-tools-key",
+                "refresh_token": key,
+                "resource": tools_service.url + "/mcp",
+            }
+            return 200, {"access_token": "access-1", "token_type": "Bearer", "expires_in": 3600}
+
+        monkeypatch.setattr(tools_service, "oauth", oauth)
+        monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(key.encode())))
+        assert cli.main(["tools", "login", "--key-stdin"]) == 0
     directory = write_tools_service(tmp_path / "project")
     metadata_path = directory / "pyproject.toml"
     metadata_path.write_text(
@@ -98,7 +117,7 @@ def test_native_mcp_transports_the_private_source_workflow_and_dynamic_api_catal
         assert bearer == "Bearer access-1"
         assert body["params"]["_meta"]["io.modelcontextprotocol/clientInfo"] == {
             "name": "recurse-sdk",
-            "version": "0.2.6",
+            "version": "0.2.7",
         }
         if body["method"] == "tools/list":
             result: dict[str, Any] = {"tools": [{"name": name} for name in _OPERATIONS]}

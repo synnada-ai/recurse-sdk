@@ -92,6 +92,24 @@ to `recurse.ToolsClient(access_token=...)` on a server. Calls require the inspec
 versions, an idempotency key, and a maximum charge. See the
 [Tools guide](docs/guide.md#tools-api) for invocation, publication, and authentication.
 
+SDK 0.2.7 also accepts an individual Recurse Tools key from the account setup page.
+`recurse tools login --key-stdin` reads it from a pipe, verifies it and saves it in the
+operating-system keychain without opening a browser. Never pass a key as a command argument,
+environment variable or MCP configuration value. `ToolsClient.from_login()` and the Tools MCP
+bridge use the imported key and automatically refresh its one-hour Tools bearer.
+
+After importing the key, connect Codex with:
+
+```sh
+codex mcp add recurse-tools -- recurse tools mcp serve
+```
+
+Give your agent the [Tools instructions](https://recurse.run/tools/SKILL.md). It can discover APIs,
+build a private Python project and execute it through Recurse. The
+[key setup guide](docs/guide.md#customer-key-setup) shows a hidden-input import and TEST origins.
+`recurse tools logout` revokes only that imported key; ordinary `recurse login` and agent execution
+keep their existing behavior.
+
 Recurse SDK 0.2.6 also prepares and executes customer-owned `tools.yaml` projects privately.
 Install or upgrade from PyPI as described above. These runs use compute billing and never
 publish a catalog entry:
