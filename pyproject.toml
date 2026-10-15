@@ -47,7 +47,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src", "tools", "examples/tiny-tuner"]
+source = ["src", "tools", "examples/tiny-tuner", "examples/company-updates"]
 
 [tool.coverage.report]
 fail_under = 100

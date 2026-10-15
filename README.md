@@ -104,6 +104,12 @@ The cap includes preparation and execution. The CLI waits for a receipt; Python'
 `client.run(...)` returns after admission so callers can poll `get_call` themselves. See
 [Private Tools runs](docs/guide.md#private-tools-runs) for retry and cancellation details.
 
+Stage 41b M2 also adds approved API discovery (`recurse tools apis search` / `apis inspect`) and
+per-function `apis` declarations for paid reads through treg. These are development-branch
+features for TEST validation, pending a public SDK release. The
+[company-updates example](examples/company-updates/README.md) searches official company pages
+and fetches bounded excerpts using one Recurse wallet.
+
 ## Documentation
 
 - [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.

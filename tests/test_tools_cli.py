@@ -84,6 +84,13 @@ def tools_service(service: FakeService, monkeypatch: pytest.MonkeyPatch) -> Fake
             None,
         ),
         (["inspect", "fixture.echo"], "/v1/catalog/fixture.echo", None),
+        (
+            ["apis", "search", "search & extract", "--limit", "2"],
+            "/v1/apis?query=search+%26+extract&limit=2",
+            None,
+        ),
+        (["apis", "search"], "/v1/apis?query=&limit=20", None),
+        (["apis", "inspect", "exa.web.search"], "/v1/apis/exa.web.search", None),
         (["get", "call-1"], "/v1/calls/call-1", None),
         (["cancel", "call-1"], "/v1/calls/call-1/cancel", {}),
         (["version", "version-1"], "/v1/tool-versions/version-1", None),

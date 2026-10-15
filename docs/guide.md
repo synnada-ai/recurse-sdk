@@ -934,11 +934,14 @@ CLI nor Python automatically retries an uncertain network submission or waits fo
 
 ### Private Tools runs
 
+Stage 41b features below are on the development branch for TEST validation; they are not yet
+part of a published SDK release.
+
 Any enabled customer with sufficient wallet funds can prepare and run their own `tools.yaml`
 project without publishing it. Use the same project format, locked dependencies and registered
 function schemas described above. Private preparation and execution are billed at 4× compute
-cost; the explicit cap includes both phases. This first private-run milestone supports
-compute-only Python. API calls through treg are a later milestone.
+cost; the explicit cap includes both phases and any requested paid API calls. Omit `apis` for
+compute-only Python. Approved read APIs through treg are available using the declaration below.
 
 ```sh
 recurse tools run path/to/app-tools --function calculate --inputs inputs.json \
@@ -991,6 +994,47 @@ For separate preparation and explicit inspection, use
 and `client.call_private(...)`. The latter requires the inspected tool and price versions,
 JSON inputs, the idempotency key and the same total workflow cap. Private versions and results
 remain owner-scoped; public catalog publication remains restricted to the configured publisher.
+
+### Approved read APIs in private tools
+
+Inspect service-controlled API metadata before writing a private tool:
+
+```sh
+recurse tools apis search search --limit 20
+recurse tools apis inspect exa.web.search
+recurse tools apis inspect firecrawl.web.scrape
+```
+
+Python discovery uses `client.apis_search(query, limit=20)` and `client.apis_get(endpoint_id)`.
+Search returns the service's `items` page; inspection includes its immutable version, input
+schema and maximum request charge in micro-USD. Discovery does not submit a provider request.
+No provider credential, customer-supplied rate or treg account is required.
+
+Each function may declare `apis: [exa.web.search, firecrawl.web.scrape]` beside its schemas in
+`tools.yaml`. The list is optional, contains at most 20 unique endpoint IDs and grants no API
+access when omitted or empty. Only approved, available read endpoints can be frozen during
+preparation. The customer cannot set a provider price, credential, arbitrary upstream URL or
+HTTP method through this declaration.
+
+Inside that function, `from recurse_apis import call` accesses the runtime-supplied helper.
+`call(endpoint_id, arguments)` returns bounded native provider JSON. It can request only the
+function's declared endpoints. The trusted parent validates the frozen contract and spending
+authority, makes requests through treg and records actual charges. The isolated Python receives
+no provider/treg credential and has no unrestricted network access. This helper is not a project
+dependency and is unavailable during ordinary local execution.
+
+Provider debits are charged at 1× and Recurse compute at 4×. The supplied total cap covers
+preparation, execution and upstream liability; the service guards spending before submitting
+each request. Completed paid requests remain chargeable if later Python fails. An uncertain
+provider outcome stays reconcilable instead of silently triggering another chargeable request.
+There are at most 20 requests per execution, within existing 64 KiB input, 256 KiB response/result
+and five-minute execution limits.
+
+The [company-updates example](../examples/company-updates/README.md) performs up to six dependent
+reads: it searches three official company domains, fetches one returned page per company, and
+returns short excerpts with explicit missing-data reasons and provider dates. Its $0.30 example
+authorization covers both preparation/execution reserves and those bounded reads; inspect current
+metadata before running it. It contains no prompt or internal agent loop.
 
 ### Server authentication
 

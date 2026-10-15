@@ -44,6 +44,19 @@
             "required": ["description", "input_schema", "output_schema", "pricing"],
             "properties": {
               "description": {"type": "string", "minLength": 1},
+              "apis": {
+                "description": "Optional approved read API endpoint IDs, frozen by the service during private preparation. Omitted or empty means no API access.",
+                "type": "array",
+                "maxItems": 20,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9]",
+                  "not": {"pattern": "[^A-Za-z0-9_.-]"}
+                }
+              },
               "input_schema": {
                 "type": "object",
                 "required": ["type", "properties", "additionalProperties"],
