@@ -63,6 +63,18 @@ def test_load_tools_manifest_accepts_explicit_free_tools_without_agent(tmp_path:
     assert not (service / "agent.yaml").exists()
 
 
+def test_tools_manifest_rejects_shared_yaml_aliases(tmp_path: Path) -> None:
+    """YAML reuse rejected by the runtime must fail before source preparation."""
+    manifest = copy.deepcopy(TOOLS_MANIFEST)
+    registration = manifest["tools"]["register"]["echo"]
+    registration["output_schema"] = registration["input_schema"]
+    write_tools_manifest(tmp_path, manifest)
+    assert "*id001" in (tmp_path / "tools.yaml").read_text()
+
+    with pytest.raises(ManifestError, match=r"tools\.yaml must not contain YAML aliases"):
+        recurse.load_tools_manifest(tmp_path)
+
+
 @pytest.mark.parametrize(
     ("path", "value", "message"),
     [
@@ -174,7 +186,7 @@ def test_invalid_api_declarations_cannot_reach_preparation(tmp_path: Path, apis:
         ("metadata: {summary: 2026-10-13}\n", "JSON-portable"),
         ("metadata: {summary: .nan}\n", "JSON-portable"),
         ('metadata: {summary: "\\uD800"}\n', "UTF-8 encodable"),
-        ("&cycle {metadata: *cycle}\n", "valid YAML"),
+        ("&cycle {metadata: *cycle}\n", "YAML aliases"),
     ],
 )
 def test_malformed_tools_yaml_is_rejected(tmp_path: Path, text: str, message: str) -> None:

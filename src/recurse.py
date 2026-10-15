@@ -440,7 +440,7 @@ def load_tools_manifest(service_directory: str | Path) -> dict[str, Any]:
 
     Raises:
         ManifestError: If the manifest is unreadable, malformed, or violates
-            the tools-only contract, including schema and fixture pricing.
+            the tools-only contract, including aliases, schema and fixture pricing.
     """
     try:
         text = (Path(service_directory) / "tools.yaml").read_text(encoding="utf-8")
@@ -451,6 +451,8 @@ def load_tools_manifest(service_directory: str | Path) -> dict[str, Any]:
     except OSError as error:
         raise ManifestError("tools.yaml could not be read") from error
     try:
+        if any(isinstance(event, yaml.events.AliasEvent) for event in yaml.parse(text)):
+            raise ManifestError("tools.yaml must not contain YAML aliases")
         manifest = yaml.load(
             text,
             Loader=_UniqueKeyLoader,  # noqa: S506 - subclass of yaml.SafeLoader
@@ -1129,6 +1131,8 @@ class ToolsClient:
     ``publish_version`` activates an already prepared version.
     ``apis_search`` and ``apis_get`` inspect approved upstream read APIs without
     exposing credentials. Private functions declare their permitted IDs in ``apis``.
+    ``stage_private`` and ``complete_private`` expose the same source-upload contract
+    used by ``prepare_private`` and ordinary MCP clients.
     ``from_login`` uses
     the saved local login and can refresh one rejected resource bearer. An explicit
     server bearer is never refreshed or read from local credentials automatically.
@@ -1262,11 +1266,14 @@ class ToolsClient:
         """Inspect one tool's immutable versions, schemas and published price."""
         return self._request("GET", "/v1/catalog/" + urllib.parse.quote(tool_id, safe=""))
 
-    def apis_search(self, query: str = "", limit: int = 20) -> dict[str, Any]:
+    def apis_search(
+        self, query: str = "", limit: int = 20, cursor: str | None = None
+    ) -> dict[str, Any]:
         """Search approved upstream read APIs and their service-controlled metadata."""
-        return self._request(
-            "GET", "/v1/apis?" + urllib.parse.urlencode({"query": query, "limit": limit})
-        )
+        parameters: dict[str, str | int] = {"query": query, "limit": limit}
+        if cursor is not None:
+            parameters["cursor"] = cursor
+        return self._request("GET", "/v1/apis?" + urllib.parse.urlencode(parameters))
 
     def apis_get(self, endpoint_id: str) -> dict[str, Any]:
         """Inspect one approved API's schema, immutable version and maximum charge."""
@@ -1320,6 +1327,37 @@ class ToolsClient:
         """Read your private project's stored preparation state."""
         return self._request(
             "GET", "/v1/private-tool-versions/" + urllib.parse.quote(version_id, safe="")
+        )
+
+    def stage_private(
+        self,
+        service_name: str,
+        application_record: dict[str, Any],
+        *,
+        max_cost_micro_usd: int,
+    ) -> dict[str, Any]:
+        """Stage an existing standard bundle and return its owner-scoped upload descriptor.
+
+        Build source with ``build_tools_bundle``. Source bytes use the returned HTTP
+        upload descriptor, outside ordinary MCP frames; they are not inline Python.
+        ``prepare_private`` performs that complete workflow for a local directory.
+        """
+        return self._request(
+            "POST",
+            "/v1/private-tool-versions",
+            {
+                "service_name": service_name,
+                "application_record": application_record,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+        )
+
+    def complete_private(self, version_id: str, source_upload_id: str) -> dict[str, Any]:
+        """Verify the allocated source upload and admit preparation without another transfer."""
+        return self._request(
+            "POST",
+            "/v1/private-tool-versions/" + urllib.parse.quote(version_id, safe="") + "/complete",
+            {"source_upload_id": source_upload_id},
         )
 
     def inspect_private(self, version_id: str, function_name: str) -> dict[str, Any]:
@@ -1394,7 +1432,11 @@ class ToolsClient:
         self, source: bytes, registration: dict[str, Any], timeout_seconds: float
     ) -> dict[str, Any]:
         """Upload and prepare an already built private source without rebuilding it."""
-        staged = self._request("POST", "/v1/private-tool-versions", registration)
+        staged = self.stage_private(
+            registration["service_name"],
+            registration["application_record"],
+            max_cost_micro_usd=registration["max_cost_micro_usd"],
+        )
         version_id = _tools_field(staged, "version_id")
         try:
             if _tools_field(staged, "status") == "staged":
@@ -1404,13 +1446,7 @@ class ToolsClient:
                         "the tools service returned an invalid source upload descriptor"
                     )
                 self._upload_source(descriptor, source)
-                self._request(
-                    "POST",
-                    "/v1/private-tool-versions/"
-                    + urllib.parse.quote(version_id, safe="")
-                    + "/complete",
-                    {"source_upload_id": _tools_field(descriptor, "upload_id")},
-                )
+                self.complete_private(version_id, _tools_field(descriptor, "upload_id"))
             deadline = time.monotonic() + timeout_seconds
             while True:
                 version = self.get_private_version(version_id)

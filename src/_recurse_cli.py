@@ -780,7 +780,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.5",
+            "version": "0.2.6",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1061,7 +1061,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.5",
+            "User-Agent": "recurse-sdk/0.2.6",
         },
         method="GET",
     )
@@ -2620,7 +2620,7 @@ def _manage_tools(arguments: argparse.Namespace) -> None:
         result = client.catalog_get(arguments.tool_id)
     elif arguments.tools_command == "apis":
         result = (
-            client.apis_search(arguments.query, arguments.limit)
+            client.apis_search(arguments.query, arguments.limit, arguments.cursor)
             if arguments.tools_apis_command == "search"
             else client.apis_get(arguments.endpoint_id)
         )
@@ -2665,7 +2665,7 @@ def _tools_mcp_response(client: ToolsClient, message: dict[str, Any]) -> dict[st
     remote_params = {} if method == "initialize" else dict(params)
     remote_params["_meta"] = {
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
-        "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.5"},
+        "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.6"},
         "io.modelcontextprotocol/clientCapabilities": {},
     }
     response = client._request(
@@ -2786,6 +2786,7 @@ def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) 
     api_search = api_operations.add_parser("search", help="search approved API metadata")
     api_search.add_argument("query", nargs="?", default="")
     api_search.add_argument("--limit", type=int, default=20)
+    api_search.add_argument("--cursor", help="opaque API catalog page cursor")
     api_inspect = api_operations.add_parser(
         "inspect", help="inspect an API schema and price ceiling"
     )

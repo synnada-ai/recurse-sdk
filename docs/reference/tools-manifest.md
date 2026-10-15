@@ -40,13 +40,15 @@ tools:
         compute_multiplier: 4
 ```
 
-The manifest shape is closed: unknown fields are rejected. `metadata.name`, `title`, and `summary`
+The manifest shape is closed: unknown fields and YAML aliases are rejected locally before paid
+source preparation. Repeat shared schema text instead of using YAML anchors and aliases.
+`metadata.name`, `title`, and `summary`
 are required non-empty strings. `runtime.python` is `3.14`; `runtime.lockfile` is `uv.lock`.
 `tools.source` is a canonical relative path to the source module. Registration names are the exact
 public module-level Python function names, and every such function must be registered once.
 Private helpers beginning with `_` do not need registration.
 
-On the Stage 41b M2 development branch, each registration may also declare an `apis` list,
+On the Stage 41b development branch, each registration may also declare an `apis` list,
 for example `apis: [exa.web.search, firecrawl.web.scrape]`. It contains at most 20 unique endpoint
 IDs, each 1–128 characters from ASCII letters, digits, underscore, dot and hyphen, beginning
 with a letter or digit. Omitted or

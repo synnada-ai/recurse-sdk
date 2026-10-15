@@ -1,7 +1,8 @@
 # Company product-update evidence
 
-Stage 41b M2 TEST example. These capabilities are on the development branch and have not been
-published in a public SDK release.
+Stage 41b M2 TEST example, also usable through the M3 source workflow. These capabilities use the
+unreleased SDK 0.2.6 development candidate. Build/install the current branch artifact as described
+in the SDK guide; they have not been published in a public SDK release.
 
 ## When to use it
 
