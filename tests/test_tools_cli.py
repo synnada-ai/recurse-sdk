@@ -37,7 +37,7 @@ def tools_service(service: FakeService, monkeypatch: pytest.MonkeyPatch) -> Fake
             result: dict[str, Any]
             assert body["params"]["_meta"] == {
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-                "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.6"},
+                "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.7"},
                 "io.modelcontextprotocol/clientCapabilities": {},
             }
             if body["method"] == "server/discover":

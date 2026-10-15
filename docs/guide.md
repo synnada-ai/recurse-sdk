@@ -884,9 +884,62 @@ These APIs and commands require Recurse SDK 0.2.5 or newer. Defaults target the 
 origins. For TEST, set `RECURSE_API_URL=https://api.dev.recurse.run` and
 `RECURSE_TOOLS_URL=https://tools.dev.recurse.run` before login or invocation.
 
+### Customer key setup
+
+SDK 0.2.7 or newer can import the individual Recurse key shown on your account setup page.
+The key is stable until revoked and grants Tools access only. It is exchanged for a one-hour
+resource-scoped bearer; the raw key is not a bearer for `ToolsClient(access_token=...)`.
+
+Use process stdin to import the key without putting it in command arguments, environment
+variables, shell history or your MCP configuration. For example, this Python snippet asks for
+hidden input and pipes it to the CLI:
+
+```python
+import getpass
+import subprocess
+
+key = getpass.getpass("Recurse key: ")
+subprocess.run(
+    ["recurse", "tools", "login", "--key-stdin"],
+    input=key,
+    text=True,
+    check=True,
+)
+```
+
+For automated setup, supply the copied key through the process's stdin without echoing it.
+`--key-stdin` rejects an interactive terminal, malformed keys and unverified imports. It stores
+the key and short-lived bearer only in the operating-system keychain. It does not open a browser.
+
+Then register the ordinary [Tools MCP bridge](#tools-mcp-bridge) with Codex using the
+`recurse-tools` configuration name. This leaves an existing Agents MCP entry intact.
+
+Read the canonical [Recurse Tools skill](https://recurse.run/tools/SKILL.md) in your coding agent.
+The bridge forwards the service's thirteen generic operations, including API discovery, private
+source preparation, inspection, execution and receipt recovery. The agent builds the standard
+source archive locally and uploads it using the returned scoped HTTP grant. It needs file-building
+and HTTP-upload capabilities; copying instructions alone does not establish a working connection.
+
+`ToolsClient.from_login()` and all `recurse tools` operations prefer an imported key for the
+configured Control and Tools origins. Bearer refresh is serialized across local processes and
+retries one explicit authentication rejection. A rejected imported key fails without falling back
+to a broader saved agent login. When no key is imported for those origins, the existing
+`recurse login` credential remains supported. Agent commands continue using their separate login.
+
+For TEST, set both `RECURSE_API_URL` and `RECURSE_TOOLS_URL` as shown above for key import **and**
+the agent/bridge process. Keys and cached bearers are partitioned by both origins; a TEST import
+does not configure production. These nonsecret URLs may be inherited by an isolated agent process.
+Do not add the key itself to that environment or to agent configuration.
+
+Use `recurse tools logout` to revoke and remove only the imported key for those origins.
+An already issued bearer can remain valid for its documented one-hour lifetime. Another key on
+the same account and the ordinary agent CLI login remain independent. Failed revocation preserves
+the local key so you can retry; the account website can also revoke the selected connection.
+Never share keys, access tokens, keychain contents or private input data in diagnostics.
+
 ### Catalog and calls
 
-Local Python explicitly reuses a saved `recurse login` credential:
+Local Python uses an imported key or the saved `recurse login` credential:
 
 ```python
 import uuid
@@ -1059,16 +1112,18 @@ print(client.catalog_search())
 
 Obtain this bearer through the configured issuer's existing OAuth grant. The registered
 `recurse-cli` refresh grant accepts `resource=<Tools origin>/mcp` with its durable CLI credential;
-the existing MCP OAuth account-linking flow also issues a resource bearer. A general API session,
+the separate `recurse-tools-key` grant exchanges an imported customer key for that exact resource.
+The existing MCP OAuth account-linking flow also issues a resource bearer. A general API session,
 agent MCP bearer, provider key, or account ID is not a Tools credential. Server clients use no
 browser or keychain and do not refresh automatically; replace an expired bearer explicitly.
-M4 adds no long-lived API-key management or public CLI token-export command.
+There is no public CLI token-export command.
 
 `ToolsClient.from_login()` obtains this resource bearer through the shared keychain and API-origin
 refresh lock, without opening a browser. Its cache is separate from agent/API tokens and tied to
 the saved login and exact Tools resource. A rejected bearer refreshes once with the original
-request body and idempotency key. Network failures are not retried. Logout revokes the durable
-credential and clears local caches; already issued resource bearers expire after one hour.
+request body and idempotency key. Network failures are not retried. `recurse tools logout`
+revokes only the imported customer key; `recurse logout` revokes the legacy CLI credential.
+Already issued resource bearers expire after one hour.
 
 ### Publication
 
@@ -1093,8 +1148,9 @@ the existing `provider-none-v1` selection, for example:
 ```
 
 Supported external providers require service-approved rate versions and publisher-owned logical
-secret bindings. Keep credential values out of the manifest and publication JSON. Provider
-coverage beyond M3's supported adapter belongs to Stage 42.
+secret bindings. Keep credential values out of the manifest and publication JSON. Private projects
+use the live approved API catalog; inspect each endpoint's current access requirements before
+declaring it in `tools.yaml`.
 
 An upload, preparation, or activation failure after staging raises `ToolsError` with `version_id`.
 Inspect that version before retrying publication; the SDK does not stage another version

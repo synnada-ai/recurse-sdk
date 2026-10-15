@@ -2,12 +2,15 @@
 
 import re
 import runpy
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from tests.keyring_backend import process_environment
 from tests.test_tools_client import ToolsService
 from tests.test_tools_client import (
     tools_service as tools_service,  # noqa: PLC0414 - re-export shared pytest fixture
@@ -160,16 +163,36 @@ def test_guide_python_examples_run_against_the_installed_package(
         _recurse_cli, "_access_token", lambda **kwargs: "documentation-local-bearer"
     )
     monkeypatch.chdir(ROOT)
+    key = "rck_" + "a" * 43
+    environment = process_environment(tmp_path, tools_service.url)
+    environment["RECURSE_TOOLS_URL"] = tools_service.url
+    tools_service.responses["POST", "/v1/oauth/token"] = (
+        200,
+        (b'{"access_token":"documentation-key-bearer","token_type":"Bearer","expires_in":3600}'),
+        {},
+    )
+    real_run = subprocess.run
+
+    def import_key(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        """Run the documented pipe against a real HTTP issuer and isolated fake keychain."""
+        assert command == ["recurse", "tools", "login", "--key-stdin"]
+        return real_run(command, **kwargs, env=environment, capture_output=True)
+
     executed = 0
     for block in blocks:
         if "path/to/app" in block:
             continue
-        exec(  # noqa: S102 - runnable public documentation is the behavior under test
-            compile(block, "<guide>", "exec"), {}
-        )
+        with monkeypatch.context() as interactive:
+            if "getpass.getpass(" in block:
+                interactive.setattr("getpass.getpass", lambda prompt: key)
+                interactive.setattr(subprocess, "run", import_key)
+            exec(  # noqa: S102 - runnable public documentation is the behavior under test
+                compile(block, "<guide>", "exec"), {}
+            )
         executed += 1
     assert executed >= 2
     assert [request[:2] for request in tools_service.requests] == [
+        ("POST", "/v1/oauth/token"),
         ("GET", "/v1/catalog?search=search&limit=20"),
         ("GET", "/v1/catalog/fixture-tools.echo"),
         ("POST", "/v1/calls"),

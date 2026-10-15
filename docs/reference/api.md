@@ -65,7 +65,8 @@ Call the tools service from a local login or an explicit server bearer.
 
 The explicit constructor never reads a keychain or opens a browser. Supply a
 short-lived bearer for the exact tools ``/mcp`` resource; renew it in the calling
-server process. Use :meth:`from_login` explicitly for the saved local CLI login.
+server process. Use :meth:`from_login` explicitly for an imported Recurse Tools
+key or the saved local CLI login.
 Methods return the service's ordinary JSON objects and durable call receipts.
 
 ``catalog_search`` pages the catalog; ``catalog_get`` inspects schemas, versions
@@ -82,7 +83,8 @@ exposing credentials. Private functions declare their permitted IDs in ``apis``.
 ``stage_private`` and ``complete_private`` expose the same source-upload contract
 used by ``prepare_private`` and ordinary MCP clients.
 ``from_login`` uses
-the saved local login and can refresh one rejected resource bearer. An explicit
+an imported Tools key first, otherwise the saved local CLI login, and can refresh
+one rejected resource bearer. An explicit
 server bearer is never refreshed or read from local credentials automatically.
 
 ## `recurse.ToolsError`

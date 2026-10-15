@@ -1117,7 +1117,8 @@ class ToolsClient:
 
     The explicit constructor never reads a keychain or opens a browser. Supply a
     short-lived bearer for the exact tools ``/mcp`` resource; renew it in the calling
-    server process. Use :meth:`from_login` explicitly for the saved local CLI login.
+    server process. Use :meth:`from_login` explicitly for an imported Recurse Tools
+    key or the saved local CLI login.
     Methods return the service's ordinary JSON objects and durable call receipts.
 
     ``catalog_search`` pages the catalog; ``catalog_get`` inspects schemas, versions
@@ -1134,7 +1135,8 @@ class ToolsClient:
     ``stage_private`` and ``complete_private`` expose the same source-upload contract
     used by ``prepare_private`` and ordinary MCP clients.
     ``from_login`` uses
-    the saved local login and can refresh one rejected resource bearer. An explicit
+    an imported Tools key first, otherwise the saved local CLI login, and can refresh
+    one rejected resource bearer. An explicit
     server bearer is never refreshed or read from local credentials automatically.
     """
 
@@ -1161,7 +1163,13 @@ class ToolsClient:
 
     @classmethod
     def from_login(cls, *, base_url: str | None = None) -> ToolsClient:
-        """Use the saved CLI login with resource-scoped refresh and no browser prompt.
+        """Use an imported Tools key or saved CLI login with resource-scoped refresh.
+
+        Import a customer key through ``recurse tools login --key-stdin``. Keys and
+        their caches are bound to the configured Control and Tools origins. An
+        invalid imported key fails rather than falling back to a broader CLI login.
+        When no key is imported for those origins, the existing CLI login is used.
+        Neither path opens a browser here.
 
         Args:
             base_url: Tools HTTP origin; uses the same default as the constructor.
@@ -1186,7 +1194,9 @@ class ToolsClient:
                 raise ToolsError(str(error)) from error
             except ServiceError as error:
                 raise ToolsError(
-                    "the local tools login could not be refreshed; run: recurse login",
+                    "the local tools login could not be refreshed; import a valid Recurse key "
+                    "with recurse tools login --key-stdin, or renew the CLI login "
+                    "with recurse login",
                     error.status_code,
                 ) from error
 

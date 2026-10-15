@@ -39,7 +39,15 @@ import keyring.errors
 import yaml
 from filelock import FileLock, Timeout
 
-from recurse import RecurseError, ToolsClient, ToolsError, _build_bundle
+from recurse import (
+    RecurseError,
+    ToolsClient,
+    ToolsError,
+    _build_bundle,
+    _tools_bearer,
+    _tools_origin,
+    _ToolsNoRedirect,
+)
 
 _DEFAULT_API_URL = "https://api.recurse.run"
 _REQUEST_TIMEOUT_SECONDS = 60
@@ -64,6 +72,7 @@ _MAX_RUNTIME_SECRET_BYTES = 32 * 1024
 _CREDIT_CODE = re.compile(r"^rc_[A-Za-z0-9_-]{24,128}$")
 _MIN_TOP_UP_CENTS = 500
 _MAX_TOP_UP_CENTS = 50_000
+_TOOLS_KEY = re.compile(r"rck_[A-Za-z0-9_-]{43}")
 
 
 # Commands outside run/status retain their existing CLI-error exit code.
@@ -136,6 +145,7 @@ def request(  # noqa: PLR0913 - one transport for JSON and OAuth form bodies
     json_body: dict[str, Any] | None = None,
     form_body: dict[str, str] | None = None,
     json_response: bool = True,
+    follow_redirects: bool = True,
 ) -> dict[str, Any]:
     """Send one request to the Recurse service and return its JSON body.
 
@@ -146,6 +156,7 @@ def request(  # noqa: PLR0913 - one transport for JSON and OAuth form bodies
         json_body: JSON request body.
         form_body: Form-encoded request body, used by the OAuth token endpoints.
         json_response: Whether the successful response must contain a JSON object.
+        follow_redirects: Whether redirects are allowed; customer keys never follow them.
 
     Returns:
         The decoded JSON response body.
@@ -168,9 +179,12 @@ def request(  # noqa: PLR0913 - one transport for JSON and OAuth form bodies
         api_base_url() + path, data=body, headers=headers, method=method
     )
     try:
-        with urllib.request.urlopen(  # noqa: S310 - scheme validated above
-            prepared, timeout=_REQUEST_TIMEOUT_SECONDS
-        ) as response:
+        open_request = (
+            urllib.request.urlopen
+            if follow_redirects
+            else urllib.request.build_opener(_ToolsNoRedirect()).open
+        )
+        with open_request(prepared, timeout=_REQUEST_TIMEOUT_SECONDS) as response:
             raw_payload = response.read()
     except urllib.error.HTTPError as error:
         raw = error.read()
@@ -492,8 +506,8 @@ def _auth_lock() -> Iterator[None]:
         raise _CliError("another Recurse process is refreshing your login; try again") from error
     except OSError as error:
         raise _CliError("could not access the local Recurse login lock") from error
-    except keyring.errors.KeyringError as error:
-        raise _CliError(f"the system keychain is unavailable: {error}") from error
+    except keyring.errors.KeyringError:
+        raise _CliError("the system keychain is unavailable") from None
 
 
 def _clear_cached_access() -> None:
@@ -580,9 +594,11 @@ def _access_token(rejected_token: str | None = None, *, resource: str | None = N
         ServiceError: If the exchange fails or its token/lifetime is invalid.
     """
     with _auth_lock():
-        credential = _device_credential()
+        key_name, key_cache_name = _tools_key_names(resource) if resource else ("", "")
+        tools_key = keyring.get_password(_KEYCHAIN_SERVICE, key_name) if resource else None
+        credential = tools_key if tools_key is not None else _device_credential()
         prefix = "access-token" if resource is None else "tools-access-token"
-        cache_name = f"{prefix}:{api_base_url()}"
+        cache_name = key_cache_name if tools_key is not None else f"{prefix}:{api_base_url()}"
         raw = keyring.get_password(_KEYCHAIN_SERVICE, cache_name)
         cached = _cached_access_token(raw, credential, rejected_token, resource=resource)
         if cached is not None:
@@ -590,36 +606,123 @@ def _access_token(rejected_token: str | None = None, *, resource: str | None = N
         if raw is not None:
             keyring.delete_password(_KEYCHAIN_SERVICE, cache_name)
         started_at = time.time()
-        tokens = _exchange_device_credential(credential, resource=resource)
-        token = required_field(tokens, "access_token")
-        expires_in = tokens.get("expires_in")
-        if (
-            isinstance(expires_in, bool)
-            or not isinstance(expires_in, (int, float))
-            or not math.isfinite(expires_in)
-            or expires_in <= 0
-        ):
-            raise ServiceError("the Recurse service returned an invalid response: expires_in")
-        try:
-            keyring.set_password(
-                _KEYCHAIN_SERVICE,
-                cache_name,
-                json.dumps(
-                    {
-                        "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
-                        "access_token": token,
-                        "expires_at": started_at + expires_in,
-                        **({"resource": resource} if resource is not None else {}),
-                    }
-                ),
-            )
-        except keyring.errors.KeyringError:
-            print(
-                "warning: cannot save the login token for reuse; allow keychain writes "
-                "to avoid repeated sign-ins and rate limits. Continuing with this token.",
-                file=sys.stderr,
-            )
+        tokens = (
+            _tools_key_request("/v1/oauth/token", credential, resource=resource)
+            if tools_key is not None
+            else _exchange_device_credential(credential, resource=resource)
+        )
+        token, cache = _access_cache(credential, tokens, resource, started_at)
+        _save_access_cache(cache_name, cache)
         return token
+
+
+def _access_cache(
+    credential: str, tokens: dict[str, Any], resource: str | None, started_at: float
+) -> tuple[str, str]:
+    """Validate an access grant and serialize its credential/resource-bound keychain cache."""
+    token = required_field(tokens, "access_token")
+    expires_in = tokens.get("expires_in")
+    if (
+        isinstance(expires_in, bool)
+        or not isinstance(expires_in, (int, float))
+        or not math.isfinite(expires_in)
+        or expires_in <= 0
+    ):
+        raise ServiceError("the Recurse service returned an invalid response: expires_in")
+    return token, json.dumps(
+        {
+            "credential_sha256": hashlib.sha256(credential.encode()).hexdigest(),
+            "access_token": token,
+            "expires_at": started_at + expires_in,
+            **({"resource": resource} if resource is not None else {}),
+        }
+    )
+
+
+def _save_access_cache(name: str, value: str) -> None:
+    """Keep a fresh bearer usable when its optional keychain cache cannot be written."""
+    try:
+        keyring.set_password(_KEYCHAIN_SERVICE, name, value)
+    except keyring.errors.KeyringError:
+        print(
+            "warning: cannot save the login token for reuse; allow keychain writes "
+            "to avoid repeated sign-ins and rate limits. Continuing with this token.",
+            file=sys.stderr,
+        )
+
+
+def _tools_key_names(resource: str) -> tuple[str, str]:
+    """Partition imported keys and their bearers by Control issuer and exact Tools resource."""
+    identity = f"{api_base_url()}:{resource}"
+    return f"tools-key:{identity}", f"tools-key-access-token:{identity}"
+
+
+def _tools_key_request(
+    path: str, credential: str, *, resource: str | None = None
+) -> dict[str, Any]:
+    """Exchange or revoke an individual Tools key without redirects or reflected error details."""
+    _tools_origin(api_base_url())
+    form = {"client_id": "recurse-tools-key"}
+    if resource is None:
+        form["token"] = credential
+    else:
+        form.update(grant_type="refresh_token", refresh_token=credential, resource=resource)
+    try:
+        tokens = request(
+            "POST",
+            path,
+            form_body=form,
+            json_response=resource is not None,
+            follow_redirects=False,
+        )
+    except ServiceError as error:
+        raise ServiceError(
+            "the Recurse key request failed; check the key, configured service URLs and connection",
+            error.status_code,
+        ) from None
+    if resource is not None:
+        _tools_bearer(required_field(tokens, "access_token"))
+        if tokens.get("token_type") != "Bearer":
+            raise ServiceError("the Recurse service returned an invalid response: token_type")
+    return tokens
+
+
+def _tools_login() -> None:
+    """Verify a bounded key from noninteractive stdin, then save it only in the OS keychain."""
+    try:
+        if sys.stdin.isatty():
+            raise _CliError(
+                "pipe the Recurse key through stdin; do not put it in command arguments"
+            )
+        key = sys.stdin.buffer.read(129).decode("ascii").strip()
+    except (OSError, ValueError) as error:
+        raise _CliError("could not read a Recurse key from stdin") from error
+    if not _TOOLS_KEY.fullmatch(key):
+        raise _CliError("stdin must contain exactly one Recurse key")
+    resource = _tools_origin(None) + "/mcp"
+    with _auth_lock():
+        started_at = time.time()
+        tokens = _tools_key_request("/v1/oauth/token", key, resource=resource)
+        _token, cache = _access_cache(key, tokens, resource, started_at)
+        name, cache_name = _tools_key_names(resource)
+        keyring.set_password(_KEYCHAIN_SERVICE, name, key)
+        _save_access_cache(cache_name, cache)
+    print("Recurse Tools key verified and saved in your system keychain.")
+
+
+def _tools_logout() -> None:
+    """Revoke and remove only the imported Tools key for the configured service origins."""
+    resource = _tools_origin(None) + "/mcp"
+    name, cache_name = _tools_key_names(resource)
+    with _auth_lock():
+        key = keyring.get_password(_KEYCHAIN_SERVICE, name)
+        if key is None:
+            raise _CliError("no Recurse Tools key is imported for these service URLs")
+        _tools_key_request("/v1/oauth/revoke", key)
+        if keyring.get_password(_KEYCHAIN_SERVICE, cache_name) is not None:
+            keyring.delete_password(_KEYCHAIN_SERVICE, cache_name)
+        keyring.delete_password(_KEYCHAIN_SERVICE, name)
+    print("Recurse Tools key revoked and removed from your system keychain.")
 
 
 def _login() -> None:
@@ -780,7 +883,7 @@ def _remote_mcp_meta() -> dict[str, Any]:
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
         "io.modelcontextprotocol/clientInfo": {
             "name": "recurse-sdk",
-            "version": "0.2.6",
+            "version": "0.2.7",
         },
         "io.modelcontextprotocol/clientCapabilities": {"extensions": {_TASKS_EXTENSION: {}}},
     }
@@ -1061,7 +1164,7 @@ def _download_artifact(grant: dict[str, Any]) -> bytes:
         url,
         headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "recurse-sdk/0.2.6",
+            "User-Agent": "recurse-sdk/0.2.7",
         },
         method="GET",
     )
@@ -2604,8 +2707,14 @@ def _run_private_tools(
     return result
 
 
-def _manage_tools(arguments: argparse.Namespace) -> None:
+def _manage_tools(arguments: argparse.Namespace) -> None:  # noqa: PLR0912 - explicit Tools command dispatch
     """Run one Tools operation with explicit versions and cost cap; print its raw JSON receipt."""
+    if arguments.tools_command == "login":
+        _tools_login()
+        return
+    if arguments.tools_command == "logout":
+        _tools_logout()
+        return
     if arguments.tools_command == "mcp":
         _serve_tools_mcp(sys.stdin.buffer, sys.stdout.buffer)
         return
@@ -2665,7 +2774,7 @@ def _tools_mcp_response(client: ToolsClient, message: dict[str, Any]) -> dict[st
     remote_params = {} if method == "initialize" else dict(params)
     remote_params["_meta"] = {
         "io.modelcontextprotocol/protocolVersion": _REMOTE_MCP_PROTOCOL,
-        "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.6"},
+        "io.modelcontextprotocol/clientInfo": {"name": "recurse-sdk", "version": "0.2.7"},
         "io.modelcontextprotocol/clientCapabilities": {},
     }
     response = client._request(
@@ -2775,6 +2884,15 @@ def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) 
     """Add the explicit Tools service commands without changing agent CLI commands."""
     tools = commands.add_parser("tools", help="use and publish the separate Tools service")
     operations = tools.add_subparsers(dest="tools_command", required=True)
+    operations.add_parser(
+        "login", help="import a Recurse Tools key without a browser"
+    ).add_argument(
+        "--key-stdin",
+        action="store_true",
+        required=True,
+        help="read the key from noninteractive stdin; never pass it as an argument",
+    )
+    operations.add_parser("logout", help="revoke and remove only the imported Recurse Tools key")
     search = operations.add_parser("search", help="search the published tool catalog")
     search.add_argument("search", nargs="?", default="", help="catalog search text")
     search.add_argument("--limit", type=int, default=20)
