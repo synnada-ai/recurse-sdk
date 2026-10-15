@@ -73,20 +73,22 @@ and price. ``call`` requires those versions, JSON inputs, a stable idempotency
 key and an explicit cost cap. ``get_call`` reads status/results/charges without
 another admission; ``cancel_call`` requests cancellation. Execution failures
 and unresolved billing remain receipt data. ``publish`` builds and publishes
-source for the authorized publisher; ``get_version`` inspects preparation and
+source for the authorized publisher. ``prepare_private`` prepares a customer's
+own project without publication; ``run`` prepares, inspects and admits a private
+call. ``get_version`` inspects publisher preparation and
 ``publish_version`` activates an already prepared version. ``from_login`` uses
 the saved local login and can refresh one rejected resource bearer. An explicit
 server bearer is never refreshed or read from local credentials automatically.
 
 ## `recurse.ToolsError`
 
-A tools request, local login, or publication could not complete.
+A tools request, local login, source preparation or publication could not complete.
 
 Execution failures are returned as durable call receipts instead of exceptions.
 
 Attributes:
     status_code: HTTP rejection status, or ``None`` for a local/transport failure.
-    version_id: Allocated publication version to inspect or resume, when known.
+    version_id: Allocated source version to inspect or resume, when known.
 
 ## `recurse.build_bundle`
 

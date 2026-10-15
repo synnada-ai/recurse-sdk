@@ -83,13 +83,13 @@ class RunContextError(RecurseError):
 
 
 class ToolsError(RecurseError):
-    """A tools request, local login, or publication could not complete.
+    """A tools request, local login, source preparation or publication could not complete.
 
     Execution failures are returned as durable call receipts instead of exceptions.
 
     Attributes:
         status_code: HTTP rejection status, or ``None`` for a local/transport failure.
-        version_id: Allocated publication version to inspect or resume, when known.
+        version_id: Allocated source version to inspect or resume, when known.
     """
 
     status_code: int | None
@@ -98,7 +98,7 @@ class ToolsError(RecurseError):
     def __init__(
         self, message: str, status_code: int | None = None, version_id: str | None = None
     ) -> None:
-        """Retain a safe failure message and optional resumable publication identity."""
+        """Retain a safe failure message and optional resumable source identity."""
         super().__init__(message)
         self.status_code = status_code
         self.version_id = version_id
@@ -1093,6 +1093,23 @@ def _tools_field(payload: dict[str, Any], name: str) -> str:
     return value
 
 
+def _private_limits(max_cost_micro_usd: int, timeout_seconds: float) -> None:
+    """Validate explicit preparation limits before building source or authorizing charges."""
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not math.isfinite(timeout_seconds)
+        or timeout_seconds <= 0
+    ):
+        raise ToolsError("preparation timeout must be a positive finite number")
+    if (
+        isinstance(max_cost_micro_usd, bool)
+        or not isinstance(max_cost_micro_usd, int)
+        or max_cost_micro_usd < 0
+    ):
+        raise ToolsError("maximum tools cost must be a nonnegative integer in micro USD")
+
+
 class ToolsClient:
     """Call the tools service from a local login or an explicit server bearer.
 
@@ -1106,7 +1123,9 @@ class ToolsClient:
     key and an explicit cost cap. ``get_call`` reads status/results/charges without
     another admission; ``cancel_call`` requests cancellation. Execution failures
     and unresolved billing remain receipt data. ``publish`` builds and publishes
-    source for the authorized publisher; ``get_version`` inspects preparation and
+    source for the authorized publisher. ``prepare_private`` prepares a customer's
+    own project without publication; ``run`` prepares, inspects and admits a private
+    call. ``get_version`` inspects publisher preparation and
     ``publish_version`` activates an already prepared version. ``from_login`` uses
     the saved local login and can refresh one rejected resource bearer. An explicit
     server bearer is never refreshed or read from local credentials automatically.
@@ -1283,6 +1302,194 @@ class ToolsClient:
     def get_version(self, version_id: str) -> dict[str, Any]:
         """Read the publisher's stored preparation state for one source version."""
         return self._request("GET", "/v1/tool-versions/" + urllib.parse.quote(version_id, safe=""))
+
+    def get_private_version(self, version_id: str) -> dict[str, Any]:
+        """Read your private project's stored preparation state."""
+        return self._request(
+            "GET", "/v1/private-tool-versions/" + urllib.parse.quote(version_id, safe="")
+        )
+
+    def inspect_private(self, version_id: str, function_name: str) -> dict[str, Any]:
+        """Inspect your prepared private function's schemas, versions and compute price."""
+        return self._request(
+            "GET",
+            "/v1/private-tool-versions/"
+            + urllib.parse.quote(version_id, safe="")
+            + "/tools/"
+            + urllib.parse.quote(function_name, safe=""),
+        )
+
+    def call_private(  # noqa: PLR0913 - explicit inspected versions, retry key and cost cap
+        self,
+        version_id: str,
+        function_name: str,
+        *,
+        tool_version: str,
+        price_version: str,
+        inputs: dict[str, Any],
+        idempotency_key: str,
+        max_cost_micro_usd: int,
+    ) -> dict[str, Any]:
+        """Admit your prepared function with an explicit price, retry identity and cap.
+
+        Reuse all arguments and the same key after an unknown transport outcome.
+        Read results with ``get_call`` and request cancellation with ``cancel_call``.
+        """
+        if not isinstance(inputs, dict):
+            raise ToolsError("tools inputs must be a JSON object")
+        return self._request(
+            "POST",
+            "/v1/private-calls",
+            {
+                "version_id": version_id,
+                "function_name": function_name,
+                "tool_version": tool_version,
+                "price_version": price_version,
+                "inputs": inputs,
+                "idempotency_key": idempotency_key,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+        )
+
+    def prepare_private(
+        self,
+        service_directory: str | Path,
+        *,
+        max_cost_micro_usd: int,
+        timeout_seconds: float = 600,
+    ) -> dict[str, Any]:
+        """Build, upload and prepare your tools.yaml project without publishing it.
+
+        Identical source reuses the owner's stored version. Preparation errors retain
+        ``ToolsError.version_id`` for inspection with ``get_private_version``.
+        The explicit total workflow cap includes preparation and execution charges.
+        """
+        _private_limits(max_cost_micro_usd, timeout_seconds)
+        artifacts, record = build_tools_bundle(service_directory)
+        manifest = load_tools_manifest(service_directory)
+        return self._prepare_private_source(
+            artifacts["source"],
+            {
+                "service_name": manifest["metadata"]["name"],
+                "application_record": record,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+            timeout_seconds,
+        )
+
+    def _prepare_private_source(
+        self, source: bytes, registration: dict[str, Any], timeout_seconds: float
+    ) -> dict[str, Any]:
+        """Upload and prepare an already built private source without rebuilding it."""
+        staged = self._request("POST", "/v1/private-tool-versions", registration)
+        version_id = _tools_field(staged, "version_id")
+        try:
+            if _tools_field(staged, "status") == "staged":
+                descriptor = staged.get("source_upload")
+                if not isinstance(descriptor, dict):
+                    raise ToolsError(
+                        "the tools service returned an invalid source upload descriptor"
+                    )
+                self._upload_source(descriptor, source)
+                self._request(
+                    "POST",
+                    "/v1/private-tool-versions/"
+                    + urllib.parse.quote(version_id, safe="")
+                    + "/complete",
+                    {"source_upload_id": _tools_field(descriptor, "upload_id")},
+                )
+            deadline = time.monotonic() + timeout_seconds
+            while True:
+                version = self.get_private_version(version_id)
+                status = _tools_field(version, "status")
+                if status == "prepared":
+                    return version
+                if status in {
+                    "failed",
+                    "cancelled",
+                    "timed_out",
+                    "infrastructure_failed",
+                    "retired",
+                }:
+                    raise ToolsError("tools preparation did not succeed: " + status)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ToolsError("tools preparation did not finish before the timeout")
+                time.sleep(min(2, remaining))
+        except ToolsError as error:
+            raise ToolsError(
+                f"{error}. Version: {version_id}; inspect with get_private_version.",
+                error.status_code,
+                version_id,
+            ) from error
+
+    def run(  # noqa: PLR0913 - explicit function, retry identity, cap and preparation bound
+        self,
+        service_directory: str | Path,
+        function_name: str,
+        *,
+        inputs: dict[str, Any],
+        idempotency_key: str,
+        max_cost_micro_usd: int,
+        timeout_seconds: float = 600,
+    ) -> dict[str, Any]:
+        """Prepare, inspect and admit a private project; return its durable call receipt.
+
+        This waits for preparation. Poll ``get_call`` for execution results.
+        Unchanged source, inputs, cap and key recover an admitted call; changes need a new key.
+        Failed preparation is billable; inspect its version before an explicit retry.
+        """
+        _tools_json(inputs)
+        _private_limits(max_cost_micro_usd, timeout_seconds)
+        manifest = load_tools_manifest(service_directory)
+        registered = manifest["tools"]["register"]
+        if not isinstance(function_name, str) or function_name not in registered:
+            raise ToolsError("function is not registered in tools.yaml")
+        try:
+            jsonschema.Draft202012Validator(registered[function_name]["input_schema"]).validate(
+                inputs
+            )
+        except jsonschema.ValidationError as error:
+            raise ToolsError("inputs do not match the private function schema") from error
+        artifacts, record = build_tools_bundle(service_directory)
+        replay = self._request(
+            "POST",
+            "/v1/private-calls/replay",
+            {
+                "service_name": manifest["metadata"]["name"],
+                "source_sha256": record["source"]["sha256"],
+                "function_name": function_name,
+                "inputs": inputs,
+                "idempotency_key": idempotency_key,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+        )
+        if "receipt" not in replay or (
+            replay["receipt"] is not None and not isinstance(replay["receipt"], dict)
+        ):
+            raise ToolsError("the tools service returned an invalid private replay response")
+        if replay["receipt"] is not None:
+            return cast("dict[str, Any]", replay["receipt"])
+        version = self._prepare_private_source(
+            artifacts["source"],
+            {
+                "service_name": manifest["metadata"]["name"],
+                "application_record": record,
+                "max_cost_micro_usd": max_cost_micro_usd,
+            },
+            timeout_seconds,
+        )
+        version_id = _tools_field(version, "version_id")
+        definition = self.inspect_private(version_id, function_name)
+        return self.call_private(
+            version_id,
+            function_name,
+            tool_version=_tools_field(definition, "version"),
+            price_version=_tools_field(definition, "price_version"),
+            inputs=inputs,
+            idempotency_key=idempotency_key,
+            max_cost_micro_usd=max_cost_micro_usd,
+        )
 
     def publish_version(
         self, version_id: str, publication_config: dict[str, Any]

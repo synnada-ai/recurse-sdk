@@ -932,6 +932,66 @@ Use `--inputs -` to read JSON from stdin. Accepted and retrieved receipts exit w
 including failed execution receipts; argument and request failures exit with code 2. Neither the
 CLI nor Python automatically retries an uncertain network submission or waits for execution.
 
+### Private Tools runs
+
+Any enabled customer with sufficient wallet funds can prepare and run their own `tools.yaml`
+project without publishing it. Use the same project format, locked dependencies and registered
+function schemas described above. Private preparation and execution are billed at 4× compute
+cost; the explicit cap includes both phases. This first private-run milestone supports
+compute-only Python. API calls through treg are a later milestone.
+
+```sh
+recurse tools run path/to/app-tools --function calculate --inputs inputs.json \
+  --idempotency-key <stable-request-key> --max-cost-micro-usd 200000 \
+  --timeout-seconds 600
+recurse tools private-version <version-id>
+recurse tools get <call-id>
+recurse tools cancel <call-id>
+```
+
+`tools run` prepares the project, inspects the function's immutable price and versions, and
+admits the call with the supplied cap and key. It prints the call ID to stderr before polling
+and prints the final JSON receipt to stdout. `--timeout-seconds` limits each preparation and
+execution wait; an execution wait timeout returns the latest pending receipt and leaves the
+call running. Ctrl-C during execution requests cancellation, prints the cancellation receipt
+when available, and exits with code 130. Cancellation and financial closure remain separate.
+The SDK checks the selected function and its input schema locally before paid preparation.
+
+Repeat the same project source, inputs, cap and idempotency key after an ambiguous submission.
+Identical source reuses your stored version and preparation, and identical admission returns
+the same call. The SDK checks for an existing admission before paid preparation, so an exact
+retry still recovers the original call after its source image or runtime has been retired.
+Changed source or arguments require a new key and are rejected before another preparation.
+A preparation error retains `ToolsError.version_id`, which `private-version` can inspect.
+Failed preparation can incur compute charges even though no execution was admitted. Inspect
+that version before explicitly retrying; a later run may create and charge a new preparation.
+The execution idempotency key protects admitted calls, not failed preparations before admission.
+A polling error leaves the
+printed call ID available for `get` or `cancel`. No network outcome is automatically retried.
+
+Python's convenience method returns the durable admission receipt without waiting for execution:
+
+```python
+import recurse
+
+client = recurse.ToolsClient.from_login()
+receipt = client.run(
+    "path/to/app-tools",
+    "calculate",
+    inputs={"values": [1, 2, 3]},
+    idempotency_key="stable-private-request-key",
+    max_cost_micro_usd=200_000,
+)
+receipt = client.get_call(receipt["call_id"])
+```
+
+For separate preparation and explicit inspection, use
+`client.prepare_private(directory, max_cost_micro_usd=...)`,
+`client.get_private_version(version_id)`, `client.inspect_private(version_id, function_name)`
+and `client.call_private(...)`. The latter requires the inspected tool and price versions,
+JSON inputs, the idempotency key and the same total workflow cap. Private versions and results
+remain owner-scoped; public catalog publication remains restricted to the configured publisher.
+
 ### Server authentication
 
 Server Python takes an explicit short-lived bearer scoped to the exact Tools resource
@@ -965,7 +1025,8 @@ credential and clears local caches; already issued resource bearers expire after
 ### Publication
 
 Only the service's configured `agent@recurse.run` publisher account may stage and publish tools.
-Other accounts can discover and consume published tools. The publisher uploads a standard
+Other accounts can discover and consume published tools and run their own projects privately.
+The publisher uploads a standard
 `tools.yaml` bundle, waits for that version's preparation, and activates its catalog entries:
 
 ```sh

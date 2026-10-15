@@ -39,7 +39,7 @@ import keyring.errors
 import yaml
 from filelock import FileLock, Timeout
 
-from recurse import RecurseError, ToolsClient, _build_bundle
+from recurse import RecurseError, ToolsClient, ToolsError, _build_bundle
 
 _DEFAULT_API_URL = "https://api.recurse.run"
 _REQUEST_TIMEOUT_SECONDS = 60
@@ -2571,12 +2571,47 @@ def _read_tools_object(source: str) -> dict[str, Any]:
     return value
 
 
+def _run_private_tools(
+    client: ToolsClient, arguments: argparse.Namespace, inputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Run an owned project, retaining its call identity through polling or interruption."""
+    result = client.run(
+        arguments.directory,
+        arguments.function,
+        inputs=inputs,
+        idempotency_key=arguments.idempotency_key,
+        max_cost_micro_usd=arguments.max_cost_micro_usd,
+        timeout_seconds=arguments.timeout_seconds,
+    )
+    call_id = result.get("call_id")
+    if not isinstance(call_id, str) or not call_id:
+        raise ToolsError("the tools service returned an invalid response: missing call_id")
+    print("Call ID: " + json.dumps(call_id), file=sys.stderr)
+    deadline = time.monotonic() + arguments.timeout_seconds
+    try:
+        while result.get("status") not in _TERMINAL_RUN_STATUSES:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return result
+            time.sleep(min(2, remaining))
+            result = client.get_call(call_id)
+    except KeyboardInterrupt:
+        try:
+            print(json.dumps(client.cancel_call(call_id), ensure_ascii=False, allow_nan=False))
+        except ToolsError as error:
+            print(f"Cancellation was not confirmed: {error}", file=sys.stderr)
+        raise
+    return result
+
+
 def _manage_tools(arguments: argparse.Namespace) -> None:
     """Run one Tools operation with explicit versions and cost cap; print its raw JSON receipt."""
     if arguments.tools_command == "mcp":
         _serve_tools_mcp(sys.stdin.buffer, sys.stdout.buffer)
         return
-    inputs = _read_tools_object(arguments.inputs) if arguments.tools_command == "call" else None
+    inputs = (
+        _read_tools_object(arguments.inputs) if arguments.tools_command in {"call", "run"} else None
+    )
     config = _read_tools_object(arguments.config) if getattr(arguments, "config", None) else None
     client = ToolsClient.from_login()
     if arguments.tools_command == "search":
@@ -2594,10 +2629,14 @@ def _manage_tools(arguments: argparse.Namespace) -> None:
         )
     elif arguments.tools_command == "get":
         result = client.get_call(arguments.call_id)
+    elif arguments.tools_command == "run":
+        result = _run_private_tools(client, arguments, cast(dict[str, Any], inputs))
     elif arguments.tools_command == "cancel":
         result = client.cancel_call(arguments.call_id)
     elif arguments.tools_command == "version":
         result = client.get_version(arguments.version_id)
+    elif arguments.tools_command == "private-version":
+        result = client.get_private_version(arguments.version_id)
     elif arguments.tools_command == "publish-version":
         result = client.publish_version(arguments.version_id, cast(dict[str, Any], config))
     else:
@@ -2743,6 +2782,18 @@ def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) 
     call.add_argument("--inputs", required=True, metavar="FILE|-", help="JSON object inputs")
     call.add_argument("--idempotency-key", required=True)
     call.add_argument("--max-cost-micro-usd", required=True, type=int)
+    run = operations.add_parser("run", help="prepare and run your tools.yaml project privately")
+    run.add_argument("directory")
+    run.add_argument("--function", required=True, help="registered Python function name")
+    run.add_argument("--inputs", required=True, metavar="FILE|-", help="JSON object inputs")
+    run.add_argument("--idempotency-key", required=True)
+    run.add_argument("--max-cost-micro-usd", required=True, type=int)
+    run.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=600,
+        help="maximum wait for each preparation and run",
+    )
     get = operations.add_parser("get", help="read a durable call receipt")
     get.add_argument("call_id")
     cancel = operations.add_parser("cancel", help="request cancellation of a tool call")
@@ -2755,6 +2806,10 @@ def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) 
     publish.add_argument("--timeout-seconds", type=float, default=600)
     version = operations.add_parser("version", help="inspect a staged or prepared source version")
     version.add_argument("version_id")
+    private_version = operations.add_parser(
+        "private-version", help="inspect your private project's preparation state"
+    )
+    private_version.add_argument("version_id")
     publish_version = operations.add_parser("publish-version", help="publish a prepared version")
     publish_version.add_argument("version_id")
     publish_version.add_argument("--config", required=True, metavar="FILE|-")
