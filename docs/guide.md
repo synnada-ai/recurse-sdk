@@ -934,13 +934,10 @@ CLI nor Python automatically retries an uncertain network submission or waits fo
 
 ### Private Tools runs
 
-Stage 41b features below use the unreleased SDK 0.2.6 candidate on the development branch for
-TEST validation. Build and install the current branch artifact; do not install a presumed public
-0.2.6 release:
+Private Tools runs require SDK 0.2.6 or newer. Install or upgrade from PyPI:
 
 ```sh
-uv build --no-sources
-uv tool install --force dist/recurse_sdk-0.2.6-py3-none-any.whl
+pip install --upgrade "recurse-sdk>=0.2.6"
 ```
 
 Any enabled customer with sufficient wallet funds can prepare and run their own `tools.yaml`
@@ -1112,7 +1109,7 @@ codex mcp add recurse-tools -- recurse tools mcp serve
 claude mcp add recurse-tools -- recurse tools mcp serve
 ```
 
-The Stage 41b service advertises thirteen generic operations through both this bridge and its
+The Tools service advertises thirteen generic operations through both this bridge and its
 remote MCP endpoint. The bridge forwards the server's tools and arguments without maintaining
 a provider list:
 
@@ -1132,7 +1129,7 @@ only MCP frames. Existing `recurse mcp serve` continues to serve agent apps thro
 
 ### Private authoring through remote MCP
 
-Connect a remote MCP client to the matching TEST endpoint `https://tools.dev.recurse.run/mcp`
+Connect a remote MCP client to the production endpoint `https://tools.recurse.run/mcp`
 using its normal OAuth connection. Remote authoring requires a client that can build or obtain
 the standard source bundle and perform the scoped HTTP upload. A client with only MCP transport
 and no bundle/HTTP capability cannot perform the source-transfer step automatically. Local

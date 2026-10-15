@@ -92,9 +92,9 @@ to `recurse.ToolsClient(access_token=...)` on a server. Calls require the inspec
 versions, an idempotency key, and a maximum charge. See the
 [Tools guide](docs/guide.md#tools-api) for invocation, publication, and authentication.
 
-The unreleased 0.2.6 development candidate also prepares and executes customer-owned `tools.yaml`
-projects privately. Install the current branch artifact as described in the guide. These runs
-use compute billing and never publish a catalog entry:
+Recurse SDK 0.2.6 also prepares and executes customer-owned `tools.yaml` projects privately.
+Install or upgrade from PyPI as described above. These runs use compute billing and never
+publish a catalog entry:
 
 ```sh
 recurse tools run path/to/app-tools --function calculate --inputs inputs.json \
@@ -105,9 +105,8 @@ The cap includes preparation and execution. The CLI waits for a receipt; Python'
 `client.run(...)` returns after admission so callers can poll `get_call` themselves. See
 [Private Tools runs](docs/guide.md#private-tools-runs) for retry and cancellation details.
 
-Stage 41b M2 also adds approved API discovery (`recurse tools apis search` / `apis inspect`) and
-per-function `apis` declarations for paid reads through treg. These are development-branch
-features for TEST validation, pending a public SDK release. Its MCP bridge forwards all thirteen
+SDK 0.2.6 adds approved API discovery (`recurse tools apis search` / `apis inspect`) and
+per-function `apis` declarations for paid reads through treg. Its MCP bridge forwards all thirteen
 generic catalog, API discovery and private source operations. Remote source authoring requires
 standard bundle construction and the returned scoped HTTP upload capability. The
 [company-updates example](examples/company-updates/README.md) searches official company pages

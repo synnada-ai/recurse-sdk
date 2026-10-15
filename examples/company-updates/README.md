@@ -1,8 +1,7 @@
 # Company product-update evidence
 
-Stage 41b M2 TEST example, also usable through the M3 source workflow. These capabilities use the
-unreleased SDK 0.2.6 development candidate. Build/install the current branch artifact as described
-in the SDK guide; they have not been published in a public SDK release.
+This private Python project requires Recurse SDK 0.2.6 or newer and an enabled account with
+sufficient wallet funds. It also supports the remote MCP source workflow in the SDK guide.
 
 ## When to use it
 
@@ -28,11 +27,12 @@ The trusted parent makes provider requests. Project code has no unrestricted net
 
 ## Run it
 
-Use the Stage 41b SDK branch after its matching service is deployed to TEST. Inspect metadata first:
+Install or upgrade the SDK and inspect current production metadata before spending:
 
 ```sh
-export RECURSE_API_URL=https://api.dev.recurse.run
-export RECURSE_TOOLS_URL=https://tools.dev.recurse.run
+pip install --upgrade "recurse-sdk>=0.2.6"
+export RECURSE_API_URL=https://api.recurse.run
+export RECURSE_TOOLS_URL=https://tools.recurse.run
 recurse login
 recurse tools apis search search
 recurse tools apis inspect exa.web.search

@@ -48,14 +48,13 @@ are required non-empty strings. `runtime.python` is `3.14`; `runtime.lockfile` i
 public module-level Python function names, and every such function must be registered once.
 Private helpers beginning with `_` do not need registration.
 
-On the Stage 41b development branch, each registration may also declare an `apis` list,
+With SDK 0.2.6 or newer, each registration may also declare an `apis` list,
 for example `apis: [exa.web.search, firecrawl.web.scrape]`. It contains at most 20 unique endpoint
 IDs, each 1–128 characters from ASCII letters, digits, underscore, dot and hyphen, beginning
 with a letter or digit. Omitted or
 empty grants no API access. The service freezes approved read endpoint contracts and prices
 during private preparation; an author cannot provide credentials or override the rate through
-this declaration. These capabilities are undergoing TEST validation and are not in a published
-SDK release yet. See the [private API guide](../guide.md#approved-read-apis-in-private-tools).
+this declaration. See the [private API guide](../guide.md#approved-read-apis-in-private-tools).
 
 Each registration requires a non-empty `description`, `input_schema`, `output_schema`, and
 `pricing`. Both schemas use Draft 2020-12 and must be self-contained: local references are
