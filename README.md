@@ -92,6 +92,18 @@ to `recurse.ToolsClient(access_token=...)` on a server. Calls require the inspec
 versions, an idempotency key, and a maximum charge. See the
 [Tools guide](docs/guide.md#tools-api) for invocation, publication, and authentication.
 
+Customers can also prepare and execute their own `tools.yaml` projects privately. These runs
+use compute billing and never publish a catalog entry:
+
+```sh
+recurse tools run path/to/app-tools --function calculate --inputs inputs.json \
+  --idempotency-key <stable-request-key> --max-cost-micro-usd 200000
+```
+
+The cap includes preparation and execution. The CLI waits for a receipt; Python's
+`client.run(...)` returns after admission so callers can poll `get_call` themselves. See
+[Private Tools runs](docs/guide.md#private-tools-runs) for retry and cancellation details.
+
 ## Documentation
 
 - [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.
