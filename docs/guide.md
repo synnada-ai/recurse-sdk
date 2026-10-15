@@ -934,8 +934,14 @@ CLI nor Python automatically retries an uncertain network submission or waits fo
 
 ### Private Tools runs
 
-Stage 41b features below are on the development branch for TEST validation; they are not yet
-part of a published SDK release.
+Stage 41b features below use the unreleased SDK 0.2.6 candidate on the development branch for
+TEST validation. Build and install the current branch artifact; do not install a presumed public
+0.2.6 release:
+
+```sh
+uv build --no-sources
+uv tool install --force dist/recurse_sdk-0.2.6-py3-none-any.whl
+```
 
 Any enabled customer with sufficient wallet funds can prepare and run their own `tools.yaml`
 project without publishing it. Use the same project format, locked dependencies and registered
@@ -1005,7 +1011,8 @@ recurse tools apis inspect exa.web.search
 recurse tools apis inspect firecrawl.web.scrape
 ```
 
-Python discovery uses `client.apis_search(query, limit=20)` and `client.apis_get(endpoint_id)`.
+Python discovery uses `client.apis_search(query, limit=20, cursor=None)` and
+`client.apis_get(endpoint_id)`. CLI search also accepts `--cursor` for a returned page cursor.
 Search returns the service's `items` page; inspection includes its immutable version, input
 schema and maximum request charge in micro-USD. Discovery does not submit a provider request.
 No provider credential, customer-supplied rate or treg account is required.
@@ -1105,10 +1112,65 @@ codex mcp add recurse-tools -- recurse tools mcp serve
 claude mcp add recurse-tools -- recurse tools mcp serve
 ```
 
-The bridge exposes `catalog_search`, `catalog_get`, `call`, `get_call`, and `cancel_call`, with
-ordinary MCP results. It advertises no Tasks. A pending call returns its receipt; the host reads
-`get_call` until completion. stdout contains only MCP frames. Existing `recurse mcp serve`
-continues to serve agent apps through its original bridge.
+The Stage 41b service advertises thirteen generic operations through both this bridge and its
+remote MCP endpoint. The bridge forwards the server's tools and arguments without maintaining
+a provider list:
+
+| Operations | Purpose |
+| --- | --- |
+| `catalog_search`, `catalog_get` | Discover and inspect published tools. |
+| `call`, `get_call`, `cancel_call` | Admit, read and cancel durable executions. |
+| `apis_search`, `apis_get` | Discover approved read API metadata; search accepts `query`, `limit` and an optional `cursor`. |
+| `private_stage`, `private_complete` | Stage a standard source bundle and complete its scoped HTTP upload. |
+| `private_get_version`, `private_inspect` | Read owner-scoped preparation and immutable function contracts. |
+| `private_replay`, `private_call` | Recover an exact admitted project request or admit an inspected private function. |
+
+Adding an approved API to the server catalog changes discovery results without changing these
+operations or the installed SDK/plugin. MCP results are ordinary responses, with no Tasks.
+A pending call returns its receipt; the host reads `get_call` until completion. stdout contains
+only MCP frames. Existing `recurse mcp serve` continues to serve agent apps through its original bridge.
+
+### Private authoring through remote MCP
+
+Connect a remote MCP client to the matching TEST endpoint `https://tools.dev.recurse.run/mcp`
+using its normal OAuth connection. Remote authoring requires a client that can build or obtain
+the standard source bundle and perform the scoped HTTP upload. A client with only MCP transport
+and no bundle/HTTP capability cannot perform the source-transfer step automatically. Local
+`recurse tools run` already performs these steps through the SDK.
+
+1. Create the normal `tools.yaml` project and dependency lockfile. Use
+   `recurse.build_tools_bundle(directory)` to obtain `artifacts["source"]` and its
+   `application_record`, or supply the same verified standard source distribution from another
+   builder. The existing source limit is 64 MiB compressed and expanded, with at most 1024 members.
+   Source bytes do not enter the 64 KiB MCP request body.
+2. Before new paid preparation, call `private_replay` with `service_name`, the actual
+   `source_sha256`, `function_name`, `inputs`, the stable `idempotency_key` and the original
+   total `max_cost_micro_usd`. An existing exact request returns its original receipt. Changed
+   source, inputs or authority conflict before another preparation. A null receipt means no
+   execution has been admitted for that key.
+3. Call `private_stage` with `service_name`, the bundle's `application_record` and the total
+   `max_cost_micro_usd`. It returns `version_id`, `status` and, when an upload is needed, a
+   `source_upload` descriptor. It accepts source metadata, not inline Python or a path on the
+   remote server. A reused prepared or pending version may not need another upload.
+4. Use the descriptor's exact `upload_url` for one HTTP POST. Set `Authorization` to its
+   `upload_authorization` and `Content-Type` to `upload_content_type`. The body is the decoded
+   base64 `upload_prefix`, followed by the unchanged source bytes, followed by the decoded
+   `upload_suffix`. Use the descriptor as an opaque, scoped capability; do not replace its
+   authorization with the Recurse bearer or forward it to another destination.
+5. Call `private_complete` with `version_id` and the descriptor's `upload_id` as
+   `source_upload_id`. If the transfer acknowledgment was lost, check this same completion
+   identity before resending source or staging another version. Read `private_get_version`
+   with `version_id` until preparation is terminal. Failed preparation may incur compute
+   charges and must be inspected before an explicit retry.
+6. Once prepared, call `private_inspect` with `version_id` and `function_name`. Pass the returned
+   immutable `version` as `tool_version` and `price_version` into `private_call`, together with
+   `version_id`, `function_name`, `inputs`, the stable `idempotency_key` and the original total
+   `max_cost_micro_usd`. Poll `get_call` for results or request `cancel_call` with its `call_id`.
+
+SDK callers who need these separate phases use
+`client.stage_private(service_name, application_record, max_cost_micro_usd=...)` and
+`client.complete_private(version_id, source_upload_id)`. `prepare_private` and `run` reuse that
+same stage/upload/complete contract; no additional archive format or execution path is introduced.
 
 `recurse login` uses the website login and standard OAuth code, refresh and revocation endpoints.
 Existing saved login credentials continue to work after upgrading.

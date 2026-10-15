@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 import recurse
 from tests.test_tools_bundle import write_tools_service
@@ -87,6 +88,30 @@ def private_call(client: recurse.ToolsClient, inputs: Any = None) -> dict[str, A
         idempotency_key="private-key",
         max_cost_micro_usd=200_000,
     )
+
+
+def test_explicit_stage_and_complete_share_the_private_source_contract(
+    private_service: PrivateToolsService, tmp_path: Path
+) -> None:
+    """Low-level SDK callers can stage a standard bundle and complete its exact HTTP upload."""
+    artifacts, record = recurse.build_tools_bundle(write_tools_service(tmp_path / "project"))
+    client = recurse.ToolsClient("customer-token", base_url=private_service.url)
+    staged = client.stage_private("fixture-tools", record, max_cost_micro_usd=200_000)
+    descriptor = staged["source_upload"]
+    assert descriptor["upload_id"] == "upload-1"
+    client._upload_source(descriptor, artifacts["source"])
+    completed = client.complete_private(staged["version_id"], descriptor["upload_id"])
+    assert completed == {"version_id": "version-1", "status": "pending"}
+    assert private_service.source == artifacts["source"]
+    stage = json.loads(private_service.requests[0][3])
+    assert stage == {
+        "service_name": "fixture-tools",
+        "application_record": record,
+        "max_cost_micro_usd": 200_000,
+    }
+    client.complete_private("version /one", "upload-1")
+    assert private_service.requests[-1][1] == "/v1/private-tool-versions/version%20%2Fone/complete"
+    assert json.loads(private_service.requests[-1][3]) == {"source_upload_id": "upload-1"}
 
 
 def test_private_run_builds_prepares_inspects_and_admits_without_publication(
@@ -326,6 +351,32 @@ def test_run_checks_input_schema_before_paid_preparation(
             idempotency_key="private-key",
             max_cost_micro_usd=200_000,
         )
+    assert private_service.requests == []
+
+
+@pytest.mark.parametrize("method", ["prepare_private", "run"])
+def test_yaml_aliases_fail_before_paid_private_preparation(
+    private_service: PrivateToolsService, tmp_path: Path, method: str
+) -> None:
+    """Both SDK source entry points reject runtime-incompatible aliases without HTTP."""
+    directory = write_tools_service(tmp_path / "project")
+    path = directory / "tools.yaml"
+    manifest = yaml.safe_load(path.read_text())
+    registration = manifest["tools"]["register"]["echo"]
+    registration["output_schema"] = registration["input_schema"]
+    path.write_text(yaml.safe_dump(manifest))
+    client = recurse.ToolsClient("token", base_url=private_service.url)
+    with pytest.raises(recurse.ManifestError, match="YAML aliases"):
+        if method == "run":
+            client.run(
+                directory,
+                "echo",
+                inputs={"message": "hello"},
+                idempotency_key="private-key",
+                max_cost_micro_usd=200_000,
+            )
+        else:
+            client.prepare_private(directory, max_cost_micro_usd=200_000)
     assert private_service.requests == []
 
 

@@ -79,6 +79,8 @@ call. ``get_version`` inspects publisher preparation;
 ``publish_version`` activates an already prepared version.
 ``apis_search`` and ``apis_get`` inspect approved upstream read APIs without
 exposing credentials. Private functions declare their permitted IDs in ``apis``.
+``stage_private`` and ``complete_private`` expose the same source-upload contract
+used by ``prepare_private`` and ordinary MCP clients.
 ``from_login`` uses
 the saved local login and can refresh one rejected resource bearer. An explicit
 server bearer is never refreshed or read from local credentials automatically.
@@ -177,4 +179,4 @@ Returns:
 
 Raises:
     ManifestError: If the manifest is unreadable, malformed, or violates
-        the tools-only contract, including schema and fixture pricing.
+        the tools-only contract, including aliases, schema and fixture pricing.

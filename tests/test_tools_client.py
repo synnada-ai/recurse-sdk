@@ -220,6 +220,8 @@ def test_api_catalog_uses_tools_authority_and_returns_metadata_unchanged(
     client = recurse.ToolsClient("customer-token", base_url=tools_service.url)
     assert client.apis_search("search & extract", limit=2) == listing
     assert client.apis_get("provider /endpoint") == definition
+    client.apis_search("", limit=1, cursor="opaque/+&?")
+    assert tools_service.requests[-1][1] == "/v1/apis?query=&limit=1&cursor=opaque%2F%2B%26%3F"
     client.apis_search()
     assert tools_service.requests[-1][1] == "/v1/apis?query=&limit=20"
     assert all(
