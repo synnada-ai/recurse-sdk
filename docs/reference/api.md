@@ -75,8 +75,11 @@ another admission; ``cancel_call`` requests cancellation. Execution failures
 and unresolved billing remain receipt data. ``publish`` builds and publishes
 source for the authorized publisher. ``prepare_private`` prepares a customer's
 own project without publication; ``run`` prepares, inspects and admits a private
-call. ``get_version`` inspects publisher preparation and
-``publish_version`` activates an already prepared version. ``from_login`` uses
+call. ``get_version`` inspects publisher preparation;
+``publish_version`` activates an already prepared version.
+``apis_search`` and ``apis_get`` inspect approved upstream read APIs without
+exposing credentials. Private functions declare their permitted IDs in ``apis``.
+``from_login`` uses
 the saved local login and can refresh one rejected resource bearer. An explicit
 server bearer is never refreshed or read from local credentials automatically.
 

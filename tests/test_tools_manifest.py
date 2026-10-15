@@ -122,6 +122,50 @@ def test_schema_allows_self_contained_local_references(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    "apis",
+    [
+        [],
+        ["exa.web.search", "firecrawl.web.scrape"],
+        [f"provider.read_{index}" for index in range(20)],
+    ],
+)
+def test_optional_read_api_declarations_preserve_exact_ids(tmp_path: Path, apis: list[str]) -> None:
+    """Functions declare bounded API authority without authoring credentials or prices."""
+    manifest = copy.deepcopy(TOOLS_MANIFEST)
+    manifest["tools"]["register"]["echo"]["apis"] = apis
+    write_tools_manifest(tmp_path, manifest)
+    assert recurse.load_tools_manifest(tmp_path)["tools"]["register"]["echo"]["apis"] == apis
+
+
+@pytest.mark.parametrize(
+    "apis",
+    [
+        "exa.web.search",
+        [1],
+        [""],
+        ["a" * 129],
+        ["exa.web.search", "exa.web.search"],
+        [f"provider.read_{index}" for index in range(21)],
+        ["exa.web.search\n"],
+        ["provider/read"],
+        ["provider.read?key=secret"],
+        ["próvider.read"],
+        ["_provider.read"],
+        [".provider.read"],
+        ["-provider.read"],
+        [{"id": "exa.web.search", "price": 0}],
+    ],
+)
+def test_invalid_api_declarations_cannot_reach_preparation(tmp_path: Path, apis: Any) -> None:
+    """Duplicate, unbounded or non-identifier authority is rejected in the public manifest."""
+    manifest = copy.deepcopy(TOOLS_MANIFEST)
+    manifest["tools"]["register"]["echo"]["apis"] = apis
+    write_tools_manifest(tmp_path, manifest)
+    with pytest.raises(ManifestError, match="apis"):
+        recurse.load_tools_manifest(tmp_path)
+
+
+@pytest.mark.parametrize(
     ("text", "message"),
     [
         ("apiVersion: [", "valid YAML"),

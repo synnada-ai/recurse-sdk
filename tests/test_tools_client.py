@@ -195,6 +195,42 @@ def test_default_catalog_and_version_resume_routes(tools_service: ToolsService) 
     assert json.loads(tools_service.requests[-1][3]) == {"tools": {}}
 
 
+def test_api_catalog_uses_tools_authority_and_returns_metadata_unchanged(
+    tools_service: ToolsService,
+) -> None:
+    """Discovery exposes approved endpoint contracts and limits without submitting paid calls."""
+    listing = {"items": [{"id": "exa.web.search", "version": "api-v1"}], "cursor": None}
+    definition = {
+        "id": "exa.web.search",
+        "version": "api-v1",
+        "input_schema": {"type": "object"},
+        "max_cost_micro_usd": 7000,
+        "pricing": {"provider_multiplier": 1, "compute_multiplier": 4},
+    }
+    tools_service.responses[("GET", "/v1/apis?query=search+%26+extract&limit=2")] = (
+        200,
+        json.dumps(listing).encode(),
+        {},
+    )
+    tools_service.responses[("GET", "/v1/apis/provider%20%2Fendpoint")] = (
+        200,
+        json.dumps(definition).encode(),
+        {},
+    )
+    client = recurse.ToolsClient("customer-token", base_url=tools_service.url)
+    assert client.apis_search("search & extract", limit=2) == listing
+    assert client.apis_get("provider /endpoint") == definition
+    client.apis_search()
+    assert tools_service.requests[-1][1] == "/v1/apis?query=&limit=20"
+    assert all(
+        method == "GET" and body == b"" for method, _path, _token, body in tools_service.requests
+    )
+    assert all(
+        bearer == "Bearer customer-token"
+        for _method, _path, bearer, _body in tools_service.requests
+    )
+
+
 @pytest.mark.parametrize("token", ["", " ", "bad\r\nAuthorization: injected", None, 123])
 def test_missing_or_invalid_bearer_is_a_typed_error(token: Any) -> None:
     """A client cannot construct invalid bearer headers or infer server credentials."""

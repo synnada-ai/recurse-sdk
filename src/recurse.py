@@ -1125,8 +1125,11 @@ class ToolsClient:
     and unresolved billing remain receipt data. ``publish`` builds and publishes
     source for the authorized publisher. ``prepare_private`` prepares a customer's
     own project without publication; ``run`` prepares, inspects and admits a private
-    call. ``get_version`` inspects publisher preparation and
-    ``publish_version`` activates an already prepared version. ``from_login`` uses
+    call. ``get_version`` inspects publisher preparation;
+    ``publish_version`` activates an already prepared version.
+    ``apis_search`` and ``apis_get`` inspect approved upstream read APIs without
+    exposing credentials. Private functions declare their permitted IDs in ``apis``.
+    ``from_login`` uses
     the saved local login and can refresh one rejected resource bearer. An explicit
     server bearer is never refreshed or read from local credentials automatically.
     """
@@ -1258,6 +1261,16 @@ class ToolsClient:
     def catalog_get(self, tool_id: str) -> dict[str, Any]:
         """Inspect one tool's immutable versions, schemas and published price."""
         return self._request("GET", "/v1/catalog/" + urllib.parse.quote(tool_id, safe=""))
+
+    def apis_search(self, query: str = "", limit: int = 20) -> dict[str, Any]:
+        """Search approved upstream read APIs and their service-controlled metadata."""
+        return self._request(
+            "GET", "/v1/apis?" + urllib.parse.urlencode({"query": query, "limit": limit})
+        )
+
+    def apis_get(self, endpoint_id: str) -> dict[str, Any]:
+        """Inspect one approved API's schema, immutable version and maximum charge."""
+        return self._request("GET", "/v1/apis/" + urllib.parse.quote(endpoint_id, safe=""))
 
     def call(  # noqa: PLR0913 - explicit inspected versions, retry identity and customer cap
         self,

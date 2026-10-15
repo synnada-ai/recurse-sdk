@@ -2618,6 +2618,12 @@ def _manage_tools(arguments: argparse.Namespace) -> None:
         result = client.catalog_search(arguments.search, arguments.limit, arguments.cursor)
     elif arguments.tools_command == "inspect":
         result = client.catalog_get(arguments.tool_id)
+    elif arguments.tools_command == "apis":
+        result = (
+            client.apis_search(arguments.query, arguments.limit)
+            if arguments.tools_apis_command == "search"
+            else client.apis_get(arguments.endpoint_id)
+        )
     elif arguments.tools_command == "call":
         result = client.call(
             arguments.tool_id,
@@ -2775,6 +2781,15 @@ def _add_tools_parser(commands: argparse._SubParsersAction[_CliArgumentParser]) 
     search.add_argument("--cursor", help="opaque catalog page cursor")
     inspect = operations.add_parser("inspect", help="inspect tool schemas and prices")
     inspect.add_argument("tool_id")
+    apis = operations.add_parser("apis", help="discover approved upstream read APIs")
+    api_operations = apis.add_subparsers(dest="tools_apis_command", required=True)
+    api_search = api_operations.add_parser("search", help="search approved API metadata")
+    api_search.add_argument("query", nargs="?", default="")
+    api_search.add_argument("--limit", type=int, default=20)
+    api_inspect = api_operations.add_parser(
+        "inspect", help="inspect an API schema and price ceiling"
+    )
+    api_inspect.add_argument("endpoint_id")
     call = operations.add_parser("call", help="admit one durable tool call")
     call.add_argument("tool_id")
     call.add_argument("--tool-version", required=True)
