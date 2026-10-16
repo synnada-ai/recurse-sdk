@@ -30,6 +30,13 @@ Production is the default. Never cross those origins with a key.
 
 ## Run the smallest project
 
+Clone the public examples before using the relative paths below:
+
+```sh
+git clone https://github.com/synnada-ai/recurse-sdk.git
+cd recurse-sdk
+```
+
 The [echo project](../examples/echo/README.md) contains `tools.yaml`, `echo_tools.py`, `pyproject.toml`,
 `uv.lock` and `inputs.json`. It has no provider requests. From this repository, after agreeing the
 example $0.30 total authorization with the user:
