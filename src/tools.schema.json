@@ -45,7 +45,7 @@
             "properties": {
               "description": {"type": "string", "minLength": 1},
               "apis": {
-                "description": "Optional approved read API endpoint IDs, frozen by the service during private preparation. Omitted or empty means no API access.",
+                "description": "Optional eligible API endpoint IDs, frozen by the service during private preparation. Omitted or empty means no API access.",
                 "type": "array",
                 "maxItems": 20,
                 "uniqueItems": true,
@@ -68,7 +68,7 @@
               },
               "output_schema": {"type": "object"},
               "pricing": {
-                "description": "M1 fixture pricing is free. Independent launch multipliers are recorded for M3.",
+                "description": "Fixed source declarations; trusted provider costs and measured compute are charged separately at 1x and 4x, including preparation. Zero bases do not waive charges.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["provider_basis_micro_usd", "compute_basis_micro_usd", "provider_multiplier", "compute_multiplier"],

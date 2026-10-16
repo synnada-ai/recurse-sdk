@@ -1,6 +1,6 @@
 # Company product-update evidence
 
-This private Python project requires Recurse SDK 0.2.6 or newer and an enabled account with
+This private Python project requires Recurse SDK 0.2.7 or newer and an enabled account with
 sufficient wallet funds. It also supports the remote MCP source workflow in the SDK guide.
 
 ## When to use it
@@ -27,13 +27,13 @@ The trusted parent makes provider requests. Project code has no unrestricted net
 
 ## Run it
 
-Install or upgrade the SDK and inspect current production metadata before spending:
+Create a Tools key at https://recurse.run/setup. Supply it to the import command through process stdin; never put it in arguments, source or logs. Install the SDK and inspect current production metadata before spending:
 
 ```sh
-pip install --upgrade "recurse-sdk>=0.2.6"
+pip install --upgrade "recurse-sdk>=0.2.7"
 export RECURSE_API_URL=https://api.recurse.run
 export RECURSE_TOOLS_URL=https://tools.recurse.run
-recurse login
+recurse tools login --key-stdin
 recurse tools apis search search
 recurse tools apis inspect exa.web.search
 recurse tools apis inspect firecrawl.web.scrape

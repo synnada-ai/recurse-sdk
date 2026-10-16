@@ -1,5 +1,7 @@
 # Recurse guide
 
+New customers: start with the [Tools quickstart](tools-quickstart.md) and [Tools key setup](#customer-key-setup). The agent-authoring chapters below remain the separate `agent.yaml` path.
+
 ## Installation
 
 Python 3.14 or newer is required. Install Recurse from PyPI:
@@ -1051,7 +1053,7 @@ and `client.call_private(...)`. The latter requires the inspected tool and price
 JSON inputs, the idempotency key and the same total workflow cap. Private versions and results
 remain owner-scoped; public catalog publication remains restricted to the configured publisher.
 
-### Approved read APIs in private tools
+### Eligible APIs in private tools
 
 Inspect service-controlled API metadata before writing a private tool:
 
@@ -1069,8 +1071,9 @@ No provider credential, customer-supplied rate or treg account is required.
 
 Each function may declare `apis: [exa.web.search, firecrawl.web.scrape]` beside its schemas in
 `tools.yaml`. The list is optional, contains at most 20 unique endpoint IDs and grants no API
-access when omitted or empty. Only approved, available read endpoints can be frozen during
-preparation. The customer cannot set a provider price, credential, arbitrary upstream URL or
+access when omitted or empty. Only eligible, available endpoints can be frozen during
+preparation. The catalog includes read and write operations; obtain explicit user authority for
+side effects and honor customer-owned-account/private-resource exclusions. The customer cannot set a provider price, credential, arbitrary upstream URL or
 HTTP method through this declaration.
 
 Inside that function, `from recurse_apis import call` accesses the runtime-supplied helper.
@@ -1173,7 +1176,7 @@ a provider list:
 | --- | --- |
 | `catalog_search`, `catalog_get` | Discover and inspect published tools. |
 | `call`, `get_call`, `cancel_call` | Admit, read and cancel durable executions. |
-| `apis_search`, `apis_get` | Discover approved read API metadata; search accepts `query`, `limit` and an optional `cursor`. |
+| `apis_search`, `apis_get` | Discover live API metadata and execution eligibility; search accepts `query`, `limit` and an optional `cursor`. |
 | `private_stage`, `private_complete` | Stage a standard source bundle and complete its scoped HTTP upload. |
 | `private_get_version`, `private_inspect` | Read owner-scoped preparation and immutable function contracts. |
 | `private_replay`, `private_call` | Recover an exact admitted project request or admit an inspected private function. |

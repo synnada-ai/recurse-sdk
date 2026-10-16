@@ -1,6 +1,6 @@
 # Recurse SDK
 
-Author, package, and deploy Recurse applications.
+Give your external agent API access and private Python execution through one Recurse wallet.
 
 ## Installation
 
@@ -43,37 +43,29 @@ The distribution ships two things:
 - The `recurse` command: browser login, encrypted runtime-secret management, direct runs, MCP
   deployment, artifact retrieval, and billing.
 
-## Quickstart
+## Start with your own agent
 
-An application is a directory with an `agent.yaml` manifest, a system prompt, a tool
-module, and a uv lockfile. See the runnable examples and
-[authoring and deployment guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md):
+1. Sign in with Google at [Setup](https://recurse.run/setup), then create an individual Tools key.
+2. Install the current SDK and import the key through stdin with `recurse tools login --key-stdin`.
+   Keep it out of command arguments, environment variables, project files and logs. The SDK stores
+   it in your operating-system keychain. Key-based setup requires SDK 0.2.7 or newer.
+3. Connect Codex using `codex mcp add recurse-tools -- recurse tools mcp serve`, then verify live API
+   discovery. If you came from an example, retain its task; otherwise tell your agent what to build.
+4. Agree missing inputs and a total spending cap before preparation. Your agent writes `tools.yaml`
+   and Python, then runs privately. Setup/discovery itself does not execute paid work.
 
-- [examples/tiny-tuner](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/tiny-tuner) — tune a classifier against held-out validation F1.
-- [examples/predictive-modeler](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/predictive-modeler) — train classification, regression, and forecasting pipelines against task-specific quality constraints.
-- [examples/rna-fold-lab](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/rna-fold-lab) — design RNA sequences against an independent forward-fold oracle.
-- [examples/backpack-3d](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/backpack-3d) — write, render, visually critique, and revise a 3D
-  backpack using Astra and complete Python modeling programs.
-- [examples/level-design](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/level-design) — design puzzle-game levels against an independent solver:
-  two runnable agents and one prompt-only example.
+See the [Tools quickstart](docs/tools-quickstart.md), [manifest reference](docs/reference/tools-manifest.md)
+and [canonical agent instructions](https://recurse.run/tools/SKILL.md).
 
-```sh
-recurse login
-recurse secret set github-token
-recurse secret list
-recurse run examples/tiny-tuner --inputs inputs.json --secret GITHUB_TOKEN=github-token
-recurse deploy examples/tiny-tuner --as mcp --cpu 1 --memory-mib 1024 \
-  --secret GITHUB_TOKEN=github-token
-codex mcp add recurse -- recurse mcp serve <deployment-id>
-claude mcp add recurse -- recurse mcp serve <deployment-id>
-```
+| Project | Manifest | Builder | Execution |
+| --- | --- | --- | --- |
+| Direct Python tools | `tools.yaml` (`ToolService`) | `build_tools_bundle` | `recurse tools run` |
+| Hosted Recurse agent | `agent.yaml` (`Agent`) | `build_bundle` | `recurse run` / `recurse deploy` |
 
-For Codex, apply the startup and tool timeout settings shown in the
-[guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) after adding the server.
-
-To connect all published gallery apps through one server, use `recurse mcp serve`
-without a deployment ID. The shared connection exposes `apps.<gallery-slug>` tools;
-private deployments still use their individual IDs. Runs use the caller's wallet.
+Private Tools projects have no prompt or hosted model loop and do not require public publication.
+Eligible APIs use Recurse's upstream credentials and wallet. Customer-owned account/private-resource
+operations remain unavailable where live metadata says so. API costs pass through at 1× and compute
+uses 4×; preparation is separately billable. A rate is not a quote for a complete task.
 
 ## Tools API
 
@@ -124,14 +116,48 @@ The cap includes preparation and execution. The CLI waits for a receipt; Python'
 [Private Tools runs](docs/guide.md#private-tools-runs) for retry and cancellation details.
 
 SDK 0.2.6 adds approved API discovery (`recurse tools apis search` / `apis inspect`) and
-per-function `apis` declarations for paid reads through treg. Its MCP bridge forwards all thirteen
+per-function `apis` declarations for eligible metered requests through treg. Its MCP bridge forwards all thirteen
 generic catalog, API discovery and private source operations. Remote source authoring requires
 standard bundle construction and the returned scoped HTTP upload capability. The
 [company-updates example](examples/company-updates/README.md) searches official company pages
 and fetches bounded excerpts using one Recurse wallet.
 
+## Hosted Recurse agents
+
+An application is a directory with an `agent.yaml` manifest, a system prompt, a tool
+module, and a uv lockfile. See the runnable examples and
+[authoring and deployment guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md):
+
+- [examples/tiny-tuner](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/tiny-tuner) — tune a classifier against held-out validation F1.
+- [examples/predictive-modeler](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/predictive-modeler) — train classification, regression, and forecasting pipelines against task-specific quality constraints.
+- [examples/rna-fold-lab](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/rna-fold-lab) — design RNA sequences against an independent forward-fold oracle.
+- [examples/backpack-3d](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/backpack-3d) — write, render, visually critique, and revise a 3D
+  backpack using Astra and complete Python modeling programs.
+- [examples/level-design](https://github.com/synnada-ai/recurse-sdk/blob/main/examples/level-design) — design puzzle-game levels against an independent solver:
+  two runnable agents and one prompt-only example.
+
+```sh
+recurse login
+recurse secret set github-token
+recurse secret list
+recurse run examples/tiny-tuner --inputs inputs.json --secret GITHUB_TOKEN=github-token
+recurse deploy examples/tiny-tuner --as mcp --cpu 1 --memory-mib 1024 \
+  --secret GITHUB_TOKEN=github-token
+codex mcp add recurse -- recurse mcp serve <deployment-id>
+claude mcp add recurse -- recurse mcp serve <deployment-id>
+```
+
+For Codex, apply the startup and tool timeout settings shown in the
+[guide](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) after adding the server.
+
+To connect all published gallery apps through one server, use `recurse mcp serve`
+without a deployment ID. The shared connection exposes `apps.<gallery-slug>` tools;
+private deployments still use their individual IDs. Runs use the caller's wallet.
+
 ## Documentation
 
+- [docs/tools-quickstart.md](docs/tools-quickstart.md) — key setup, private Python, API access and recovery.
+- [docs/reference/tools-manifest.md](docs/reference/tools-manifest.md) — `tools.yaml` authoring contract.
 - [docs/guide.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/guide.md) — installation, authoring, runtime, login, deployment, local MCP access, and billing.
 - [docs/reference/api.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/reference/api.md) — generated API reference.
 - [docs/reference/manifest.md](https://github.com/synnada-ai/recurse-sdk/blob/main/docs/reference/manifest.md) — generated `agent.yaml` reference.

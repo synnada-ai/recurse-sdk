@@ -1,6 +1,8 @@
 # Structure of a Recurse example
 
-A runnable Recurse example is a complete agent application. It shows:
+The [echo](echo/README.md) and [company-updates](company-updates/README.md) examples are private Python Tools projects: `tools.yaml`, a declared Python module, `pyproject.toml` and `uv.lock`, with no prompt or hosted model loop. Start with the [Tools quickstart](../docs/tools-quickstart.md).
+
+The remaining examples are hosted Recurse agent applications. Their existing structure shows:
 - The caller's request; i.e. the agent's input contract.
 - Choices the agent can make; i.e. the action tools and prompt instructions.
 - Tools that measure those choices; i.e. the verifiers.
@@ -8,7 +10,7 @@ A runnable Recurse example is a complete agent application. It shows:
 
 The files below are a common shape; smaller examples may keep all logic in one tool file, while larger ones may include supporting modules or evaluation utilities.
 
-## Directory layout
+## Hosted-agent directory layout
 
 ```text
 example/
@@ -53,7 +55,7 @@ The `agent.yaml` file contains the agent manifest and defines the runtime contra
 
 ### The prompt
 
-The `prompt.md` file contains the system prompt for the agent, see [prompting guide](https://recurse.run/SKILL.md#prompting) for details.
+The `prompt.md` file contains the system prompt for the agent, see [prompting guide](https://recurse.run/agents/SKILL.md#prompting) for details.
 
 ### Tools
 

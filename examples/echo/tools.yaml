@@ -1,0 +1,51 @@
+{
+  "apiVersion": "recurse.tools/v1alpha1",
+  "kind": "ToolService",
+  "metadata": {
+    "name": "echo-example",
+    "title": "Echo a message",
+    "summary": "Return JSON through private compute without provider requests."
+  },
+  "runtime": {
+    "python": "3.14",
+    "lockfile": "uv.lock"
+  },
+  "tools": {
+    "source": "echo_tools.py",
+    "register": {
+      "echo": {
+        "description": "Return a message.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "output_schema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        "pricing": {
+          "provider_basis_micro_usd": 0,
+          "compute_basis_micro_usd": 0,
+          "provider_multiplier": 1,
+          "compute_multiplier": 4
+        }
+      }
+    }
+  }
+}

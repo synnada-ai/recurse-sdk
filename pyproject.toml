@@ -1,6 +1,6 @@
 [project]
 name = "recurse-sdk"
-version = "0.2.7"
+version = "0.2.8"
 description = "Author, package, and deploy Recurse applications."
 readme = "README.md"
 license = "Apache-2.0"
@@ -47,7 +47,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src", "tools", "examples/tiny-tuner", "examples/company-updates"]
+source = ["src", "tools", "examples/tiny-tuner", "examples/company-updates", "examples/echo"]
 
 [tool.coverage.report]
 fail_under = 100
