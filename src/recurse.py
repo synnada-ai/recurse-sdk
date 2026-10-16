@@ -1130,7 +1130,7 @@ class ToolsClient:
     own project without publication; ``run`` prepares, inspects and admits a private
     call. ``get_version`` inspects publisher preparation;
     ``publish_version`` activates an already prepared version.
-    ``apis_search`` and ``apis_get`` inspect approved upstream read APIs without
+    ``apis_search`` and ``apis_get`` inspect eligible upstream APIs without
     exposing credentials. Private functions declare their permitted IDs in ``apis``.
     ``stage_private`` and ``complete_private`` expose the same source-upload contract
     used by ``prepare_private`` and ordinary MCP clients.
@@ -1279,7 +1279,7 @@ class ToolsClient:
     def apis_search(
         self, query: str = "", limit: int = 20, cursor: str | None = None
     ) -> dict[str, Any]:
-        """Search approved upstream read APIs and their service-controlled metadata."""
+        """Search eligible upstream APIs and their service-controlled metadata."""
         parameters: dict[str, str | int] = {"query": query, "limit": limit}
         if cursor is not None:
             parameters["cursor"] = cursor
