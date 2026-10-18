@@ -136,6 +136,8 @@ Validate tools-only source and build one immutable standard distribution.
 Tools are parsed without importing them on the author's machine. The
 distribution contains ``tools.yaml``, its source, project metadata, and
 the exact dependency lockfile. No agent manifest or prompt is required.
+Archive timestamps and ownership are normalized so identical archive files
+and permissions retain their source identity across fresh-process replay.
 
 Args:
     service_directory: Directory containing ``tools.yaml`` and project files.

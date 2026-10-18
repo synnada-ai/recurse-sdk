@@ -1,6 +1,9 @@
 """Private project preparation and execution use real bounded HTTP boundaries."""
 
 import json
+import os
+import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,7 +13,7 @@ import pytest
 import yaml
 
 import recurse
-from tests.test_tools_bundle import write_tools_service
+from tests.test_tools_bundle import write_setuptools_tools_service, write_tools_service
 from tests.test_tools_client import ToolsService
 
 
@@ -207,6 +210,44 @@ def test_run_replays_original_call_after_source_runtime_retirement(
         max_cost_micro_usd=200_000,
     )
     assert first == second
+    assert [path for _, path, _, _ in private_service.requests[request_count:]] == [
+        "/v1/private-calls/replay"
+    ]
+
+
+def test_new_process_recovers_setuptools_call_without_another_preparation(
+    private_service: PrivateToolsService, tmp_path: Path
+) -> None:
+    """A fresh SDK process rebuilds unchanged source and retrieves the existing call."""
+    directory = write_setuptools_tools_service(tmp_path / "project")
+    client = recurse.ToolsClient("token", base_url=private_service.url)
+    first = client.run(
+        directory,
+        "echo",
+        inputs={"message": "hello"},
+        idempotency_key="same-request",
+        max_cost_micro_usd=200_000,
+    )
+    request_count = len(private_service.requests)
+    os.utime(directory / "tools.py", (1, 1))
+    result = subprocess.run(  # noqa: S603 - fixed isolated SDK replay, against a local test server
+        [
+            sys.executable,
+            "-c",
+            "import json, sys, recurse; "
+            "print(json.dumps(recurse.ToolsClient('token', base_url=sys.argv[1]).run("
+            "sys.argv[2], 'echo', inputs={'message':'hello'}, "
+            "idempotency_key='same-request', max_cost_micro_usd=200_000)))",
+            private_service.url,
+            str(directory),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == first
     assert [path for _, path, _, _ in private_service.requests[request_count:]] == [
         "/v1/private-calls/replay"
     ]
