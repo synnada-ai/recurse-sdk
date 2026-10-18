@@ -100,6 +100,15 @@ The project must declare a standard build backend in `pyproject.toml`. Its sdist
 `tools.yaml`, the declared source module, `pyproject.toml`, `PKG-INFO`, and the exact `uv.lock`.
 The backend controls which additional files enter the source distribution. The builder parses
 source with Python's AST and never imports or executes it on the author's machine.
+Tools bundles preserve those files and their permissions while normalizing archive order,
+timestamps, ownership and gzip headers. When archive member names, contents and permissions are
+unchanged, their source identity stays the same for private-call replay. Build-generated file
+contents still affect identity.
+This normalization does not apply to hosted-agent bundles.
+
+Calls admitted with an older SDK's original archive retain that original source hash. Inspect
+their existing call receipt with `get_call`; upgrading the SDK does not rewrite an admitted
+call's identity or authorize a new preparation.
 
 The returned record uses `apiVersion: recurse.tools.application/v1alpha1`, distinct from the agent
 artifact contract, and records the source distribution's SHA-256 and byte size. See the

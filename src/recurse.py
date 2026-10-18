@@ -17,6 +17,7 @@ login, deployment, and billing; see the package documentation.
 import ast
 import base64
 import copy
+import gzip
 import hashlib
 import http.client
 import io
@@ -940,12 +941,31 @@ def _validate_tools_contract_source(source_path: Path, registered: dict[str, Any
         _validate_tool(function)
 
 
+def _canonical_tools_sdist(source: bytes) -> bytes:
+    """Keep validated files and permissions while removing volatile archive metadata."""
+    stream = io.BytesIO()
+    with (
+        tarfile.open(fileobj=io.BytesIO(source), mode="r:gz") as original,
+        gzip.GzipFile(fileobj=stream, mode="wb", filename="", mtime=0) as compressed,
+        tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as normalized,
+    ):
+        for member in sorted(original.getmembers(), key=lambda item: item.name):
+            entry = tarfile.TarInfo(member.name)
+            entry.type = tarfile.DIRTYPE if member.isdir() else tarfile.REGTYPE
+            entry.mode = member.mode
+            entry.size = 0 if member.isdir() else member.size
+            normalized.addfile(entry, original.extractfile(member))
+    return stream.getvalue()
+
+
 def build_tools_bundle(service_directory: str | Path) -> tuple[dict[str, bytes], dict[str, Any]]:
     """Validate tools-only source and build one immutable standard distribution.
 
     Tools are parsed without importing them on the author's machine. The
     distribution contains ``tools.yaml``, its source, project metadata, and
     the exact dependency lockfile. No agent manifest or prompt is required.
+    Archive timestamps and ownership are normalized so identical archive files
+    and permissions retain their source identity across fresh-process replay.
 
     Args:
         service_directory: Directory containing ``tools.yaml`` and project files.
@@ -974,12 +994,18 @@ def build_tools_bundle(service_directory: str | Path) -> tuple[dict[str, bytes],
         raise BundleError("runtime.lockfile could not be read") from error
     if len(lockfile_bytes) > _MAX_LOCKFILE_BYTES:
         raise BundleError(f"lockfile exceeds {_MAX_LOCKFILE_BYTES} bytes")
-    source_bytes = _build_sdist(
-        service,
-        {"tools.yaml", "pyproject.toml", "PKG-INFO", "uv.lock", manifest["tools"]["source"]},
-    )
+    required_paths = {
+        "tools.yaml",
+        "pyproject.toml",
+        "PKG-INFO",
+        "uv.lock",
+        manifest["tools"]["source"],
+    }
+    source_bytes = _build_sdist(service, required_paths)
     if _sdist_file(source_bytes, "uv.lock") != lockfile_bytes:
         raise BundleError("build backend changed uv.lock")
+    source_bytes = _canonical_tools_sdist(source_bytes)
+    _inspect_sdist(source_bytes, required_paths)
     return (
         {"source": source_bytes},
         {

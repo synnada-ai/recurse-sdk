@@ -1,8 +1,10 @@
 """Tools-only bundles preserve the standard sdist without agent artifacts."""
 
 import copy
+import gzip
 import hashlib
 import io
+import os
 import tarfile
 from pathlib import Path
 
@@ -43,6 +45,20 @@ def write_tools_service(directory: Path) -> Path:
     return directory
 
 
+def write_setuptools_tools_service(directory: Path) -> Path:
+    """Create a tools service whose backend writes build-time archive timestamps."""
+    write_tools_service(directory)
+    (directory / "pyproject.toml").write_text(
+        '[build-system]\nrequires = ["setuptools"]\n'
+        'build-backend = "setuptools.build_meta"\n\n'
+        '[project]\nname = "fixture-tools"\nversion = "0.1.0"\n'
+        'description = "JSON fixture tools"\n\n'
+        '[tool.setuptools]\npy-modules = ["tools"]\n'
+        '[tool.setuptools.data-files]\n"." = ["tools.yaml", "uv.lock"]\n'
+    )
+    return directory
+
+
 @pytest.fixture
 def service(tmp_path: Path) -> Path:
     """Provide a complete tools service using a real standard build backend."""
@@ -76,6 +92,82 @@ def test_build_tools_bundle_needs_no_prompt_and_does_not_import_source(service: 
     assert "agent.yaml" not in contents
     assert "prompt.md" not in contents
     assert contents["uv.lock"] == b"version = 1\n"
+
+
+def test_unchanged_setuptools_source_has_the_same_bundle_identity(tmp_path: Path) -> None:
+    """Rebuilding identical files must not change their private replay identity."""
+    service = write_setuptools_tools_service(tmp_path / "tools-service")
+    first_artifacts, first_record = recurse.build_tools_bundle(service)
+    os.utime(service / "tools.py", (1, 1))
+    second_artifacts, second_record = recurse.build_tools_bundle(service)
+
+    assert first_record == second_record
+    assert first_artifacts == second_artifacts
+
+
+def test_tools_identity_ignores_container_metadata_and_preserves_file_contents(
+    service: Path,
+) -> None:
+    """Ordering, owners, PAX dates and gzip headers must not change replay identity."""
+    source = recurse._build_sdist(service, {"tools.yaml", "tools.py", "uv.lock"})
+    with tarfile.open(fileobj=io.BytesIO(source), mode="r:gz") as archive:
+        contents = []
+        for member in archive:
+            extracted = archive.extractfile(member)
+            contents.append((member, extracted.read() if extracted is not None else None))
+    root = contents[0][0].name.partition("/")[0]
+    directory = tarfile.TarInfo(root + "/assets")
+    directory.type = tarfile.DIRTYPE
+    directory.mode = 0o755
+    directory.size = 3
+    executable = tarfile.TarInfo(root + "/assets/" + "image-" * 30 + "π.bin")
+    executable.mode = 0o755
+    executable.size = 3
+    contents.extend([(directory, None), (executable, b"\x00\xff\x01")])
+
+    variants = []
+    for timestamp, entries in [(1, contents), (2, list(reversed(contents)))]:
+        stream = io.BytesIO()
+        with (
+            gzip.GzipFile(
+                fileobj=stream, mode="wb", filename=f"build-{timestamp}.tar", mtime=timestamp
+            ) as compressed,
+            tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as archive,
+        ):
+            for member, data in entries:
+                entry = copy.copy(member)
+                entry.uid = entry.gid = timestamp
+                entry.uname = entry.gname = f"owner-{timestamp}"
+                entry.mtime = timestamp
+                entry.pax_headers = {
+                    "mtime": str(timestamp),
+                    "atime": str(timestamp),
+                    "ctime": str(timestamp),
+                }
+                archive.addfile(entry, io.BytesIO(data) if data is not None else None)
+        variants.append(stream.getvalue())
+    assert variants[0] != variants[1]
+    for variant in variants:
+        recurse._inspect_sdist(variant, set())
+    normalized = [recurse._canonical_tools_sdist(variant) for variant in variants]
+    assert normalized[0] == normalized[1]
+    assert normalized[0][3:8] == b"\x00" * 5
+    expected = {
+        member.name: (member.mode, data if member.isfile() else None) for member, data in contents
+    }
+    with tarfile.open(fileobj=io.BytesIO(normalized[0]), mode="r:gz") as archive:
+        assert archive.getnames() == sorted(expected)
+        for member in archive:
+            extracted = archive.extractfile(member)
+            data = extracted.read() if extracted is not None else None
+            assert (member.mode, data) == expected[member.name]
+            assert (member.mtime, member.uid, member.gid, member.uname, member.gname) == (
+                0,
+                0,
+                0,
+                "",
+                "",
+            )
 
 
 @pytest.mark.parametrize(
